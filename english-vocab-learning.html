@@ -842,12 +842,13 @@ tr:hover td { background: #f8fafc; }
         <div class="flashcard" id="flashcard" onclick="handleCardClick()">
           <div class="word-front" id="fcFront">click</div>
           <button class="btn-speak" id="btnSpeak" onclick="speakWord(event)" title="朗读">🔊</button>
+          <div id="fcExampleFront" style="font-size:0.85rem;color:var(--ink);margin-top:6px;line-height:1.5;text-align:center;display:none;"></div>
             <div class="word-meta" id="fcMeta" style="display:none;"></div>
           <div id="fcBack" style="display:none;">
             <div class="word-back" id="fcWordHeader"></div>
             <div class="ai-section" id="aiExample" style="display:none;">
               <div class="ai-section-title">例句</div>
-              <div class="ai-section-content" id="fcExample"></div>
+              <div class="ai-section-content" id="fcExampleBack"></div>
             </div>
             <div class="ai-section" id="aiSynonyms" style="display:none;">
               <div class="ai-section-title">近义词 / 反义词</div>
@@ -897,7 +898,7 @@ tr:hover td { background: #f8fafc; }
         </div>
         <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">
         <button class="btn btn-primary" id="btnGenOne" onclick="generateAllContent()">AI 生成全部学习内容</button>
-        <button class="btn btn-secondary" id="btnGenPhonetic" onclick="generatePhoneticOnly()" style="background:#fce7f3;color:#be185d;border-color:#f9a8d4;">仅生成音标</button>
+        <button class="btn btn-secondary" id="btnGenPhonetic" onclick="generatePhoneticAndExample()" style="background:#fce7f3;color:#be185d;border-color:#f9a8d4;">仅生成音标和例句</button>
         </div>
       </div>
     </div>
@@ -1346,8 +1347,8 @@ function addWord() {
   showToast('单词已添加');
 }
 
-// 常见词性正则
-const POS_RE = /^(n\.|v\.|adj\.|adv\.|prep\.|conj\.|pron\.|num\.|art\.|int\.)\s*/;
+// 常见词性正则（支持 n. / v. / vi. / vt. / adj. / adv. 等）
+const POS_RE = /^(n\.|v\.|vi\.|vt\.|adj\.|adv\.|prep\.|conj\.|pron\.|num\.|art\.|int\.|aux\.|det\.|auxil\.)\s*/;
 
 async function pasteFromClipboard() {
   try {
@@ -1415,7 +1416,9 @@ function phraseImport() {
     if (line.includes(' - ')) {
       const idx = line.indexOf(' - ');
       eng = line.substring(0, idx).trim();
-      chn = line.substring(idx + 3).trim();
+      const parsed = parsePos(line.substring(idx + 3).trim());
+      pos = parsed.pos;
+      chn = parsed.rest || line.substring(idx + 3).trim();
     } else if (line.includes('\t')) {
       const parts = line.split(/\t/);
       if (parts.length >= 2) {
@@ -1426,10 +1429,29 @@ function phraseImport() {
       }
     } else if (line.includes(',')) {
       const idx = line.indexOf(',');
-      eng = line.substring(0, idx).trim();
-      const parsed = parsePos(line.substring(idx + 1).trim());
-      pos = parsed.pos;
-      chn = parsed.rest;
+      const beforeComma = line.substring(0, idx);
+      // 如果逗号前已有中文，说明逗号是释义内部的分隔符，不是英中分隔符
+      if (/[\u4e00-\u9fff]/.test(beforeComma)) {
+        // 回退到空格拆分
+        const parts = line.split(/\s+/);
+        if (parts.length >= 2) {
+          eng = parts[0];
+          const parsed = parsePos(parts[1]);
+          if (parsed.pos) {
+            pos = parsed.pos;
+            chn = (parsed.rest ? parsed.rest + ' ' : '') + parts.slice(2).join(' ');
+          } else {
+            chn = parts.slice(1).join(' ');
+          }
+        } else {
+          invalid++; return;
+        }
+      } else {
+        eng = beforeComma.trim();
+        const parsed = parsePos(line.substring(idx + 1).trim());
+        pos = parsed.pos;
+        chn = parsed.rest;
+      }
     } else {
       const parts = line.split(/\s+/);
       if (parts.length >= 3) {
@@ -1513,62 +1535,91 @@ function batchImport() {
   let invalid = 0;
   lines.forEach(line => {
     let eng = '', pos = '', chn = '';
-    // 支持多种分隔格式，优先识别含词性的格式
-    // 格式1: "英文 词性. 中文"（空格分隔，含词性）
-    // 格式2: "英文 词性.中文"（词性后无空格）
-    // 格式3: "英文 - 中文"（横杠分隔，无词性）
-    // 格式4: "英文,中文"（逗号分隔）
-    // 格式5: "英文\t词性. 中文" 或 "英文\t中文"（Tab分隔）
-    if (line.includes(' - ')) {
-      const idx = line.indexOf(' - ');
-      eng = line.substring(0, idx).trim();
-      chn = line.substring(idx + 3).trim();
-    } else if (line.includes('\t')) {
-      const parts = line.split(/\t/);
-      if (parts.length >= 2) {
-        eng = parts[0].trim();
-        // 第二段可能含词性
-        const parsed = parsePos(parts[1].trim());
-        pos = parsed.pos;
-        chn = parsed.rest || parts.slice(2).join('\t').trim();
+
+    // 核心思路：先找英文单词（纯 ASCII 字母），再找词性，其余全是中文
+    function parseLine(str) {
+      // 先去掉开头和结尾的空白
+      str = str.trim();
+      if (!str) return null;
+
+      // 尝试 Tab 分隔
+      if (str.includes('\t')) {
+        const parts = str.split(/\t/);
+        const first = parts[0].trim();
+        if (/^[a-zA-Z]/.test(first)) {
+          const r = parsePos(parts.slice(1).join(' ').trim());
+          return { eng: first, pos: r.pos, chn: r.rest || parts.slice(1).join(' ').trim() };
+        }
       }
-    } else if (line.includes(',')) {
-      const idx = line.indexOf(',');
-      eng = line.substring(0, idx).trim();
-      const parsed = parsePos(line.substring(idx + 1).trim());
-      pos = parsed.pos;
-      chn = parsed.rest;
-    } else if (line.includes(' -')) {
-      const idx = line.indexOf(' -');
-      eng = line.substring(0, idx).trim();
-      chn = line.substring(idx + 2).trim();
-    } else {
-      // 尝试按空格拆分：第一个词=英文，第二个=词性，其余=中文
-      const parts = line.split(/\s+/);
-      if (parts.length >= 3) {
-        eng = parts[0];
-        const parsed = parsePos(parts[1]);
+
+      // 尝试 " - " 分隔
+      if (str.includes(' - ')) {
+        const idx = str.indexOf(' - ');
+        const first = str.substring(0, idx).trim();
+        if (/^[a-zA-Z]/.test(first)) {
+          const r = parsePos(str.substring(idx + 3).trim());
+          return { eng: first, pos: r.pos, chn: r.rest || str.substring(idx + 3).trim() };
+        }
+      }
+
+      // 尝试 " -" 分隔（无词性）
+      if (str.includes(' -')) {
+        const idx = str.indexOf(' -');
+        const first = str.substring(0, idx).trim();
+        if (/^[a-zA-Z]/.test(first)) {
+          return { eng: first, pos: '', chn: str.substring(idx + 2).trim() };
+        }
+      }
+
+      // 按空格拆分，找英文单词起始位置
+      const parts = str.split(/\s+/);
+      if (parts.length < 2) return null;
+
+      // 找到第一个以英文字母开头的纯英文单词（允许尾部逗号/分号/词性）
+      let engIdx = -1;
+      for (let i = 0; i < parts.length; i++) {
+        // 去掉尾部可能附加的逗号+词性（如 "profession,n." → "profession"）
+        const cleaned = parts[i].replace(/[,;，；].*$/, '');
+        if (/^[a-zA-Z][a-zA-Z-]*$/.test(cleaned)) {
+          engIdx = i;
+          break;
+        }
+      }
+      if (engIdx === -1) return null;
+
+      eng = parts[engIdx].replace(/[,;，；].*$/, '');
+      // 英文之后的部分
+      const rest = parts.slice(engIdx + 1);
+      // 如果英文词本身带有逗号后的内容（如 "profession,n."），把逗号后的内容也加入 rest
+      const afterComma = parts[engIdx].replace(/^[a-zA-Z][a-zA-Z-]*/, '');
+      if (afterComma && afterComma !== parts[engIdx]) {
+        rest.unshift(afterComma.replace(/^[,;，；]+/, ''));
+      }
+      if (rest.length === 0) return null;
+
+      // 检查下一个词是否为词性
+      const parsed = parsePos(rest[0]);
+      if (parsed.pos) {
         pos = parsed.pos;
-        chn = parsed.rest ? parsed.rest + ' ' + parts.slice(2).join(' ') : parts.slice(1).join(' ');
-        // 如果没检测到词性，尝试只拆第一个=英文，其余=中文
-        if (!pos) {
-          eng = parts[0];
-          chn = parts.slice(1).join(' ');
-        }
-      } else if (parts.length === 2) {
-        eng = parts[0];
-        const parsed = parsePos(parts[1]);
-        if (parsed.pos) {
-          pos = parsed.pos;
-          chn = parsed.rest;
-        } else {
-          chn = parts[1];
-        }
+        chn = (parsed.rest ? parsed.rest + ' ' : '') + rest.slice(1).join(' ');
       } else {
-        invalid++;
-        return;
+        chn = rest.join(' ');
       }
+
+      // 清理中文中的前导标点
+      chn = chn.replace(/^[,;，；、\s]+/, '').trim();
+      return { eng, pos, chn };
     }
+
+    const result = parseLine(line);
+    if (!result || !result.eng || !result.chn) {
+      invalid++;
+      return;
+    }
+    eng = result.eng;
+    pos = result.pos;
+    chn = result.chn;
+
     if (!eng || !chn) { invalid++; return; }
     if (appData.words.some(w => w.english.toLowerCase() === eng.toLowerCase())) {
       skipped++;
@@ -1579,6 +1630,7 @@ function batchImport() {
   });
   persist();
   renderWordTable();
+  $('batchInput').value = '';
   let msg = `导入完成: 新增 ${added} 个`;
   if (skipped > 0) msg += `，跳过 ${skipped} 个重复`;
   if (invalid > 0) msg += `，${invalid} 行格式无法识别`;
@@ -1795,46 +1847,54 @@ ${missing.includes('对话') ? '对话: <A:... B:... 一个包含该单词的雅
   $('btnGenOne').textContent = 'AI 生成全部学习内容';
 }
 
-async function generatePhoneticOnly() {
+async function generatePhoneticAndExample() {
   const w = appData.words[learnIndex];
   if (!w) return;
   if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
   $('btnGenPhonetic').disabled = true;
   $('btnGenPhonetic').textContent = '生成中...';
   const posStr = w.pos ? '(' + w.pos + ') ' : '';
-  const prompt = `请只输出英语单词 "${w.english}" ${posStr}的国际音标（IPA格式），例如 /əˈbændən/。只输出音标，不要输出其他内容。`;
-  let result = await callAI(prompt, 256);
+  // 一次请求同时生成音标和例句
+  const prompt = `请为英语单词 "${w.english}" ${posStr}生成以下内容，按格式输出：
+1. 音标：/IPA格式音标/
+2. 英文例句：一句包含该单词的自然英文例句
+3. 中文翻译：例句的中文翻译
+请严格按以下格式输出：
+音标：/.../
+例句：...
+翻译：...`;
+  let result = await callAI(prompt, 512);
   if (result) {
-    // 清理返回内容：提取 IPA 音标格式 /.../
-    let phonetic = result.trim();
-    const ipaMatch = phonetic.match(/\/[^/]+\//);
-    if (ipaMatch) {
-      phonetic = ipaMatch[0];
-    } else {
-      // 去掉可能的前缀文字，只保留音标部分
-      phonetic = phonetic.replace(/^.*?([\/\[].+?[\/\]])/s, '$1').trim();
-    }
-    w.phonetic = phonetic;
+    parsePhoneticAndExample(w, result);
     persist();
     showCard();
-    showToast('音标生成完毕');
+    showToast('音标和例句生成完毕');
   } else {
-    // 降级：用更宽松的 prompt 重试一次
+    // 降级：只生成音标
     result = await callAI(`单词 "${w.english}" 的音标是什么？只回复音标。`, 256);
     if (result) {
-      let phonetic = result.trim();
-      const ipaMatch = phonetic.match(/\/[^/]+\//);
-      if (ipaMatch) phonetic = ipaMatch[0];
-      w.phonetic = phonetic;
+      parsePhoneticAndExample(w, '音标：' + result);
       persist();
       showCard();
-      showToast('音标生成完毕');
+      showToast('音标生成完毕（例句生成失败）');
     } else {
-      showToast('音标生成失败，请稍后重试');
+      showToast('生成失败，请稍后重试');
     }
   }
   $('btnGenPhonetic').disabled = false;
-  $('btnGenPhonetic').textContent = '仅生成音标';
+  $('btnGenPhonetic').textContent = '仅生成音标和例句';
+}
+
+function parsePhoneticAndExample(w, text) {
+  // 提取音标 /.../
+  const ipaMatch = text.match(/\/[^/]+\//);
+  if (ipaMatch) w.phonetic = ipaMatch[0];
+  // 提取例句
+  const exMatch = text.match(/例句[：:]\s*(.+?)(?:\n|$)/);
+  if (exMatch) w.example = exMatch[1].trim();
+  // 提取翻译
+  const trMatch = text.match(/翻译[：:]\s*(.+?)(?:\n|$)/);
+  if (trMatch) w.exampleCn = trMatch[1].trim();
 }
 
 async function generateAllContentBatch() {
@@ -1937,6 +1997,20 @@ function showCard() {
   $('fcFront').innerHTML = w.phonetic
     ? `<span class="word-eng">${escapeHtml(w.english)}</span> <span class="phonetic">${escapeHtml(w.phonetic)}</span>`
     : escapeHtml(w.english);
+  // 例句（卡片正面：仅英文例句）
+  if (w.example) {
+    $('fcExampleFront').innerHTML = `<i>"${escapeHtml(w.example)}"</i>`;
+    $('fcExampleFront').style.display = '';
+  } else {
+    $('fcExampleFront').style.display = 'none';
+  }
+  // 例句（卡片背面：英文例句 + 中文翻译）
+  if (w.example) {
+    $('fcExampleBack').innerHTML = `<i>"${escapeHtml(w.example)}"</i>${w.exampleCn ? ' <span style="color:var(--muted);">' + escapeHtml(w.exampleCn) + '</span>' : ''}`;
+    $('aiExample').style.display = '';
+  } else {
+    $('aiExample').style.display = 'none';
+  }
   // Header (背面)
   if (w.pos) {
     $('fcWordHeader').innerHTML = `<span class="pos-tag ${posClass(w.pos)}">${escapeHtml(w.pos)}</span> ${escapeHtml(w.chinese)}`;
@@ -2109,6 +2183,7 @@ async function speakWord(e) {
 function flipCard() {
   cardFlipped = !cardFlipped;
   $('fcFront').style.display = cardFlipped ? 'none' : '';
+  $('fcExampleFront').style.display = cardFlipped ? 'none' : (appData.words[learnIndex] && appData.words[learnIndex].example ? '' : 'none');
   $('fcBack').style.display = cardFlipped ? '' : 'none';
   $('fcHint').textContent = cardFlipped ? '点击收起' : '点击翻转卡片';
   $('btnGenOne').style.display = cardFlipped ? 'none' : '';
