@@ -2065,7 +2065,7 @@ function showCard() {
     else $('fc' + id).textContent = content;
   }
 
-  showIfContent('Example', w.example + (w.exampleCn ? '\n' + w.exampleCn : ''));
+  // 例句已在 card front/back 分别处理，不需要在这里重复填充
   showIfContent('Synonyms', (w.synonyms || w.antonyms) ? (w.synonyms ? '近义词: ' + w.synonyms : '') + (w.antonyms ? '\n反义词: ' + w.antonyms : '') : '');
   showIfContent('Collocations', w.collocations, () => {
     const colls = w.collocations.split(/[｜/\\|]/).map(x => x.trim()).filter(x => x);
@@ -2212,8 +2212,7 @@ function nextCard() {
   if (appData.words.length === 0) return;
   learnIndex = (learnIndex + 1) % appData.words.length;
   cardFlipped = false;
-  showCard();
-  // 立即更新计数器，避免 showCard 内部延迟
+  try { showCard(); } catch (e) { console.error(e); }
   $('fcCounter').textContent = (learnIndex + 1) + ' / ' + appData.words.length;
 }
 
@@ -2221,7 +2220,7 @@ function prevCard() {
   if (appData.words.length === 0) return;
   learnIndex = (learnIndex - 1 + appData.words.length) % appData.words.length;
   cardFlipped = false;
-  showCard();
+  try { showCard(); } catch (e) { console.error(e); }
   $('fcCounter').textContent = (learnIndex + 1) + ' / ' + appData.words.length;
 }
 
