@@ -2116,7 +2116,13 @@ async function speakWord(e) {
 
   const removeSpeaking = () => btn.classList.remove('speaking');
 
-  // Try API TTS first if provider supports it
+  // 构建朗读文本：单词 + 例句（如果有），提供自然语境
+  let speakText = w.english;
+  if (w.example) speakText += '. ' + w.example;
+  // 音标信息（纯参考，不朗读）
+  // 用更慢的语速模拟真人发音的节奏感
+
+  // Try API TTS first (OpenAI / compatible)
   let played = false;
   const provider = PROVIDERS[appData.provider || 'deepseek'];
   if (appData.apiKey && provider.tts) {
@@ -2130,10 +2136,10 @@ async function speakWord(e) {
         },
         body: JSON.stringify({
           model: 'tts-1-hd',
-          input: w.english,
-          voice: 'nova',
+          input: speakText,
+          voice: 'shimmer',
           response_format: 'mp3',
-          speed: 0.9
+          speed: 0.85
         })
       });
       if (resp.ok) {
@@ -2147,42 +2153,50 @@ async function speakWord(e) {
     } catch (e) { /* fallback to Web Speech */ }
   }
 
-  // Fallback: Web Speech API (with voice optimization)
+  // Fallback: Web Speech API
   if (!played) {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(w.english);
-      utter.lang = 'en-US';
-      utter.rate = 0.85;
-      utter.pitch = 1.05;
-      utter.volume = 1;
-      // 优先选择高质量英语语音
-      const voices = window.speechSynthesis.getVoices();
-      const preferred = [
-        // Google 高质量英语语音
-        v => v.name.includes('Google') && v.name.includes('US') && v.lang.startsWith('en'),
-        v => v.name.includes('Google') && v.lang.startsWith('en'),
-        // Microsoft 高质量英语语音
-        v => v.name.includes('Microsoft') && v.name.includes('Jenny') && v.lang === 'en-US',
-        v => v.name.includes('Microsoft') && v.name.includes('David') && v.lang === 'en-US',
-        v => v.name.includes('Microsoft') && v.lang.startsWith('en-US'),
-        v => v.name.includes('Microsoft') && v.lang.startsWith('en'),
-        // macOS 高质量英语语音
-        v => v.name.includes('Samantha') && v.lang === 'en-US',
-        v => v.name.includes('Daniel') && v.lang === 'en-GB',
-        v => v.name.includes('Karen') && v.lang === 'en-AU',
-        // 任何英语 US 语音
-        v => v.lang === 'en-US',
-        // 任何英语语音
-        v => v.lang.startsWith('en'),
-      ];
-      for (const match of preferred) {
-        const found = voices.find(match);
-        if (found) { utter.voice = found; break; }
+      // 先读单词，停顿后读例句
+      const speakPart = (text, rate, pitch) => {
+        return new Promise((resolve) => {
+          const utter = new SpeechSynthesisUtterance(text);
+          utter.lang = 'en-US';
+          utter.rate = rate;
+          utter.pitch = pitch;
+          utter.volume = 1;
+          const voices = window.speechSynthesis.getVoices();
+          const preferred = [
+            v => v.name.includes('Google') && v.voiceURI.includes('en-US') && v.name.includes('Neural'),
+            v => v.name.includes('Google') && v.lang.startsWith('en-US'),
+            v => v.name.includes('Google') && v.lang.startsWith('en'),
+            v => v.name.includes('Microsoft') && v.name.includes('Jenny') && v.lang === 'en-US',
+            v => v.name.includes('Microsoft') && v.name.includes('Aria') && v.lang === 'en-US',
+            v => v.name.includes('Microsoft') && v.lang.startsWith('en-US'),
+            v => v.name.includes('Samantha') && v.lang === 'en-US',
+            v => v.name.includes('Daniel') && v.lang === 'en-GB',
+            v => v.lang === 'en-US',
+            v => v.lang.startsWith('en'),
+          ];
+          for (const match of preferred) {
+            const found = voices.find(match);
+            if (found) { utter.voice = found; break; }
+          }
+          utter.onend = resolve;
+          utter.onerror = resolve;
+          window.speechSynthesis.speak(utter);
+        });
+      };
+      try {
+        await speakPart(w.english, 0.78, 1.05);
+        if (w.example) {
+          await new Promise(r => setTimeout(r, 400));
+          await speakPart(w.example, 0.8, 1.0);
+        }
+        removeSpeaking();
+      } catch (e) {
+        removeSpeaking();
       }
-      utter.onend = removeSpeaking;
-      utter.onerror = removeSpeaking;
-      window.speechSynthesis.speak(utter);
     } else {
       removeSpeaking();
       showToast('浏览器不支持朗读功能');
