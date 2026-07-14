@@ -1785,8 +1785,9 @@ async function generateAllContent(wordId) {
   $('btnGenOne').disabled = true;
   $('btnGenOne').textContent = '生成中...';
 
-  const posStr = word.pos ? '(' + word.pos + ') ' : '';
-  const prompt = `请为英语单词 "${word.english}" ${posStr}（中文意思：${word.chinese}）生成以下完整学习内容。请严格按照格式输出，每个标签独立一行：
+  try {
+    const posStr = word.pos ? '(' + word.pos + ') ' : '';
+    const prompt = `请为英语单词 "${word.english}" ${posStr}（中文意思：${word.chinese}）生成以下完整学习内容。请严格按照格式输出，每个标签独立一行：
 
 音标: <该单词的国际音标 IPA，例如 /əˈbændən/>
 例句: <一个自然实用的英文例句>
@@ -1803,44 +1804,47 @@ async function generateAllContent(wordId) {
 难度: <中考/高考/四级/六级/雅思/托福/专八 中选一个最符合的>
 考频: <高频/中频/低频 中选一个，并简要说明>`;
 
-  const result = await callAI(prompt, 4000);
-  if (result) {
-    word.example = parseSection(result, '例句') || parseSection(result, '例句');
-    word.phonetic = parseSection(result, '音标');
-    word.exampleCn = parseSection(result, '例句翻译');
-    word.synonyms = parseSection(result, '近义词');
-    word.antonyms = parseSection(result, '反义词');
-    word.collocations = parseSection(result, '搭配');
-    word.rootAnalysis = parseSection(result, '词根');
-    word.passage = parseSection(result, '短文');
-    word.dialogue = parseSection(result, '对话');
-    word.similarWords = parseSection(result, '形近词');
-    word.clozeTest = parseSection(result, '填空');
-    word.translationExercise = parseSection(result, '翻译题');
-    word.difficulty = parseSection(result, '难度');
-    word.frequency = parseSection(result, '考频');
-    word.aiGenerated = true;
-    // 补全缺失的字段
-    const missing = [];
-    if (!word.dialogue) missing.push('对话');
-    if (!word.similarWords) missing.push('形近词');
-    if (!word.clozeTest) missing.push('填空');
-    if (!word.translationExercise) missing.push('翻译题');
-    if (missing.length > 0) {
-      const fillPrompt = `请为英语单词 "${word.english}" ${posStr}（中文意思：${word.chinese}）补充以下缺失的学习内容，严格按照格式输出：
+    const result = await callAI(prompt, 4000);
+    if (result) {
+      word.example = parseSection(result, '例句') || parseSection(result, '例句');
+      word.phonetic = parseSection(result, '音标');
+      word.exampleCn = parseSection(result, '例句翻译');
+      word.synonyms = parseSection(result, '近义词');
+      word.antonyms = parseSection(result, '反义词');
+      word.collocations = parseSection(result, '搭配');
+      word.rootAnalysis = parseSection(result, '词根');
+      word.passage = parseSection(result, '短文');
+      word.dialogue = parseSection(result, '对话');
+      word.similarWords = parseSection(result, '形近词');
+      word.clozeTest = parseSection(result, '填空');
+      word.translationExercise = parseSection(result, '翻译题');
+      word.difficulty = parseSection(result, '难度');
+      word.frequency = parseSection(result, '考频');
+      word.aiGenerated = true;
+      const missing = [];
+      if (!word.dialogue) missing.push('对话');
+      if (!word.similarWords) missing.push('形近词');
+      if (!word.clozeTest) missing.push('填空');
+      if (!word.translationExercise) missing.push('翻译题');
+      if (missing.length > 0) {
+        const fillPrompt = `请为英语单词 "${word.english}" ${posStr}（中文意思：${word.chinese}）补充以下缺失的学习内容，严格按照格式输出：
 ${missing.includes('对话') ? '对话: <A:... B:... 一个包含该单词的雅思口语难度的对话，至少 4 轮，场景自然，词汇丰富，附中文翻译>\n' : ''}${missing.includes('形近词') ? '形近词: <词1> - <区别说明> / <词2> - <区别说明>\n' : ''}${missing.includes('填空') ? '填空: <一句包含该单词的完形填空，用___替换该单词，附答案>\n' : ''}${missing.includes('翻译题') ? '翻译题: <一个中文句子，要求用该单词翻译成英文，附参考答案>\n' : ''}`;
-      const fillResult = await callAI(fillPrompt, 1500);
-      if (fillResult) {
-        if (missing.includes('对话')) word.dialogue = parseSection(fillResult, '对话');
-        if (missing.includes('形近词')) word.similarWords = parseSection(fillResult, '形近词');
-        if (missing.includes('填空')) word.clozeTest = parseSection(fillResult, '填空');
-        if (missing.includes('翻译题')) word.translationExercise = parseSection(fillResult, '翻译题');
+        const fillResult = await callAI(fillPrompt, 1500);
+        if (fillResult) {
+          if (missing.includes('对话')) word.dialogue = parseSection(fillResult, '对话');
+          if (missing.includes('形近词')) word.similarWords = parseSection(fillResult, '形近词');
+          if (missing.includes('填空')) word.clozeTest = parseSection(fillResult, '填空');
+          if (missing.includes('翻译题')) word.translationExercise = parseSection(fillResult, '翻译题');
+        }
       }
+      persist();
+      renderWordTable();
+      if (!wordId) showCard();
+      showToast('全部学习内容生成完毕！');
     }
-    persist();
-    renderWordTable();
-    if (!wordId) showCard();
-    showToast('全部学习内容生成完毕！');
+  } catch (err) {
+    console.error('generateAllContent error:', err);
+    showToast('生成失败，请稍后重试');
   }
 
   $('btnGenOne').disabled = false;
@@ -1853,9 +1857,9 @@ async function generatePhoneticAndExample() {
   if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
   $('btnGenPhonetic').disabled = true;
   $('btnGenPhonetic').textContent = '生成中...';
-  const posStr = w.pos ? '(' + w.pos + ') ' : '';
-  // 一次请求同时生成音标和例句
-  const prompt = `请为英语单词 "${w.english}" ${posStr}生成以下内容，按格式输出：
+  try {
+    const posStr = w.pos ? '(' + w.pos + ') ' : '';
+    const prompt = `请为英语单词 "${w.english}" ${posStr}生成以下内容，按格式输出：
 1. 音标：/IPA格式音标/
 2. 英文例句：一句包含该单词的自然英文例句
 3. 中文翻译：例句的中文翻译
@@ -1863,23 +1867,26 @@ async function generatePhoneticAndExample() {
 音标：/.../
 例句：...
 翻译：...`;
-  let result = await callAI(prompt, 512);
-  if (result) {
-    parsePhoneticAndExample(w, result);
-    persist();
-    showCard();
-    showToast('音标和例句生成完毕');
-  } else {
-    // 降级：只生成音标
-    result = await callAI(`单词 "${w.english}" 的音标是什么？只回复音标。`, 256);
+    let result = await callAI(prompt, 512);
     if (result) {
-      parsePhoneticAndExample(w, '音标：' + result);
+      parsePhoneticAndExample(w, result);
       persist();
       showCard();
-      showToast('音标生成完毕（例句生成失败）');
+      showToast('音标和例句生成完毕');
     } else {
-      showToast('生成失败，请稍后重试');
+      result = await callAI(`单词 "${w.english}" 的音标是什么？只回复音标。`, 256);
+      if (result) {
+        parsePhoneticAndExample(w, '音标：' + result);
+        persist();
+        showCard();
+        showToast('音标生成完毕（例句生成失败）');
+      } else {
+        showToast('生成失败，请稍后重试');
+      }
     }
+  } catch (err) {
+    console.error('generatePhoneticAndExample error:', err);
+    showToast('生成失败，请稍后重试');
   }
   $('btnGenPhonetic').disabled = false;
   $('btnGenPhonetic').textContent = '仅生成音标和例句';
