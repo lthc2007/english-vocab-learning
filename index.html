@@ -1857,6 +1857,7 @@ async function generatePhoneticAndExample() {
   if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
   $('btnGenPhonetic').disabled = true;
   $('btnGenPhonetic').textContent = '生成中...';
+  let successMsg = '';
   try {
     const posStr = w.pos ? '(' + w.pos + ') ' : '';
     const prompt = `请为英语单词 "${w.english}" ${posStr}生成以下内容，按格式输出：
@@ -1871,25 +1872,27 @@ async function generatePhoneticAndExample() {
     if (result) {
       parsePhoneticAndExample(w, result);
       persist();
-      showCard();
-      showToast('音标和例句生成完毕');
+      successMsg = '音标和例句生成完毕';
     } else {
       result = await callAI(`单词 "${w.english}" 的音标是什么？只回复音标。`, 256);
       if (result) {
         parsePhoneticAndExample(w, '音标：' + result);
         persist();
-        showCard();
-        showToast('音标生成完毕（例句生成失败）');
-      } else {
-        showToast('生成失败，请稍后重试');
+        successMsg = '音标生成完毕（例句生成失败）';
       }
     }
   } catch (err) {
     console.error('generatePhoneticAndExample error:', err);
-    showToast('生成失败，请稍后重试');
   }
+  // 恢复按钮和 UI 放在 try 外，确保一定执行
   $('btnGenPhonetic').disabled = false;
   $('btnGenPhonetic').textContent = '仅生成音标和例句';
+  if (successMsg) {
+    showToast(successMsg);
+    try { showCard(); } catch (e) { /* 渲染失败不报错 */ }
+  } else {
+    showToast('生成失败，请稍后重试');
+  }
 }
 
 function parsePhoneticAndExample(w, text) {
