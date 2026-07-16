@@ -974,7 +974,10 @@ tr:hover td { background: #f8fafc; }
         <span>文章朗读</span>
         <span style="font-size:0.75rem;color:var(--muted);">导入英文文章，AI 真人朗读，可下载音频</span>
       </div>
-      <textarea id="articleText" placeholder="在此粘贴英文文章..." style="width:100%;height:200px;font-family:var(--mono);font-size:0.9rem;line-height:1.6;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink);resize:vertical;"></textarea>
+      <textarea id="articleText" placeholder="在此粘贴英文文章..." oninput="updateArticleEstimate()" style="width:100%;height:200px;font-family:var(--mono);font-size:0.9rem;line-height:1.6;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink);resize:vertical;"></textarea>
+      <div id="articleEstimate" style="font-size:0.8rem;color:var(--muted);margin-top:6px;display:none;">
+        预估字符数: <strong id="estChars">0</strong> &nbsp;|&nbsp; 预估费用: <strong id="estCost">¥0.00</strong> <span style="color:var(--muted);" id="estPriceLabel"></span>
+      </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;">
         <button class="btn btn-primary" id="btnReadPlay" onclick="startArticleRead()">▶ 朗读</button>
         <button class="btn btn-secondary" id="btnReadPause" onclick="pauseArticleRead()" style="display:none;">⏸ 暂停</button>
@@ -1567,6 +1570,7 @@ function saveSettings() {
   closeSettings();
   showToast('API 设置已保存');
   renderWordTable();
+  updateArticleEstimate();
 }
 
 // ─── Key paste / toggle helpers ───
@@ -1605,6 +1609,7 @@ function onTabSwitch(tab) {
   if (tab === 'learn') renderLearn();
   if (tab === 'spell') initSpell();
   if (tab === 'quiz') initQuiz();
+  if (tab === 'read') updateArticleEstimate();
 }
 
 // ═══════════════════════════════════════
@@ -2944,6 +2949,33 @@ let articleChunkIdx = -1;     // current playing chunk index
 let articleIsPlaying = false;
 let articleIsPaused = false;
 let articlePausedAt = 0;
+
+// TTS pricing: 元/万字符 (MiniMax China)
+const TTS_PRICING = { 'speech-2.8-hd': 3.5, 'speech-2.8-turbo': 2, 'speech-2.6-hd': 3.5, 'speech-2.6-turbo': 2, 'speech-02-hd': 3.5, 'speech-02-turbo': 2 };
+
+function updateArticleEstimate() {
+  const text = $('articleText').value;
+  const est = $('articleEstimate');
+  if (!text.trim()) {
+    est.style.display = 'none';
+    return;
+  }
+  est.style.display = '';
+  // MiniMax 计费: 1汉字=2字符, 英文字母/标点/空格=1字符
+  const charCount = [...text].reduce((n, c) => {
+    // CJK characters count as 2
+    return n + (/[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/.test(c) ? 2 : 1);
+  }, 0);
+  const ttsModel = appData.ttsModel || 'speech-2.8-hd';
+  const pricePer10k = TTS_PRICING[ttsModel] || 3.5;
+  const cost = (charCount / 10000) * pricePer10k;
+  $('estChars').textContent = charCount.toLocaleString();
+  $('estCost').textContent = '¥' + cost.toFixed(cost < 0.01 ? 4 : 2);
+  $('estPriceLabel').textContent = '(' + ttsModel + ': ¥' + pricePer10k + '/万字符)';
+  if (cost < 0.01 && cost > 0) {
+    $('estCost').textContent = '¥<0.01';
+  }
+}
 
 // Shared MiniMax TTS helper: returns { blob, error }
 async function callMiniMaxTTS(text) {
