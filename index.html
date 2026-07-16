@@ -978,6 +978,7 @@ tr:hover td { background: #f8fafc; }
       <select class="form-input" id="providerSelect" onchange="onProviderChange()">
         <option value="deepseek">DeepSeek</option>
         <option value="openai">OpenAI</option>
+        <option value="minimax">MiniMax</option>
         <option value="moonshot">Moonshot (月之暗面)</option>
         <option value="groq">Groq</option>
         <option value="zhipu">智谱 AI (GLM)</option>
@@ -1046,7 +1047,18 @@ const PROVIDERS = {
     ttsModels: ['tts-1', 'tts-1-hd'],
     ttsVoices: ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'],
     keyHint: '获取 API Key: <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--accent);">platform.openai.com</a>',
-    tts: true
+    tts: true,
+    ttsType: 'openai'
+  },
+  minimax: {
+    name: 'MiniMax',
+    url: 'https://api.minimaxi.com/v1',
+    models: ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.5'],
+    ttsModels: ['speech-2.8-hd', 'speech-2.8-turbo', 'speech-2.6-hd'],
+    ttsVoices: ['English_Graceful_Lady', 'English_Trustworthy_Man', 'English_ReservedYoungMan', 'English_PlayfulGirl', 'English_ManWithDeepVoice', 'female-tianmei-jingpin', 'male-qn-qingse'],
+    keyHint: '获取 API Key: <a href="https://platform.minimaxi.com/user-center/basic-information/interface-key" target="_blank" style="color:var(--accent);">platform.minimaxi.com</a>',
+    tts: true,
+    ttsType: 'minimax'
   },
   moonshot: {
     name: 'Moonshot',
@@ -2119,33 +2131,67 @@ async function speakWord(e) {
   // 构建朗读文本：仅朗读单词
   let speakText = w.english;
 
-  // Try API TTS first (OpenAI / compatible)
+  // Try API TTS first (OpenAI / MiniMax)
   let played = false;
   const provider = PROVIDERS[appData.provider || 'deepseek'];
   if (appData.apiKey && provider.tts) {
     try {
-      const apiUrl = (appData.apiUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
-      const resp = await fetch(apiUrl + '/audio/speech', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + appData.apiKey
-        },
-        body: JSON.stringify({
-          model: 'tts-1-hd',
-          input: speakText,
-          voice: 'shimmer',
-          response_format: 'mp3',
-          speed: 0.85
-        })
-      });
-      if (resp.ok) {
-        const blob = await resp.blob();
-        const audio = new Audio(URL.createObjectURL(blob));
-        audio.onended = removeSpeaking;
-        audio.onerror = removeSpeaking;
-        audio.play();
-        played = true;
+      if (provider.ttsType === 'minimax') {
+        // MiniMax TTS: POST /v1/t2a_v2, returns base64 audio
+        const apiUrl = (appData.apiUrl || provider.url).replace(/\/$/, '');
+        const resp = await fetch(apiUrl + '/t2a_v2', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + appData.apiKey
+          },
+          body: JSON.stringify({
+            model: 'speech-2.8-hd',
+            text: speakText,
+            voice_id: 'English_Graceful_Lady',
+            speed: 0.85,
+            audio_format: 'mp3'
+          })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.audio) {
+            const byteChars = atob(data.audio);
+            const byteNums = new Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
+            const blob = new Blob([new Uint8Array(byteNums)], { type: 'audio/mp3' });
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.onended = removeSpeaking;
+            audio.onerror = removeSpeaking;
+            audio.play();
+            played = true;
+          }
+        }
+      } else {
+        // OpenAI-compatible TTS: POST /audio/speech, returns blob
+        const apiUrl = (appData.apiUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
+        const resp = await fetch(apiUrl + '/audio/speech', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + appData.apiKey
+          },
+          body: JSON.stringify({
+            model: 'tts-1-hd',
+            input: speakText,
+            voice: 'shimmer',
+            response_format: 'mp3',
+            speed: 0.85
+          })
+        });
+        if (resp.ok) {
+          const blob = await resp.blob();
+          const audio = new Audio(URL.createObjectURL(blob));
+          audio.onended = removeSpeaking;
+          audio.onerror = removeSpeaking;
+          audio.play();
+          played = true;
+        }
       }
     } catch (e) { /* fallback to Web Speech */ }
   }
