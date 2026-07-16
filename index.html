@@ -2351,6 +2351,7 @@ async function speakWord(e) {
 
   // Try API TTS using the dedicated TTS API key
   let played = false;
+  let ttsError = '';
   const ttsProvider = appData.ttsProvider || 'none';
   const ttsCfg = TTS_PROVIDERS[ttsProvider];
   if (ttsProvider !== 'none' && appData.ttsKey && ttsCfg) {
@@ -2375,31 +2376,24 @@ async function speakWord(e) {
           })
         });
         if (resp.ok) {
-          const ct = resp.headers.get('content-type') || '';
-          if (ct.includes('application/json')) {
-            const data = await resp.json();
-            const audioHex = data.data?.audio;
-            if (audioHex) {
-              // hex decode (not base64!)
-              const bytes = new Uint8Array(audioHex.length / 2);
-              for (let i = 0; i < audioHex.length; i += 2) {
-                bytes[i / 2] = parseInt(audioHex.substring(i, i + 2), 16);
-              }
-              const blob = new Blob([bytes], { type: 'audio/mp3' });
-              const audio = new Audio(URL.createObjectURL(blob));
-              audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
-              audio.play(); played = true;
+          const data = await resp.json();
+          const audioHex = data.data?.audio;
+          if (audioHex) {
+            const bytes = new Uint8Array(audioHex.length / 2);
+            for (let i = 0; i < audioHex.length; i += 2) {
+              bytes[i / 2] = parseInt(audioHex.substring(i, i + 2), 16);
             }
+            const blob = new Blob([bytes], { type: 'audio/mp3' });
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+            await audio.play();
+            played = true;
           } else {
-            const blob = await resp.blob();
-            if (blob.size > 0) {
-              const audio = new Audio(URL.createObjectURL(blob));
-              audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
-              audio.play(); played = true;
-            }
+            ttsError = 'MiniMax 返回空音频';
           }
         } else {
-          console.warn('MiniMax TTS error:', resp.status);
+          const errBody = await resp.text().catch(() => '');
+          ttsError = 'HTTP ' + resp.status + ': ' + errBody.substring(0, 100);
         }
       } else if (ttsCfg.ttsType === 'openai') {
         const resp = await fetch(ttsUrl + '/audio/speech', {
@@ -2409,12 +2403,24 @@ async function speakWord(e) {
         });
         if (resp.ok) {
           const blob = await resp.blob();
-          const audio = new Audio(URL.createObjectURL(blob));
-          audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
-          audio.play(); played = true;
+          if (blob.size > 0) {
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+            await audio.play();
+            played = true;
+          }
+        } else {
+          ttsError = 'OpenAI TTS HTTP ' + resp.status;
         }
       }
-    } catch (e) { /* fallback to Web Speech */ }
+    } catch (e) {
+      ttsError = e.message || String(e);
+      console.error('TTS error:', e);
+    }
+  }
+  
+  if (!played && ttsError) {
+    showToast('TTS 失败: ' + ttsError + ' — 已降级为浏览器发音', 5000);
   }
 
   // Fallback: Web Speech API
