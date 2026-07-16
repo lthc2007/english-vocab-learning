@@ -1139,7 +1139,7 @@ const TTS_PROVIDERS = {
   minimax: {
     name: 'MiniMax TTS', url: 'https://api.minimaxi.com/v1',
     models: ['speech-2.8-hd', 'speech-2.8-turbo', 'speech-2.6-hd'],
-    voices: ['English_Graceful_Lady', 'English_Trustworthy_Man', 'English_ReservedYoungMan', 'English_PlayfulGirl', 'English_ManWithDeepVoice', 'female-tianmei-jingpin', 'male-qn-qingse'],
+    voices: ['English_Graceful_Lady', 'English_Trustworth_Man', 'English_ReservedYoungMan', 'English_PlayfulGirl', 'English_ManWithDeepVoice', 'English_CalmWoman', 'English_magnetic_voiced_man', 'English_captivating_female1'],
     keyHint: '获取 API Key: <a href="https://platform.minimaxi.com/user-center/basic-information/interface-key" target="_blank" style="color:var(--accent);">platform.minimaxi.com</a>',
     ttsType: 'minimax'
   }
@@ -2354,16 +2354,30 @@ async function speakWord(e) {
           body: JSON.stringify({ model: ttsModel, text: speakText, voice_id: ttsVoice, speed: 0.85, audio_format: 'mp3' })
         });
         if (resp.ok) {
-          const data = await resp.json();
-          if (data.audio) {
-            const byteChars = atob(data.audio);
-            const byteNums = new Array(byteChars.length);
-            for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
-            const blob = new Blob([new Uint8Array(byteNums)], { type: 'audio/mp3' });
-            const audio = new Audio(URL.createObjectURL(blob));
-            audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
-            audio.play(); played = true;
+          const ct = resp.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const data = await resp.json();
+            const audioB64 = data.data?.audio || data.audio;
+            if (audioB64) {
+              const byteChars = atob(audioB64);
+              const byteNums = new Array(byteChars.length);
+              for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
+              const blob = new Blob([new Uint8Array(byteNums)], { type: 'audio/mp3' });
+              const audio = new Audio(URL.createObjectURL(blob));
+              audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+              audio.play(); played = true;
+            }
+          } else {
+            // binary audio response (audio/mpeg etc.)
+            const blob = await resp.blob();
+            if (blob.size > 0) {
+              const audio = new Audio(URL.createObjectURL(blob));
+              audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+              audio.play(); played = true;
+            }
           }
+        } else {
+          console.warn('MiniMax TTS error:', resp.status);
         }
       } else if (ttsCfg.ttsType === 'openai') {
         const resp = await fetch(ttsUrl + '/audio/speech', {
