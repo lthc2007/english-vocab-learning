@@ -1070,7 +1070,7 @@ function loadData() {
     if (raw) return JSON.parse(raw);
   } catch (e) { /* ignore */ }
   return { apiKey: '', apiUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-pro', provider: 'deepseek',
-    ttsKey: '', ttsProvider: 'minimax', ttsUrl: 'https://api.minimax.io', ttsModel: 'speech-2.8-hd', ttsVoice: 'English_Graceful_Lady',
+    ttsKey: '', ttsProvider: 'minimax', ttsUrl: 'https://api.minimaxi.com', ttsModel: 'speech-2.8-hd', ttsVoice: 'English_Graceful_Lady',
     words: [] };
 }
 
@@ -1137,10 +1137,10 @@ const TTS_PROVIDERS = {
     ttsType: 'openai'
   },
   minimax: {
-    name: 'MiniMax TTS', url: 'https://api.minimax.io',
+    name: 'MiniMax TTS', url: 'https://api.minimaxi.com',
     models: ['speech-2.8-hd', 'speech-2.8-turbo', 'speech-2.6-hd'],
     voices: ['English_Graceful_Lady', 'English_Trustworth_Man', 'English_ReservedYoungMan', 'English_PlayfulGirl', 'English_ManWithDeepVoice', 'English_CalmWoman', 'English_magnetic_voiced_man', 'English_captivating_female1'],
-    keyHint: '获取 API Key: <a href="https://platform.minimax.io/user-center/basic-information/interface-key" target="_blank" style="color:var(--accent);">platform.minimax.io</a>',
+    keyHint: '获取 API Key: <a href="https://platform.minimaxi.com/user-center/basic-information/interface-key" target="_blank" style="color:var(--accent);">platform.minimaxi.com</a>',
     ttsType: 'minimax'
   }
 };
@@ -1319,8 +1319,8 @@ function openSettings() {
   $('ttsProviderSelect').value = appData.ttsProvider || 'minimax';
   onTtsProviderChange();
   // Auto-correct old MiniMax URLs
-  if (appData.ttsUrl && appData.ttsUrl.includes('api.minimaxi.com')) {
-    appData.ttsUrl = 'https://api.minimax.io';
+  if (appData.ttsUrl && appData.ttsUrl.includes('api.minimax.io')) {
+    appData.ttsUrl = 'https://api.minimaxi.com';
     persist();
   }
   $('ttsUrlInput').value = appData.ttsUrl || '';
@@ -2377,6 +2377,7 @@ async function speakWord(e) {
         });
         if (resp.ok) {
           const data = await resp.json();
+          console.log('MiniMax TTS response:', JSON.stringify(data).substring(0, 300));
           const audioHex = data.data?.audio;
           if (audioHex) {
             const bytes = new Uint8Array(audioHex.length / 2);
@@ -2389,11 +2390,63 @@ async function speakWord(e) {
             await audio.play();
             played = true;
           } else {
-            ttsError = 'MiniMax 返回空音频';
+            ttsError = 'MiniMax 返回空音频 (status=' + (data.data?.status || '?') + ', base=' + (data.base_resp?.status_code || '?') + ')';
+            // 中国站返回空音频，尝试国际站
+            if (ttsUrl.includes('api.minimaxi.com')) {
+              try {
+                const resp2 = await fetch('https://api.minimax.io/v1/t2a_v2', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+                  body: JSON.stringify({
+                    model: ttsModel, text: speakText, stream: false, language_boost: 'English', output_format: 'hex',
+                    voice_setting: { voice_id: ttsVoice, speed: 0.85, vol: 1, pitch: 0 },
+                    audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
+                  })
+                });
+                if (resp2.ok) {
+                  const data2 = await resp2.json();
+                  const audioHex2 = data2.data?.audio;
+                  if (audioHex2) {
+                    const bytes = new Uint8Array(audioHex2.length / 2);
+                    for (let i = 0; i < audioHex2.length; i += 2) bytes[i / 2] = parseInt(audioHex2.substring(i, i + 2), 16);
+                    const blob = new Blob([bytes], { type: 'audio/mp3' });
+                    const audio = new Audio(URL.createObjectURL(blob));
+                    audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+                    await audio.play(); played = true; ttsError = '';
+                  }
+                }
+              } catch (e2) { /* ignore */ }
+            }
           }
         } else {
           const errBody = await resp.text().catch(() => '');
           ttsError = 'HTTP ' + resp.status + ': ' + errBody.substring(0, 100);
+          // 如果中国站失败，尝试国际站 URL
+          if (ttsUrl.includes('api.minimaxi.com')) {
+            try {
+              const resp2 = await fetch('https://api.minimax.io/v1/t2a_v2', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+                body: JSON.stringify({
+                  model: ttsModel, text: speakText, stream: false, language_boost: 'English', output_format: 'hex',
+                  voice_setting: { voice_id: ttsVoice, speed: 0.85, vol: 1, pitch: 0 },
+                  audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
+                })
+              });
+              if (resp2.ok) {
+                const data2 = await resp2.json();
+                const audioHex2 = data2.data?.audio;
+                if (audioHex2) {
+                  const bytes = new Uint8Array(audioHex2.length / 2);
+                  for (let i = 0; i < audioHex2.length; i += 2) bytes[i / 2] = parseInt(audioHex2.substring(i, i + 2), 16);
+                  const blob = new Blob([bytes], { type: 'audio/mp3' });
+                  const audio = new Audio(URL.createObjectURL(blob));
+                  audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+                  await audio.play(); played = true; ttsError = '';
+                }
+              }
+            } catch (e2) { /* ignore */ }
+          }
         }
       } else if (ttsCfg.ttsType === 'openai') {
         const resp = await fetch(ttsUrl + '/audio/speech', {
