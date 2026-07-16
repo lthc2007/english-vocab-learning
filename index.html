@@ -1070,7 +1070,7 @@ function loadData() {
     if (raw) return JSON.parse(raw);
   } catch (e) { /* ignore */ }
   return { apiKey: '', apiUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-pro', provider: 'deepseek',
-    ttsKey: '', ttsProvider: 'minimax', ttsUrl: 'https://api.minimaxi.com/v1', ttsModel: 'speech-2.8-hd', ttsVoice: 'English_Graceful_Lady',
+    ttsKey: '', ttsProvider: 'minimax', ttsUrl: 'https://api.minimax.io', ttsModel: 'speech-2.8-hd', ttsVoice: 'English_Graceful_Lady',
     words: [] };
 }
 
@@ -1137,10 +1137,10 @@ const TTS_PROVIDERS = {
     ttsType: 'openai'
   },
   minimax: {
-    name: 'MiniMax TTS', url: 'https://api.minimaxi.com/v1',
+    name: 'MiniMax TTS', url: 'https://api.minimax.io',
     models: ['speech-2.8-hd', 'speech-2.8-turbo', 'speech-2.6-hd'],
     voices: ['English_Graceful_Lady', 'English_Trustworth_Man', 'English_ReservedYoungMan', 'English_PlayfulGirl', 'English_ManWithDeepVoice', 'English_CalmWoman', 'English_magnetic_voiced_man', 'English_captivating_female1'],
-    keyHint: '获取 API Key: <a href="https://platform.minimaxi.com/user-center/basic-information/interface-key" target="_blank" style="color:var(--accent);">platform.minimaxi.com</a>',
+    keyHint: '获取 API Key: <a href="https://platform.minimax.io/user-center/basic-information/interface-key" target="_blank" style="color:var(--accent);">platform.minimax.io</a>',
     ttsType: 'minimax'
   }
 };
@@ -1318,6 +1318,11 @@ function openSettings() {
   // TTS section
   $('ttsProviderSelect').value = appData.ttsProvider || 'minimax';
   onTtsProviderChange();
+  // Auto-correct old MiniMax URLs
+  if (appData.ttsUrl && appData.ttsUrl.includes('api.minimaxi.com')) {
+    appData.ttsUrl = 'https://api.minimax.io';
+    persist();
+  }
   $('ttsUrlInput').value = appData.ttsUrl || '';
   $('ttsKeyInput').value = appData.ttsKey || '';
   if (appData.ttsModel) $('ttsModelSelect').value = appData.ttsModel;
@@ -1467,10 +1472,18 @@ async function testTtsConnection() {
 
   try {
     if (cfg.ttsType === 'minimax') {
-      const resp = await fetch(url + '/t2a_v2', {
+      const resp = await fetch(url + '/v1/t2a_v2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-        body: JSON.stringify({ model: 'speech-2.8-hd', text: 'Hello', voice_id: 'English_Graceful_Lady', audio_format: 'mp3' }),
+        body: JSON.stringify({
+          model: 'speech-2.8-hd',
+          text: 'Hello',
+          stream: false,
+          language_boost: 'English',
+          output_format: 'hex',
+          voice_setting: { voice_id: 'English_Graceful_Lady', speed: 1, vol: 1, pitch: 0 },
+          audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
+        }),
         signal: AbortSignal.timeout(15000)
       });
       if (resp.ok) {
@@ -2348,27 +2361,36 @@ async function speakWord(e) {
       const ttsVoice = appData.ttsVoice || ttsCfg.voices[0];
 
       if (ttsCfg.ttsType === 'minimax') {
-        const resp = await fetch(ttsUrl + '/t2a_v2', {
+        const resp = await fetch(ttsUrl + '/v1/t2a_v2', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
-          body: JSON.stringify({ model: ttsModel, text: speakText, voice_id: ttsVoice, speed: 0.85, audio_format: 'mp3' })
+          body: JSON.stringify({
+            model: ttsModel,
+            text: speakText,
+            stream: false,
+            language_boost: 'English',
+            output_format: 'hex',
+            voice_setting: { voice_id: ttsVoice, speed: 0.85, vol: 1, pitch: 0 },
+            audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
+          })
         });
         if (resp.ok) {
           const ct = resp.headers.get('content-type') || '';
           if (ct.includes('application/json')) {
             const data = await resp.json();
-            const audioB64 = data.data?.audio || data.audio;
-            if (audioB64) {
-              const byteChars = atob(audioB64);
-              const byteNums = new Array(byteChars.length);
-              for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
-              const blob = new Blob([new Uint8Array(byteNums)], { type: 'audio/mp3' });
+            const audioHex = data.data?.audio;
+            if (audioHex) {
+              // hex decode (not base64!)
+              const bytes = new Uint8Array(audioHex.length / 2);
+              for (let i = 0; i < audioHex.length; i += 2) {
+                bytes[i / 2] = parseInt(audioHex.substring(i, i + 2), 16);
+              }
+              const blob = new Blob([bytes], { type: 'audio/mp3' });
               const audio = new Audio(URL.createObjectURL(blob));
               audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
               audio.play(); played = true;
             }
           } else {
-            // binary audio response (audio/mpeg etc.)
             const blob = await resp.blob();
             if (blob.size > 0) {
               const audio = new Audio(URL.createObjectURL(blob));
