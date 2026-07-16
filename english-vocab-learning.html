@@ -971,42 +971,77 @@ tr:hover td { background: #f8fafc; }
 
 <!-- Settings Modal -->
 <div class="modal-overlay" id="modalSettings">
-  <div class="modal" style="max-width:480px;">
+  <div class="modal" style="max-width:520px;">
     <div class="modal-title">API 设置</div>
-    <div class="form-group">
-      <label class="form-label">服务商</label>
-      <select class="form-input" id="providerSelect" onchange="onProviderChange()">
-        <option value="deepseek">DeepSeek</option>
-        <option value="openai">OpenAI</option>
-        <option value="minimax">MiniMax</option>
-        <option value="moonshot">Moonshot (月之暗面)</option>
-        <option value="groq">Groq</option>
-        <option value="zhipu">智谱 AI (GLM)</option>
-        <option value="bytedance">豆包 (字节)</option>
-        <option value="custom">自定义</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">API 地址</label>
-      <input class="form-input" id="apiUrlInput" type="text" placeholder="https://api.deepseek.com/v1" autocomplete="off">
-      <p style="font-size:0.7rem;color:var(--muted);margin-top:2px;">服务商会自动填充，也可手动修改</p>
-    </div>
-    <div class="form-group">
-      <label class="form-label">模型名称</label>
-      <select class="form-input" id="modelSelect"></select>
-      <input class="form-input" id="modelCustomInput" type="text" placeholder="输入自定义模型名" autocomplete="off" style="display:none;margin-top:4px;">
-    </div>
-    <div class="form-group" style="position:relative;">
-      <label class="form-label">API Key</label>
-      <input class="form-input" id="apiKeyInput" type="password" placeholder="sk-..." autocomplete="off" style="padding-right:80px;">
-      <div class="input-btns">
-        <button class="btn btn-secondary btn-sm" onclick="pasteApiKey()" title="从剪贴板粘贴">📋 粘贴</button>
-        <button class="btn btn-secondary btn-sm" onclick="toggleKeyVisibility()" title="显示/隐藏" id="toggleKeyBtn">👁</button>
+    <!-- Section 1: AI Learning -->
+    <div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;">
+      <div style="font-weight:700;font-size:0.95rem;margin-bottom:10px;color:var(--accent);">AI 学习内容生成</div>
+      <div class="form-group">
+        <label class="form-label">服务商</label>
+        <select class="form-input" id="providerSelect" onchange="onProviderChange()">
+          <option value="deepseek">DeepSeek</option>
+          <option value="openai">OpenAI</option>
+          <option value="moonshot">Moonshot (月之暗面)</option>
+          <option value="groq">Groq</option>
+          <option value="zhipu">智谱 AI (GLM)</option>
+          <option value="bytedance">豆包 (字节)</option>
+          <option value="custom">自定义</option>
+        </select>
       </div>
-      <p style="font-size:0.75rem;color:var(--muted);margin-top:4px;" id="apiKeyHint">
-        获取 API Key: <a href="https://platform.deepseek.com/api_keys" target="_blank" style="color:var(--accent);">platform.deepseek.com</a>
-      </p>
+      <div class="form-group">
+        <label class="form-label">API 地址</label>
+        <input class="form-input" id="apiUrlInput" type="text" placeholder="https://api.deepseek.com/v1" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">模型名称</label>
+        <select class="form-input" id="modelSelect"></select>
+        <input class="form-input" id="modelCustomInput" type="text" placeholder="输入自定义模型名" autocomplete="off" style="display:none;margin-top:4px;">
+      </div>
+      <div class="form-group" style="position:relative;">
+        <label class="form-label">API Key</label>
+        <input class="form-input" id="apiKeyInput" type="password" placeholder="sk-..." autocomplete="off" style="padding-right:80px;">
+        <div class="input-btns">
+          <button class="btn btn-secondary btn-sm" onclick="pasteMainKey()">📋 粘贴</button>
+          <button class="btn btn-secondary btn-sm" onclick="toggleMainKeyVisibility()" title="显示/隐藏" id="toggleMainKeyBtn">👁</button>
+        </div>
+        <p style="font-size:0.75rem;color:var(--muted);margin-top:4px;" id="apiKeyHint"></p>
+      </div>
     </div>
+
+    <!-- Section 2: TTS -->
+    <div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;">
+      <div style="font-weight:700;font-size:0.95rem;margin-bottom:10px;color:var(--accent);">语音朗读 (TTS)</div>
+      <div class="form-group">
+        <label class="form-label">TTS 服务商</label>
+        <select class="form-input" id="ttsProviderSelect" onchange="onTtsProviderChange()">
+          <option value="none">不使用 API</option>
+          <option value="minimax">MiniMax TTS</option>
+          <option value="openai">OpenAI TTS</option>
+        </select>
+      </div>
+      <div class="form-group" id="ttsUrlGroup">
+        <label class="form-label">TTS API 地址</label>
+        <input class="form-input" id="ttsUrlInput" type="text" placeholder="https://api.minimaxi.com/v1" autocomplete="off">
+      </div>
+      <div class="form-group" id="ttsModelGroup">
+        <label class="form-label">TTS 模型</label>
+        <select class="form-input" id="ttsModelSelect"></select>
+      </div>
+      <div class="form-group" id="ttsVoiceGroup">
+        <label class="form-label">音色</label>
+        <select class="form-input" id="ttsVoiceSelect"></select>
+      </div>
+      <div class="form-group" id="ttsKeyGroup" style="position:relative;">
+        <label class="form-label">TTS API Key</label>
+        <input class="form-input" id="ttsKeyInput" type="password" placeholder="TTS API Key..." autocomplete="off" style="padding-right:80px;">
+        <div class="input-btns">
+          <button class="btn btn-secondary btn-sm" onclick="pasteTtsKey()">📋 粘贴</button>
+          <button class="btn btn-secondary btn-sm" onclick="toggleTtsKeyVisibility()" title="显示/隐藏" id="toggleTtsKeyBtn">👁</button>
+        </div>
+        <p style="font-size:0.75rem;color:var(--muted);margin-top:4px;" id="ttsKeyHint"></p>
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeSettings()">取消</button>
       <button class="btn btn-primary" onclick="saveSettings()">保存</button>
@@ -1028,7 +1063,9 @@ function loadData() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch (e) { /* ignore */ }
-  return { apiKey: '', apiUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-pro', provider: 'deepseek', words: [] };
+  return { apiKey: '', apiUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-pro', provider: 'deepseek',
+    ttsKey: '', ttsProvider: 'minimax', ttsUrl: 'https://api.minimaxi.com/v1', ttsModel: 'speech-2.8-hd', ttsVoice: 'English_Graceful_Lady',
+    words: [] };
 }
 
 // Provider presets
@@ -1044,21 +1081,7 @@ const PROVIDERS = {
     name: 'OpenAI',
     url: 'https://api.openai.com/v1',
     models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-    ttsModels: ['tts-1', 'tts-1-hd'],
-    ttsVoices: ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'],
-    keyHint: '获取 API Key: <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--accent);">platform.openai.com</a>',
-    tts: true,
-    ttsType: 'openai'
-  },
-  minimax: {
-    name: 'MiniMax',
-    url: 'https://api.minimaxi.com/v1',
-    models: ['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.5'],
-    ttsModels: ['speech-2.8-hd', 'speech-2.8-turbo', 'speech-2.6-hd'],
-    ttsVoices: ['English_Graceful_Lady', 'English_Trustworthy_Man', 'English_ReservedYoungMan', 'English_PlayfulGirl', 'English_ManWithDeepVoice', 'female-tianmei-jingpin', 'male-qn-qingse'],
-    keyHint: '获取 API Key: <a href="https://platform.minimaxi.com/user-center/basic-information/interface-key" target="_blank" style="color:var(--accent);">platform.minimaxi.com</a>',
-    tts: true,
-    ttsType: 'minimax'
+    keyHint: '获取 API Key: <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--accent);">platform.openai.com</a>'
   },
   moonshot: {
     name: 'Moonshot',
@@ -1094,6 +1117,25 @@ const PROVIDERS = {
     models: [],
     keyHint: '请输入自定义 API 地址和 Key',
     tts: true
+  }
+};
+
+// TTS-only providers (separate from AI learning providers)
+const TTS_PROVIDERS = {
+  none: { name: '不使用 API 朗读', url: '', keyHint: '使用浏览器内置语音朗读', ttsType: 'web' },
+  openai: {
+    name: 'OpenAI TTS', url: 'https://api.openai.com/v1',
+    models: ['tts-1', 'tts-1-hd'],
+    voices: ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'],
+    keyHint: '获取 API Key: <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--accent);">platform.openai.com</a>',
+    ttsType: 'openai'
+  },
+  minimax: {
+    name: 'MiniMax TTS', url: 'https://api.minimaxi.com/v1',
+    models: ['speech-2.8-hd', 'speech-2.8-turbo', 'speech-2.6-hd'],
+    voices: ['English_Graceful_Lady', 'English_Trustworthy_Man', 'English_ReservedYoungMan', 'English_PlayfulGirl', 'English_ManWithDeepVoice', 'female-tianmei-jingpin', 'male-qn-qingse'],
+    keyHint: '获取 API Key: <a href="https://platform.minimaxi.com/user-center/basic-information/interface-key" target="_blank" style="color:var(--accent);">platform.minimaxi.com</a>',
+    ttsType: 'minimax'
   }
 };
 
@@ -1175,7 +1217,12 @@ function exportData() {
     apiKey: appData.apiKey,
     apiUrl: appData.apiUrl,
     model: appData.model,
-    provider: appData.provider
+    provider: appData.provider,
+    ttsKey: appData.ttsKey,
+    ttsProvider: appData.ttsProvider,
+    ttsUrl: appData.ttsUrl,
+    ttsModel: appData.ttsModel,
+    ttsVoice: appData.ttsVoice
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1214,6 +1261,11 @@ function importData(event) {
         if (data.apiUrl) appData.apiUrl = data.apiUrl;
         if (data.model) appData.model = data.model;
         if (data.provider) appData.provider = data.provider;
+        if (data.ttsKey) appData.ttsKey = data.ttsKey;
+        if (data.ttsProvider) appData.ttsProvider = data.ttsProvider;
+        if (data.ttsUrl) appData.ttsUrl = data.ttsUrl;
+        if (data.ttsModel) appData.ttsModel = data.ttsModel;
+        if (data.ttsVoice) appData.ttsVoice = data.ttsVoice;
         showToast('覆盖导入完成: ' + data.words.length + ' 个单词已导入');
       }
       persist();
@@ -1245,7 +1297,6 @@ function updateApiStatus() {
 function openSettings() {
   $('providerSelect').value = appData.provider || 'deepseek';
   onProviderChange();
-  // Override with saved values
   $('apiUrlInput').value = appData.apiUrl || '';
   $('apiKeyInput').value = appData.apiKey || '';
   if (appData.model) {
@@ -1258,6 +1309,13 @@ function openSettings() {
       $('modelCustomInput').value = appData.model;
     }
   }
+  // TTS section
+  $('ttsProviderSelect').value = appData.ttsProvider || 'minimax';
+  onTtsProviderChange();
+  $('ttsUrlInput').value = appData.ttsUrl || '';
+  $('ttsKeyInput').value = appData.ttsKey || '';
+  if (appData.ttsModel) $('ttsModelSelect').value = appData.ttsModel;
+  if (appData.ttsVoice) $('ttsVoiceSelect').value = appData.ttsVoice;
   $('modalSettings').classList.add('show');
 }
 
@@ -1266,7 +1324,6 @@ function onProviderChange() {
   const cfg = PROVIDERS[provider];
   $('apiUrlInput').value = cfg.url;
   $('apiKeyHint').innerHTML = cfg.keyHint;
-  // Populate model options
   const sel = $('modelSelect');
   sel.innerHTML = '';
   cfg.models.forEach(m => {
@@ -1276,7 +1333,6 @@ function onProviderChange() {
     sel.appendChild(opt);
   });
   if (provider === 'custom') {
-    // Add custom option
     const opt = document.createElement('option');
     opt.value = '__custom__';
     opt.textContent = '自定义...';
@@ -1285,14 +1341,37 @@ function onProviderChange() {
   } else {
     $('modelCustomInput').style.display = 'none';
   }
-  // Listen for model select change to show custom input
   sel.onchange = function() {
-    if (sel.value === '__custom__') {
-      $('modelCustomInput').style.display = '';
-    } else {
-      $('modelCustomInput').style.display = 'none';
-    }
+    $('modelCustomInput').style.display = sel.value === '__custom__' ? '' : 'none';
   };
+}
+
+function onTtsProviderChange() {
+  const provider = $('ttsProviderSelect').value;
+  const cfg = TTS_PROVIDERS[provider];
+  if (provider === 'none') {
+    ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup'].forEach(id => $(id).style.display = 'none');
+    return;
+  }
+  ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup'].forEach(id => $(id).style.display = '');
+  $('ttsUrlInput').value = cfg.url;
+  $('ttsKeyHint').innerHTML = cfg.keyHint;
+  const sel = $('ttsModelSelect');
+  sel.innerHTML = '';
+  cfg.models.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = m;
+    sel.appendChild(opt);
+  });
+  const vsel = $('ttsVoiceSelect');
+  vsel.innerHTML = '';
+  cfg.voices.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v;
+    vsel.appendChild(opt);
+  });
 }
 
 function closeSettings() {
@@ -1305,16 +1384,36 @@ function saveSettings() {
   appData.apiUrl = $('apiUrlInput').value.trim();
   appData.apiKey = $('apiKeyInput').value.trim();
   const modelVal = $('modelSelect').value;
-  if (modelVal === '__custom__') {
-    appData.model = $('modelCustomInput').value.trim();
-  } else {
-    appData.model = modelVal;
-  }
+  appData.model = modelVal === '__custom__' ? $('modelCustomInput').value.trim() : modelVal;
+  // TTS
+  appData.ttsProvider = $('ttsProviderSelect').value;
+  appData.ttsUrl = $('ttsUrlInput').value.trim();
+  appData.ttsKey = $('ttsKeyInput').value.trim();
+  appData.ttsModel = $('ttsModelSelect').value;
+  appData.ttsVoice = $('ttsVoiceSelect').value;
   persist();
   updateApiStatus();
   closeSettings();
   showToast('API 设置已保存');
   renderWordTable();
+}
+
+// ─── Key paste / toggle helpers ───
+async function pasteMainKey() {
+  try { $('apiKeyInput').value = await navigator.clipboard.readText(); showToast('已粘贴'); } catch (e) { showToast('粘贴失败，请手动输入'); }
+}
+async function pasteTtsKey() {
+  try { $('ttsKeyInput').value = await navigator.clipboard.readText(); showToast('已粘贴'); } catch (e) { showToast('粘贴失败，请手动输入'); }
+}
+function toggleMainKeyVisibility() {
+  const inp = $('apiKeyInput'); const btn = $('toggleMainKeyBtn');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+}
+function toggleTtsKeyVisibility() {
+  const inp = $('ttsKeyInput'); const btn = $('toggleTtsKeyBtn');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.textContent = inp.type === 'password' ? '👁' : '🙈';
 }
 
 // ═══════════════════════════════════════
@@ -1373,32 +1472,6 @@ async function pasteFromClipboard() {
     }
   } catch (e) {
     showToast('无法读取剪贴板，请手动 Ctrl+V 粘贴');
-  }
-}
-
-async function pasteApiKey() {
-  try {
-    const text = await navigator.clipboard.readText();
-    if (text) {
-      $('apiKeyInput').value = text.trim();
-      showToast('已粘贴 API Key');
-    } else {
-      showToast('剪贴板为空');
-    }
-  } catch (e) {
-    showToast('无法读取剪贴板，请手动 Ctrl+V 粘贴');
-  }
-}
-
-function toggleKeyVisibility() {
-  const input = $('apiKeyInput');
-  const btn = $('toggleKeyBtn');
-  if (input.type === 'password') {
-    input.type = 'text';
-    btn.textContent = '🙈';
-  } else {
-    input.type = 'password';
-    btn.textContent = '👁';
   }
 }
 
@@ -2131,27 +2204,22 @@ async function speakWord(e) {
   // 构建朗读文本：仅朗读单词
   let speakText = w.english;
 
-  // Try API TTS first (OpenAI / MiniMax)
+  // Try API TTS using the dedicated TTS API key
   let played = false;
-  const provider = PROVIDERS[appData.provider || 'deepseek'];
-  if (appData.apiKey && provider.tts) {
+  const ttsProvider = appData.ttsProvider || 'none';
+  const ttsCfg = TTS_PROVIDERS[ttsProvider];
+  if (ttsProvider !== 'none' && appData.ttsKey && ttsCfg) {
     try {
-      if (provider.ttsType === 'minimax') {
-        // MiniMax TTS: POST /v1/t2a_v2, returns base64 audio
-        const apiUrl = (appData.apiUrl || provider.url).replace(/\/$/, '');
-        const resp = await fetch(apiUrl + '/t2a_v2', {
+      const ttsUrl = (appData.ttsUrl || ttsCfg.url).replace(/\/$/, '');
+      const ttsKey = appData.ttsKey;
+      const ttsModel = appData.ttsModel || ttsCfg.models[0];
+      const ttsVoice = appData.ttsVoice || ttsCfg.voices[0];
+
+      if (ttsCfg.ttsType === 'minimax') {
+        const resp = await fetch(ttsUrl + '/t2a_v2', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + appData.apiKey
-          },
-          body: JSON.stringify({
-            model: 'speech-2.8-hd',
-            text: speakText,
-            voice_id: 'English_Graceful_Lady',
-            speed: 0.85,
-            audio_format: 'mp3'
-          })
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+          body: JSON.stringify({ model: ttsModel, text: speakText, voice_id: ttsVoice, speed: 0.85, audio_format: 'mp3' })
         });
         if (resp.ok) {
           const data = await resp.json();
@@ -2161,36 +2229,21 @@ async function speakWord(e) {
             for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
             const blob = new Blob([new Uint8Array(byteNums)], { type: 'audio/mp3' });
             const audio = new Audio(URL.createObjectURL(blob));
-            audio.onended = removeSpeaking;
-            audio.onerror = removeSpeaking;
-            audio.play();
-            played = true;
+            audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+            audio.play(); played = true;
           }
         }
-      } else {
-        // OpenAI-compatible TTS: POST /audio/speech, returns blob
-        const apiUrl = (appData.apiUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
-        const resp = await fetch(apiUrl + '/audio/speech', {
+      } else if (ttsCfg.ttsType === 'openai') {
+        const resp = await fetch(ttsUrl + '/audio/speech', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + appData.apiKey
-          },
-          body: JSON.stringify({
-            model: 'tts-1-hd',
-            input: speakText,
-            voice: 'shimmer',
-            response_format: 'mp3',
-            speed: 0.85
-          })
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+          body: JSON.stringify({ model: ttsModel, input: speakText, voice: ttsVoice, response_format: 'mp3', speed: 0.85 })
         });
         if (resp.ok) {
           const blob = await resp.blob();
           const audio = new Audio(URL.createObjectURL(blob));
-          audio.onended = removeSpeaking;
-          audio.onerror = removeSpeaking;
-          audio.play();
-          played = true;
+          audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+          audio.play(); played = true;
         }
       }
     } catch (e) { /* fallback to Web Speech */ }
