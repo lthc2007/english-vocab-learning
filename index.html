@@ -713,6 +713,7 @@ tr:hover td { background: #f8fafc; }
     <button class="nav-tab" data-tab="learn">AI 学习</button>
     <button class="nav-tab" data-tab="spell">拼写练习</button>
     <button class="nav-tab" data-tab="quiz">看英选中</button>
+    <button class="nav-tab" data-tab="read">文章朗读</button>
   </div>
 </nav>
 
@@ -962,6 +963,31 @@ tr:hover td { background: #f8fafc; }
         <div style="display:flex;gap:12px;justify-content:center;margin-top:16px;">
           <button class="btn btn-danger btn-sm" onclick="resetQuiz()">重新开始</button>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tab: 文章朗读 -->
+  <section class="tab-panel" id="panel-read">
+    <div class="card">
+      <div class="card-header">
+        <span>文章朗读</span>
+        <span style="font-size:0.75rem;color:var(--muted);">导入英文文章，AI 真人朗读，可下载音频</span>
+      </div>
+      <textarea id="articleText" placeholder="在此粘贴英文文章..." style="width:100%;height:200px;font-family:var(--mono);font-size:0.9rem;line-height:1.6;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink);resize:vertical;"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;">
+        <button class="btn btn-primary" id="btnReadPlay" onclick="startArticleRead()">▶ 朗读</button>
+        <button class="btn btn-secondary" id="btnReadPause" onclick="pauseArticleRead()" style="display:none;">⏸ 暂停</button>
+        <button class="btn btn-secondary" id="btnReadResume" onclick="resumeArticleRead()" style="display:none;">▶ 继续</button>
+        <button class="btn btn-secondary" id="btnReadStop" onclick="stopArticleRead()" style="display:none;">⏹ 停止</button>
+        <button class="btn btn-outline" id="btnReadDownload" onclick="downloadArticleAudio()" style="display:none;">💾 下载音频</button>
+        <span id="readStatus" style="font-size:0.8rem;color:var(--muted);"></span>
+      </div>
+      <div style="margin-top:8px;">
+        <div class="progress-bar" id="readProgressBar" style="display:none;">
+          <div class="progress-fill" id="readProgressFill" style="width:0%;transition:width 0.3s;"></div>
+        </div>
+        <span id="readProgressText" style="font-size:0.75rem;color:var(--muted);display:none;"></span>
       </div>
     </div>
   </section>
@@ -2907,6 +2933,301 @@ $('modalSettings').addEventListener('click', function(e) {
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') closeSettings();
 });
+
+// ═══════════════════════════════════════
+// Article Reading
+// ═══════════════════════════════════════
+let articleAudio = null;
+let articleBlob = null;
+let articleChunks = [];       // audio chunks for current article
+let articleChunkIdx = -1;     // current playing chunk index
+let articleIsPlaying = false;
+let articleIsPaused = false;
+let articlePausedAt = 0;
+
+// Shared MiniMax TTS helper: returns { blob, error }
+async function callMiniMaxTTS(text) {
+  const ttsProvider = appData.ttsProvider || 'none';
+  const ttsCfg = TTS_PROVIDERS[ttsProvider];
+  if (ttsProvider === 'none' || !appData.ttsKey || !ttsCfg) {
+    return { blob: null, error: 'TTS 未配置' };
+  }
+  const ttsUrl = (appData.ttsUrl || ttsCfg.url).replace(/\/$/, '');
+  const ttsKey = appData.ttsKey;
+  const ttsModel = appData.ttsModel || ttsCfg.models[0];
+  const ttsVoice = appData.ttsVoice || ttsCfg.voices[0];
+
+  if (ttsCfg.ttsType === 'minimax') {
+    const resp = await fetch(ttsUrl + '/v1/t2a_v2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+      body: JSON.stringify({
+        model: ttsModel, text, stream: false, language_boost: 'English', output_format: 'hex',
+        voice_setting: { voice_id: ttsVoice, speed: 0.95, vol: 1, pitch: 0 },
+        audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
+      })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      const audioHex = data.data?.audio;
+      if (audioHex) {
+        const bytes = new Uint8Array(audioHex.length / 2);
+        for (let i = 0; i < audioHex.length; i += 2) bytes[i / 2] = parseInt(audioHex.substring(i, i + 2), 16);
+        return { blob: new Blob([bytes], { type: 'audio/mp3' }), error: null };
+      }
+      return { blob: null, error: 'MiniMax 返回空音频 (status=' + (data.data?.status || '?') + ')' };
+    }
+    // 中国站失败，尝试国际站
+    if (ttsUrl.includes('api.minimaxi.com')) {
+      try {
+        const resp2 = await fetch('https://api.minimax.io/v1/t2a_v2', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+          body: JSON.stringify({
+            model: ttsModel, text, stream: false, language_boost: 'English', output_format: 'hex',
+            voice_setting: { voice_id: ttsVoice, speed: 0.95, vol: 1, pitch: 0 },
+            audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
+          })
+        });
+        if (resp2.ok) {
+          const data2 = await resp2.json();
+          const audioHex2 = data2.data?.audio;
+          if (audioHex2) {
+            const bytes = new Uint8Array(audioHex2.length / 2);
+            for (let i = 0; i < audioHex2.length; i += 2) bytes[i / 2] = parseInt(audioHex2.substring(i, i + 2), 16);
+            return { blob: new Blob([bytes], { type: 'audio/mp3' }), error: null };
+          }
+        }
+      } catch (e2) { /* ignore */ }
+    }
+    const errBody = await resp.text().catch(() => '');
+    return { blob: null, error: 'HTTP ' + resp.status + ': ' + errBody.substring(0, 100) };
+  } else if (ttsCfg.ttsType === 'openai') {
+    const resp = await fetch(ttsUrl + '/audio/speech', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+      body: JSON.stringify({ model: ttsModel, input: text, voice: ttsVoice, response_format: 'mp3', speed: 0.95 })
+    });
+    if (resp.ok) {
+      const blob = await resp.blob();
+      if (blob.size > 0) return { blob, error: null };
+      return { blob: null, error: 'OpenAI TTS 返回空音频' };
+    }
+    return { blob: null, error: 'OpenAI TTS HTTP ' + resp.status };
+  }
+  return { blob: null, error: '未知 TTS 类型' };
+}
+
+function mergeAudioBlobs(blobs) {
+  return new Blob(blobs, { type: 'audio/mp3' });
+}
+
+async function startArticleRead() {
+  const text = $('articleText').value.trim();
+  if (!text) { showToast('请先粘贴英文文章'); return; }
+
+  const ttsProvider = appData.ttsProvider || 'none';
+  const ttsCfg = TTS_PROVIDERS[ttsProvider];
+  const hasTTS = ttsProvider !== 'none' && appData.ttsKey && ttsCfg;
+
+  // Reset state
+  stopArticleRead();
+  articleChunks = [];
+  articleChunkIdx = -1;
+  articleBlob = null;
+  articleIsPlaying = false;
+  articleIsPaused = false;
+
+  $('btnReadPlay').style.display = 'none';
+  $('btnReadStop').style.display = '';
+  $('btnReadPause').style.display = 'none';
+  $('btnReadResume').style.display = 'none';
+  $('btnReadDownload').style.display = 'none';
+  $('readStatus').textContent = '';
+
+  if (hasTTS) {
+    // Split text into chunks (MiniMax limit is ~10k chars, use 8000 for safety)
+    const MAX_CHUNK = 8000;
+    let chunks = [];
+    if (text.length <= MAX_CHUNK) {
+      chunks = [text];
+    } else {
+      // Split at sentence boundaries
+      let remaining = text;
+      while (remaining.length > 0) {
+        if (remaining.length <= MAX_CHUNK) {
+          chunks.push(remaining);
+          break;
+        }
+        let cut = MAX_CHUNK;
+        // Try to cut at the last sentence-ending punctuation within range
+        const searchEnd = Math.min(MAX_CHUNK, remaining.length);
+        const lastPeriod = remaining.lastIndexOf('. ', searchEnd - 1);
+        const lastExcl = remaining.lastIndexOf('! ', searchEnd - 1);
+        const lastQ = remaining.lastIndexOf('? ', searchEnd - 1);
+        const lastNewline = remaining.lastIndexOf('\n', searchEnd - 1);
+        const best = Math.max(lastPeriod, lastExcl, lastQ, lastNewline);
+        if (best > MAX_CHUNK * 0.5) cut = best + 1;
+        chunks.push(remaining.substring(0, cut).trim());
+        remaining = remaining.substring(cut).trim();
+      }
+    }
+
+    $('readProgressBar').style.display = '';
+    $('readProgressText').style.display = '';
+    $('readProgressText').textContent = '正在生成 AI 语音... 0/' + chunks.length;
+    $('readProgressFill').style.width = '0%';
+    $('readStatus').textContent = '正在生成 AI 语音...';
+
+    const blobs = [];
+    for (let i = 0; i < chunks.length; i++) {
+      const { blob, error } = await callMiniMaxTTS(chunks[i]);
+      if (blob) {
+        blobs.push(blob);
+        $('readProgressText').textContent = '正在生成 AI 语音... ' + (i + 1) + '/' + chunks.length;
+        $('readProgressFill').style.width = ((i + 1) / chunks.length * 100) + '%';
+      } else {
+        showToast('第 ' + (i + 1) + ' 段生成失败: ' + error + ' — 降级为浏览器朗读');
+        $('readProgressBar').style.display = 'none';
+        $('readProgressText').style.display = 'none';
+        break;
+      }
+    }
+
+    if (blobs.length === chunks.length) {
+      // All chunks generated successfully
+      articleBlob = mergeAudioBlobs(blobs);
+      articleChunks = blobs;
+      $('readStatus').textContent = '朗读中... (MiniMax AI)';
+      $('readProgressBar').style.display = 'none';
+      $('readProgressText').style.display = 'none';
+      $('btnReadDownload').style.display = '';
+      $('btnReadPause').style.display = '';
+      playArticleChunks(0);
+      return;
+    }
+  }
+
+  // Fallback to Web Speech
+  $('readProgressBar').style.display = 'none';
+  $('readProgressText').style.display = 'none';
+  $('readStatus').textContent = '朗读中... (浏览器语音)';
+  $('btnReadPause').style.display = '';
+  $('btnReadDownload').style.display = 'none';
+  doWebSpeechRead(text);
+}
+
+function playArticleChunks(idx) {
+  if (idx >= articleChunks.length) { onArticleEnded(); return; }
+  articleChunkIdx = idx;
+  const url = URL.createObjectURL(articleChunks[idx]);
+  articleAudio = new Audio(url);
+  articleAudio.onended = () => {
+    URL.revokeObjectURL(url);
+    playArticleChunks(idx + 1);
+  };
+  articleAudio.onerror = () => { showToast('音频播放失败'); onArticleEnded(); };
+  articleAudio.onpause = () => {
+    if (articleAudio && !articleAudio.ended) {
+      articleIsPaused = true;
+      articlePausedAt = articleAudio.currentTime;
+    }
+  };
+  articleAudio.play();
+  articleIsPlaying = true;
+  articleIsPaused = false;
+}
+
+function pauseArticleRead() {
+  if (articleAudio) { articleAudio.pause(); }
+  $('btnReadPause').style.display = 'none';
+  $('btnReadResume').style.display = '';
+  $('readStatus').textContent = '已暂停';
+}
+
+function resumeArticleRead() {
+  if (articleAudio) { articleAudio.play(); articleIsPaused = false; }
+  $('btnReadPause').style.display = '';
+  $('btnReadResume').style.display = 'none';
+  $('readStatus').textContent = '朗读中...';
+}
+
+function stopArticleRead() {
+  if (articleAudio) {
+    articleAudio.pause();
+    articleAudio = null;
+  }
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  articleIsPlaying = false;
+  articleIsPaused = false;
+  articleChunks = [];
+  articleChunkIdx = -1;
+  articleBlob = null;
+  $('btnReadPlay').style.display = '';
+  $('btnReadPause').style.display = 'none';
+  $('btnReadResume').style.display = 'none';
+  $('btnReadStop').style.display = 'none';
+  $('btnReadDownload').style.display = 'none';
+  $('readStatus').textContent = '';
+  $('readProgressBar').style.display = 'none';
+  $('readProgressText').style.display = 'none';
+}
+
+function onArticleEnded() {
+  articleIsPlaying = false;
+  articleIsPaused = false;
+  $('btnReadPlay').style.display = '';
+  $('btnReadPause').style.display = 'none';
+  $('btnReadResume').style.display = 'none';
+  $('btnReadStop').style.display = 'none';
+  $('readStatus').textContent = '朗读完毕';
+}
+
+function downloadArticleAudio() {
+  if (!articleBlob) { showToast('没有可下载的音频'); return; }
+  const url = URL.createObjectURL(articleBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'article-reading.mp3';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('音频下载中...');
+}
+
+function doWebSpeechRead(text) {
+  if (!('speechSynthesis' in window)) {
+    showToast('浏览器不支持朗读功能');
+    onArticleEnded();
+    return;
+  }
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'en-US';
+  utter.rate = 0.85;
+  utter.pitch = 1.0;
+  utter.volume = 1;
+  const voices = window.speechSynthesis.getVoices();
+  const preferred = [
+    v => v.name.includes('Google') && v.voiceURI.includes('en-US') && v.name.includes('Neural'),
+    v => v.name.includes('Google') && v.lang.startsWith('en-US'),
+    v => v.name.includes('Google') && v.lang.startsWith('en'),
+    v => v.name.includes('Microsoft') && v.name.includes('Jenny') && v.lang === 'en-US',
+    v => v.name.includes('Microsoft') && v.name.includes('Aria') && v.lang === 'en-US',
+    v => v.name.includes('Samantha') && v.lang === 'en-US',
+    v => v.lang === 'en-US',
+    v => v.lang.startsWith('en'),
+  ];
+  for (const match of preferred) {
+    const found = voices.find(match);
+    if (found) { utter.voice = found; break; }
+  }
+  utter.onend = onArticleEnded;
+  utter.onerror = onArticleEnded;
+  window.speechSynthesis.speak(utter);
+  articleIsPlaying = true;
+}
 
 init();
 </script>
