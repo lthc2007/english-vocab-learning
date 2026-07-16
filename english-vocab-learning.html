@@ -1007,6 +1007,8 @@ tr:hover td { background: #f8fafc; }
           <button class="btn btn-secondary btn-sm" onclick="toggleMainKeyVisibility()" title="显示/隐藏" id="toggleMainKeyBtn">👁</button>
         </div>
         <p style="font-size:0.75rem;color:var(--muted);margin-top:4px;" id="apiKeyHint"></p>
+        <button class="btn btn-secondary btn-sm" onclick="testAiConnection()" id="testAiBtn" style="margin-top:8px;width:100%;">🔍 测试 AI 连接</button>
+        <span id="testAiResult" style="display:block;margin-top:4px;font-size:0.8rem;"></span>
       </div>
     </div>
 
@@ -1041,6 +1043,8 @@ tr:hover td { background: #f8fafc; }
           <button class="btn btn-secondary btn-sm" onclick="toggleTtsKeyVisibility()" title="显示/隐藏" id="toggleTtsKeyBtn">👁</button>
         </div>
         <p style="font-size:0.75rem;color:var(--muted);margin-top:4px;" id="ttsKeyHint"></p>
+        <button class="btn btn-secondary btn-sm" onclick="testTtsConnection()" id="testTtsBtn" style="margin-top:8px;width:100%;">🔍 测试 TTS 连接</button>
+        <span id="testTtsResult" style="display:block;margin-top:4px;font-size:0.8rem;"></span>
       </div>
     </div>
 
@@ -1378,6 +1382,132 @@ function onTtsProviderChange() {
 
 function closeSettings() {
   $('modalSettings').classList.remove('show');
+}
+
+// ─── API 连接测试 ───
+async function testAiConnection() {
+  const btn = $('testAiBtn');
+  const result = $('testAiResult');
+  btn.disabled = true;
+  btn.textContent = '测试中...';
+  result.textContent = '';
+  result.style.color = '';
+
+  const key = $('apiKeyInput').value.trim();
+  const url = ($('apiUrlInput').value.trim() || 'https://api.deepseek.com/v1').replace(/\/$/, '');
+  const model = getModalModel();
+
+  if (!key) {
+    result.textContent = '请先填写 API Key';
+    result.style.color = '#e74c3c';
+    btn.disabled = false;
+    btn.textContent = '🔍 测试 AI 连接';
+    return;
+  }
+
+  try {
+    const resp = await fetch(url + '/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + key
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [{ role: 'user', content: 'Hello' }],
+        max_tokens: 5
+      }),
+      signal: AbortSignal.timeout(15000)
+    });
+    if (resp.ok) {
+      result.textContent = 'AI 连接成功！模型: ' + model;
+      result.style.color = '#27ae60';
+    } else {
+      const err = await resp.text().catch(() => '');
+      const short = err.substring(0, 200);
+      result.textContent = '连接失败: HTTP ' + resp.status + (short ? ' — ' + short : '');
+      result.style.color = '#e74c3c';
+    }
+  } catch (e) {
+    result.textContent = '连接失败: ' + (e.name === 'TimeoutError' ? '请求超时' : e.message);
+    result.style.color = '#e74c3c';
+  }
+  btn.disabled = false;
+  btn.textContent = '🔍 测试 AI 连接';
+}
+
+async function testTtsConnection() {
+  const btn = $('testTtsBtn');
+  const result = $('testTtsResult');
+  btn.disabled = true;
+  btn.textContent = '测试中...';
+  result.textContent = '';
+  result.style.color = '';
+
+  const provider = $('ttsProviderSelect').value;
+  if (provider === 'none') {
+    result.textContent = '未启用 API 朗读，无需测试';
+    result.style.color = '#999';
+    btn.disabled = false;
+    btn.textContent = '🔍 测试 TTS 连接';
+    return;
+  }
+
+  const key = $('ttsKeyInput').value.trim();
+  const url = ($('ttsUrlInput').value.trim() || TTS_PROVIDERS[provider].url).replace(/\/$/, '');
+  const cfg = TTS_PROVIDERS[provider];
+
+  if (!key) {
+    result.textContent = '请先填写 TTS API Key';
+    result.style.color = '#e74c3c';
+    btn.disabled = false;
+    btn.textContent = '🔍 测试 TTS 连接';
+    return;
+  }
+
+  try {
+    if (cfg.ttsType === 'minimax') {
+      const resp = await fetch(url + '/t2a_v2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({ model: 'speech-2.8-hd', text: 'Hello', voice_id: 'English_Graceful_Lady', audio_format: 'mp3' }),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (resp.ok) {
+        result.textContent = 'TTS 连接成功！(MiniMax)';
+        result.style.color = '#27ae60';
+      } else {
+        const err = await resp.text().catch(() => '');
+        result.textContent = '连接失败: HTTP ' + resp.status + (err ? ' — ' + err.substring(0, 200) : '');
+        result.style.color = '#e74c3c';
+      }
+    } else if (cfg.ttsType === 'openai') {
+      const resp = await fetch(url + '/audio/speech', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({ model: 'tts-1-hd', input: 'Hello', voice: 'alloy', response_format: 'mp3' }),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (resp.ok) {
+        result.textContent = 'TTS 连接成功！(OpenAI)';
+        result.style.color = '#27ae60';
+      } else {
+        const err = await resp.text().catch(() => '');
+        result.textContent = '连接失败: HTTP ' + resp.status + (err ? ' — ' + err.substring(0, 200) : '');
+        result.style.color = '#e74c3c';
+      }
+    }
+  } catch (e) {
+    result.textContent = '连接失败: ' + (e.name === 'TimeoutError' ? '请求超时' : e.message);
+    result.style.color = '#e74c3c';
+  }
+  btn.disabled = false;
+  btn.textContent = '🔍 测试 TTS 连接';
+}
+
+function getModalModel() {
+  const sel = $('modelSelect');
+  return sel.value === '__custom__' ? $('modelCustomInput').value.trim() : sel.value;
 }
 
 function saveSettings() {
