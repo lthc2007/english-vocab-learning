@@ -984,6 +984,7 @@ tr:hover td { background: #f8fafc; }
         <button class="btn btn-secondary" id="btnReadResume" onclick="resumeArticleRead()" style="display:none;">▶ 继续</button>
         <button class="btn btn-secondary" id="btnReadStop" onclick="stopArticleRead()" style="display:none;">⏹ 停止</button>
         <button class="btn btn-outline" id="btnReadDownload" onclick="downloadArticleAudio()" style="display:none;">💾 下载音频</button>
+        <button class="btn btn-secondary btn-sm" id="btnReadClear" onclick="clearArticle()" title="清空文章">🗑 清除</button>
         <span id="readStatus" style="font-size:0.8rem;color:var(--muted);"></span>
       </div>
       <div style="margin-top:8px;">
@@ -3203,6 +3204,12 @@ function stopArticleRead() {
   $('readStatus').textContent = '';
   $('readProgressBar').style.display = 'none';
   $('readProgressText').style.display = 'none';
+}
+
+function clearArticle() {
+  $('articleText').value = '';
+  $('articleEstimate').style.display = 'none';
+  stopArticleRead();
 }
 
 function onArticleEnded() {
