@@ -848,7 +848,7 @@ tr:hover td { background: #f8fafc; }
         <div class="flashcard" id="flashcard" onclick="handleCardClick()">
           <div class="word-front" id="fcFront">click</div>
           <button class="btn-speak" id="btnSpeak" onclick="speakWord(event)" title="朗读">🔊</button>
-          <div style="display:flex;align-items:center;justify-content:center;gap:6px;"><div id="fcExampleFront" style="font-size:0.85rem;color:var(--ink);line-height:1.5;display:none;"></div><button class="btn-speak-example" id="btnSpeakExampleFront" onclick="speakExample(event)" title="朗读例句" style="display:none;">📢</button></div>
+          <div id="fcExampleFront" style="font-size:0.85rem;color:var(--ink);margin-top:6px;line-height:1.5;text-align:center;display:none;"></div>
             <div class="word-meta" id="fcMeta" style="display:none;"></div>
           <div id="fcBack" style="display:none;">
             <div class="word-back" id="fcWordHeader"></div>
@@ -2276,10 +2276,8 @@ function showCard() {
   if (w.example) {
     $('fcExampleFront').innerHTML = `<i>"${escapeHtml(w.example)}"</i>`;
     $('fcExampleFront').style.display = '';
-    $('btnSpeakExampleFront').style.display = '';
   } else {
     $('fcExampleFront').style.display = 'none';
-    $('btnSpeakExampleFront').style.display = 'none';
   }
   // 例句（卡片背面：英文例句 + 中文翻译）
   if (w.example) {
@@ -2566,7 +2564,6 @@ function flipCard() {
   cardFlipped = !cardFlipped;
   $('fcFront').style.display = cardFlipped ? 'none' : '';
   $('fcExampleFront').style.display = cardFlipped ? 'none' : (appData.words[learnIndex] && appData.words[learnIndex].example ? '' : 'none');
-  $('btnSpeakExampleFront').style.display = cardFlipped ? 'none' : (appData.words[learnIndex] && appData.words[learnIndex].example ? '' : 'none');
   $('fcBack').style.display = cardFlipped ? '' : 'none';
   $('fcHint').textContent = cardFlipped ? '点击收起' : '点击翻转卡片';
   $('btnGenOne').style.display = cardFlipped ? 'none' : '';

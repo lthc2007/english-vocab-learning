@@ -283,6 +283,9 @@ tr:hover td { background: #f8fafc; }
 }
 .btn-speak:hover { background: var(--accent); border-color: var(--accent); transform: scale(1.1); }
 .btn-speak.speaking { background: var(--accent); color: #fff; border-color: var(--accent); animation: pulse 0.6s infinite; }
+.btn-speak-example { background: none; border: none; cursor: pointer; font-size: 0.85rem; padding: 2px 4px; border-radius: 4px; line-height: 1; transition: all 0.15s; color: var(--muted); }
+.btn-speak-example:hover { background: var(--bg2); color: var(--accent); transform: scale(1.2); }
+.btn-speak-example.speaking { color: var(--accent); animation: pulse 0.6s infinite; }
 @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
 .flashcard .word-back { font-size: 1.3rem; color: var(--accent); margin-top: 8px; text-align: center; }
 .flashcard .word-meta { margin-top: 8px; text-align: center; }
@@ -851,7 +854,7 @@ tr:hover td { background: #f8fafc; }
             <div class="word-back" id="fcWordHeader"></div>
             <div class="ai-section" id="aiExample" style="display:none;">
               <div class="ai-section-title">例句</div>
-              <div class="ai-section-content" id="fcExampleBack"></div>
+              <div class="ai-section-content" id="fcExampleBack"></div><button class="btn-speak-example" id="btnSpeakExampleBack" onclick="speakExample(event)" title="朗读例句" style="display:none;margin-top:4px;">📢</button>
             </div>
             <div class="ai-section" id="aiSynonyms" style="display:none;">
               <div class="ai-section-title">近义词 / 反义词</div>
@@ -2280,8 +2283,10 @@ function showCard() {
   if (w.example) {
     $('fcExampleBack').innerHTML = `<i>"${escapeHtml(w.example)}"</i>${w.exampleCn ? ' <span style="color:var(--muted);">' + escapeHtml(w.exampleCn) + '</span>' : ''}`;
     $('aiExample').style.display = '';
+    $('btnSpeakExampleBack').style.display = '';
   } else {
     $('aiExample').style.display = 'none';
+    $('btnSpeakExampleBack').style.display = 'none';
   }
   // Header (背面)
   if (w.pos) {
@@ -3266,6 +3271,112 @@ function doWebSpeechRead(text) {
   utter.onerror = onArticleEnded;
   window.speechSynthesis.speak(utter);
   articleIsPlaying = true;
+}
+
+
+async function speakExample(e) {
+  e.stopPropagation();
+  const w = appData.words[learnIndex];
+  if (!w || !w.example) return;
+  const btnId = e.target.id;
+  const btn = $(btnId);
+  btn.classList.add('speaking');
+  const removeSpeaking = () => btn.classList.remove('speaking');
+
+  let speakText = w.example;
+  let played = false;
+  let ttsError = '';
+  const ttsProvider = appData.ttsProvider || 'none';
+  const ttsCfg = TTS_PROVIDERS[ttsProvider];
+  if (ttsProvider !== 'none' && appData.ttsKey && ttsCfg) {
+    try {
+      const ttsUrl = (appData.ttsUrl || ttsCfg.url).replace(/\/$/, '');
+      const ttsKey = appData.ttsKey;
+      const ttsModel = appData.ttsModel || ttsCfg.models[0];
+      const ttsVoice = appData.ttsVoice || ttsCfg.voices[0];
+
+      if (ttsCfg.ttsType === 'minimax') {
+        const resp = await fetch(ttsUrl + '/v1/t2a_v2', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+          body: JSON.stringify({
+            model: ttsModel, text: speakText, stream: false, language_boost: 'English', output_format: 'hex',
+            voice_setting: { voice_id: ttsVoice, speed: 0.85, vol: 1, pitch: 0 },
+            audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
+          })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const audioHex = data.data?.audio;
+          if (audioHex) {
+            const bytes = new Uint8Array(audioHex.length / 2);
+            for (let i = 0; i < audioHex.length; i += 2) bytes[i / 2] = parseInt(audioHex.substring(i, i + 2), 16);
+            const blob = new Blob([bytes], { type: 'audio/mp3' });
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+            await audio.play(); played = true;
+          } else {
+            ttsError = 'MiniMax 返回空音频';
+          }
+        } else {
+          ttsError = 'MiniMax HTTP ' + resp.status;
+        }
+      } else if (ttsCfg.ttsType === 'openai') {
+        const resp = await fetch(ttsUrl + '/audio/speech', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+          body: JSON.stringify({ model: ttsModel, input: speakText, voice: ttsVoice, response_format: 'mp3', speed: 0.85 })
+        });
+        if (resp.ok) {
+          const blob = await resp.blob();
+          if (blob.size > 0) {
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+            await audio.play(); played = true;
+          }
+        } else {
+          ttsError = 'OpenAI HTTP ' + resp.status;
+        }
+      }
+    } catch (e) {
+      ttsError = e.message || String(e);
+    }
+  }
+
+  if (!played && ttsError) {
+    showToast('例句朗读失败: ' + ttsError + ' — 已降级浏览器发音', 5000);
+  }
+  if (!played) {
+    // Fallback: Web Speech
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(speakText);
+      utter.lang = 'en-US';
+      utter.rate = 0.8;
+      utter.pitch = 1.0;
+      utter.volume = 1;
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = [
+        v => v.name.includes('Google') && v.voiceURI && v.voiceURI.includes('en-US') && v.name.includes('Neural'),
+        v => v.name.includes('Google') && v.lang.startsWith('en-US'),
+        v => v.name.includes('Google') && v.lang.startsWith('en'),
+        v => v.name.includes('Microsoft') && v.name.includes('Jenny') && v.lang === 'en-US',
+        v => v.name.includes('Microsoft') && v.name.includes('Aria') && v.lang === 'en-US',
+        v => v.name.includes('Samantha') && v.lang === 'en-US',
+        v => v.lang === 'en-US',
+        v => v.lang.startsWith('en'),
+      ];
+      for (const match of preferred) {
+        const found = voices.find(match);
+        if (found) { utter.voice = found; break; }
+      }
+      utter.onend = removeSpeaking;
+      utter.onerror = removeSpeaking;
+      window.speechSynthesis.speak(utter);
+    } else {
+      removeSpeaking();
+    }
+  }
 }
 
 init();
