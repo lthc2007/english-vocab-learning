@@ -717,6 +717,7 @@ tr:hover td { background: #f8fafc; }
     <button class="nav-tab" data-tab="spell">拼写练习</button>
     <button class="nav-tab" data-tab="quiz">看英选中</button>
     <button class="nav-tab" data-tab="read">文章朗读</button>
+    <button class="nav-tab" data-tab="lookup">单词查询</button>
   </div>
 </nav>
 
@@ -996,6 +997,50 @@ tr:hover td { background: #f8fafc; }
         </div>
         <span id="readProgressText" style="font-size:0.75rem;color:var(--muted);display:none;"></span>
       </div>
+    </div>
+  </section>
+
+  <!-- Tab: 单词查询 -->
+  <section class="tab-panel" id="panel-lookup">
+    <div class="card">
+      <div class="card-header">
+        <span>单词查询</span>
+        <span style="font-size:0.75rem;color:var(--muted);">输入单词，AI 即时生成释义、例句、派生词等</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" id="lookupWord" placeholder="输入英文单词..." class="form-input" style="flex:1;font-size:1.1rem;padding:10px 14px;" onkeydown="if(event.key==='Enter')doLookup()">
+        <button class="btn btn-primary" id="btnLookup" onclick="doLookup()">🔍 查询</button>
+      </div>
+      <div id="lookupResult" style="display:none;margin-top:16px;border:1px solid var(--border);border-radius:10px;padding:16px;">
+        <!-- Phonetic -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span style="font-size:1.5rem;font-weight:700;color:var(--accent);" id="luWord"></span>
+          <span style="font-size:1rem;color:var(--muted);" id="luPhonetic"></span>
+          <button class="btn-speak" id="luSpeak" onclick="lookupSpeak(event)" title="朗读单词" style="display:none;">🔊</button>
+        </div>
+        <!-- Definition -->
+        <div style="margin-bottom:12px;">
+          <div class="ai-section-title">释义</div>
+          <div class="ai-section-content" id="luDefinition" style="line-height:1.8;"></div>
+        </div>
+        <!-- Examples -->
+        <div style="margin-bottom:12px;" id="luExamplesArea">
+          <div class="ai-section-title">例句 <button class="btn-speak-example" id="luSpeakExample" onclick="lookupSpeakExample(event)" title="朗读例句" style="display:none;">📢</button></div>
+          <div class="ai-section-content" id="luExamples"></div>
+        </div>
+        <!-- Derived words -->
+        <div style="margin-bottom:12px;" id="luDerivedArea">
+          <div class="ai-section-title">派生词</div>
+          <div class="ai-section-content" id="luDerived"></div>
+        </div>
+        <!-- Add to list -->
+        <div id="luAddArea" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+          <button class="btn btn-primary" id="luAddBtn" onclick="addLookedUpWord()">➕ 添加到我的单词列表</button>
+          <span id="luAddedMsg" style="display:none;margin-left:10px;color:var(--green);font-size:0.85rem;">已添加 ✓</span>
+        </div>
+      </div>
+      <div id="lookupLoading" style="display:none;text-align:center;padding:20px;color:var(--muted);">AI 正在查询中，请稍候...</div>
+      <div id="lookupError" style="display:none;text-align:center;padding:16px;color:#e74c3c;"></div>
     </div>
   </section>
 </main>
@@ -3376,6 +3421,242 @@ async function speakExample(e) {
     } else {
       removeSpeaking();
     }
+  }
+}
+
+// ═══════════════════════════════════════
+// Word Lookup
+// ═══════════════════════════════════════
+let lookupData = null; // { word, phonetic, definition, examples, derived }
+
+async function doLookup() {
+  const word = $('lookupWord').value.trim();
+  if (!word) { showToast('请输入单词'); return; }
+  if (!appData.apiKey) { showToast('请先在 API 设置中配置 AI API Key'); return; }
+
+  $('lookupResult').style.display = 'none';
+  $('lookupError').style.display = 'none';
+  $('lookupLoading').style.display = '';
+  $('btnLookup').disabled = true;
+  lookupData = null;
+
+  try {
+    const prompt = `请为英语单词 "${word}" 生成以下学习内容，严格按照格式输出：
+
+音标: <该单词的国际音标 IPA，例如 /ˈeksəmpəl/>
+释义: <完整的中文释义，用序号列出不同词性和义项。标注常用程度，常用的义项前加【常用】。例如：1.【常用】动词：放弃、遗弃 2.【常用】名词：放纵、放任>
+例句: <2个自然实用的英文例句，每句一行，附中文翻译。格式：例句1 | 翻译1，例句2 | 翻译2>
+派生词: <该单词的派生词及其释义，用 | 分隔，例如：abandoned (adj.) 被遗弃的 | abandonment (n.) 放弃、抛弃>`;
+
+    const result = await callAI(prompt, 2000);
+    if (result) {
+      const phonetic = parseSection(result, '音标') || '';
+      const definition = parseSection(result, '释义') || '';
+      const examplesRaw = parseSection(result, '例句') || '';
+      const derived = parseSection(result, '派生词') || '';
+
+      // Parse definition: bold 【常用】 marks
+      const defHtml = definition
+        .replace(/【常用】/g, '<strong style="color:#e67e22;">●常用 </strong>')
+        .replace(/\n/g, '<br>');
+
+      // Parse examples
+      const exampleLines = examplesRaw.split('\n').filter(l => l.trim());
+      const exampleItems = exampleLines.map((line, i) => {
+        const parts = line.split('|').map(s => s.trim());
+        if (parts.length >= 2) {
+          return `<div style="margin-bottom:6px;">${i + 1}. <i>"${escapeHtml(parts[0])}"</i> <span style="color:var(--muted);">${escapeHtml(parts[1])}</span></div>`;
+        }
+        return `<div style="margin-bottom:6px;">${i + 1}. <i>"${escapeHtml(line)}"</i></div>`;
+      }).join('');
+
+      // Parse derived words
+      const derivedItems = derived.split('|').map(s => s.trim()).filter(s => s);
+      const derivedHtml = derivedItems.length > 0
+        ? derivedItems.map(d => `<span style="display:inline-block;background:var(--bg);padding:3px 8px;border-radius:4px;margin:3px 4px;font-size:0.85rem;">${escapeHtml(d)}</span>`).join('')
+        : '暂无派生词';
+
+      // Populate UI
+      $('luWord').textContent = word;
+      $('luPhonetic').textContent = phonetic;
+      $('luSpeak').style.display = phonetic ? '' : 'none';
+      $('luDefinition').innerHTML = defHtml;
+      $('luExamples').innerHTML = exampleItems || '暂无例句';
+      $('luSpeakExample').style.display = exampleItems ? '' : 'none';
+      $('luDerived').innerHTML = derivedHtml;
+      $('luAddedMsg').style.display = 'none';
+
+      // Check if already in word list
+      const exists = appData.words.find(w => w.english.toLowerCase() === word.toLowerCase());
+      $('luAddBtn').style.display = exists ? 'none' : '';
+      if (exists) $('luAddedMsg').textContent = '已在单词列表中 ✓';
+
+      // Store lookup data
+      lookupData = {
+        word: word,
+        phonetic: phonetic,
+        definition: definition,
+        examples: examplesRaw,
+        examplesHtml: exampleItems,
+        derived: derived,
+        derivedHtml: derivedHtml
+      };
+
+      $('lookupResult').style.display = '';
+    } else {
+      $('lookupError').textContent = '查询失败，请稍后重试';
+      $('lookupError').style.display = '';
+    }
+  } catch (err) {
+    console.error('lookup error:', err);
+    $('lookupError').textContent = '查询失败: ' + (err.message || '未知错误');
+    $('lookupError').style.display = '';
+  }
+
+  $('lookupLoading').style.display = 'none';
+  $('btnLookup').disabled = false;
+}
+
+function addLookedUpWord() {
+  if (!lookupData) return;
+  const { word, phonetic, definition, examples, derived } = lookupData;
+
+  // Check duplicate
+  if (appData.words.find(w => w.english.toLowerCase() === word.toLowerCase())) {
+    showToast('该单词已在列表中');
+    return;
+  }
+
+  // Extract example
+  const exampleLines = examples.split('\n').filter(l => l.trim());
+  const firstExample = exampleLines.length > 0
+    ? exampleLines[0].split('|')[0].trim()
+    : '';
+
+  const newWord = {
+    id: Date.now(),
+    english: word,
+    chinese: definition.replace(/【常用】/g, '').replace(/\d+\.\s*/g, '').split('\n')[0].substring(0, 50),
+    phonetic: phonetic,
+    example: firstExample,
+    exampleCn: '',
+    pos: '',
+    synonyms: '',
+    antonyms: '',
+    collocations: '',
+    rootAnalysis: derived || '',
+    passage: '',
+    dialogue: '',
+    similarWords: '',
+    clozeTest: '',
+    translationExercise: '',
+    difficulty: '',
+    frequency: '',
+    aiGenerated: false
+  };
+
+  appData.words.push(newWord);
+  persist();
+  renderWordTable();
+  $('luAddBtn').style.display = 'none';
+  $('luAddedMsg').style.display = '';
+  $('luAddedMsg').textContent = '已添加 ✓';
+  showToast('「' + word + '」已添加到单词列表');
+}
+
+async function lookupSpeak(e) {
+  e.stopPropagation();
+  const word = lookupData?.word;
+  if (!word) return;
+  const btn = $('luSpeak');
+  btn.classList.add('speaking');
+  const removeSpeaking = () => btn.classList.remove('speaking');
+  await speakText(word, removeSpeaking);
+}
+
+async function lookupSpeakExample(e) {
+  e.stopPropagation();
+  if (!lookupData || !lookupData.examples) return;
+  const btn = $('luSpeakExample');
+  btn.classList.add('speaking');
+  const removeSpeaking = () => btn.classList.remove('speaking');
+  // Get first example sentence
+  const firstLine = lookupData.examples.split('\n').filter(l => l.trim())[0] || '';
+  const text = firstLine.split('|')[0].trim();
+  if (!text) { removeSpeaking(); return; }
+  await speakText(text, removeSpeaking);
+}
+
+// Shared speak helper: try MiniMax TTS, fallback to browser
+async function speakText(text, onDone) {
+  let played = false;
+  const ttsProvider = appData.ttsProvider || 'none';
+  const ttsCfg = TTS_PROVIDERS[ttsProvider];
+  if (ttsProvider !== 'none' && appData.ttsKey && ttsCfg) {
+    try {
+      const ttsUrl = (appData.ttsUrl || ttsCfg.url).replace(/\/$/, '');
+      const ttsKey = appData.ttsKey;
+      const ttsModel = appData.ttsModel || ttsCfg.models[0];
+      const ttsVoice = appData.ttsVoice || ttsCfg.voices[0];
+
+      if (ttsCfg.ttsType === 'minimax') {
+        const resp = await fetch(ttsUrl + '/v1/t2a_v2', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+          body: JSON.stringify({
+            model: ttsModel, text, stream: false, language_boost: 'English', output_format: 'hex',
+            voice_setting: { voice_id: ttsVoice, speed: 0.85, vol: 1, pitch: 0 },
+            audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
+          })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const audioHex = data.data?.audio;
+          if (audioHex) {
+            const bytes = new Uint8Array(audioHex.length / 2);
+            for (let i = 0; i < audioHex.length; i += 2) bytes[i / 2] = parseInt(audioHex.substring(i, i + 2), 16);
+            const blob = new Blob([bytes], { type: 'audio/mp3' });
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.onended = onDone; audio.onerror = onDone;
+            await audio.play(); played = true;
+          }
+        }
+      } else if (ttsCfg.ttsType === 'openai') {
+        const resp = await fetch(ttsUrl + '/audio/speech', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+          body: JSON.stringify({ model: ttsModel, input: text, voice: ttsVoice, response_format: 'mp3', speed: 0.85 })
+        });
+        if (resp.ok) {
+          const blob = await resp.blob();
+          if (blob.size > 0) {
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.onended = onDone; audio.onerror = onDone;
+            await audio.play(); played = true;
+          }
+        }
+      }
+    } catch (e) { /* fallback */ }
+  }
+  if (!played) {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'en-US'; utter.rate = 0.8; utter.pitch = 1; utter.volume = 1;
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = [
+        v => v.name.includes('Google') && v.voiceURI && v.voiceURI.includes('en-US') && v.name.includes('Neural'),
+        v => v.name.includes('Google') && v.lang.startsWith('en-US'),
+        v => v.name.includes('Google') && v.lang.startsWith('en'),
+        v => v.name.includes('Microsoft') && (v.name.includes('Jenny') || v.name.includes('Aria')) && v.lang === 'en-US',
+        v => v.name.includes('Samantha') && v.lang === 'en-US',
+        v => v.lang === 'en-US',
+        v => v.lang.startsWith('en'),
+      ];
+      for (const match of preferred) { const found = voices.find(match); if (found) { utter.voice = found; break; } }
+      utter.onend = onDone; utter.onerror = onDone;
+      window.speechSynthesis.speak(utter);
+    } else { onDone(); }
   }
 }
 
