@@ -1954,7 +1954,7 @@ function batchImport() {
 
 function deleteWord(id) {
   if (!confirm('确定删除该单词吗？')) return;
-  appData.words = appData.words.filter(w => w.id !== id);
+  appData.words = appData.words.filter(w => w.id !== Number(id));
   persist();
   renderWordTable();
   showToast('单词已删除');
@@ -3498,8 +3498,13 @@ async function doLookup() {
 
       // Check if already in word list
       const exists = appData.words.find(w => w.english.toLowerCase() === word.toLowerCase());
-      $('luAddBtn').style.display = exists ? 'none' : '';
-      if (exists) $('luAddedMsg').textContent = '已在单词列表中 ✓';
+      if (exists) {
+        $('luAddBtn').style.display = 'none';
+        $('luAddedMsg').textContent = '已在单词列表中 ✓';
+        $('luAddedMsg').style.display = '';
+      } else {
+        $('luAddBtn').style.display = '';
+      }
 
       // Store lookup data
       lookupData = {
