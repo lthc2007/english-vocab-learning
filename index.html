@@ -2075,7 +2075,7 @@ async function callAI(prompt, maxTokens = 1500) {
 function parseSection(text, label) {
   const patterns = [
     // 匹配：从当前标签到下一个"标签:"模式之间的所有内容（支持多行）
-    new RegExp(label + '[:：]\\s*([\\s\\S]+?)(?=\\n\\s*(?:音标|例句|例句翻译|近义词|反义词|搭配|词根|短文|对话|形近词|填空|翻译题|难度|考频)[:：]|$)', 's'),
+    new RegExp(label + '[:：]\\s*([\\s\\S]+?)(?=\\n\\s*(?:音标|释义|例句|例句翻译|近义词|反义词|搭配|词根|词根词缀|派生词|短文|对话|形近词|填空|翻译题|难度|考频)[:：]|$)', 's'),
     // 备用：单行匹配
     new RegExp(label + '\\s*[:：]\\s*(.+?)(?:\\n|$)', 's'),
   ];
@@ -3549,14 +3549,32 @@ function addLookedUpWord() {
     ? exampleLines[0].split('|')[0].trim()
     : '';
 
+  // Extract POS from definition (e.g. "1. 动词：放弃" → "动词")
+  let pos = '';
+  const posMatch = definition.match(/(n\.|v\.|vi\.|vt\.|adj\.|adv\.|prep\.|conj\.|pron\.|num\.|art\.|int\.|aux\.|det\.|auxil\.|名词|动词|形容词|副词|介词|连词|代词|数词|冠词|感叹词|助动词|限定词)/);
+  if (posMatch) {
+    const raw = posMatch[1];
+    const posMap = { '名词': 'n.', '动词': 'v.', '形容词': 'adj.', '副词': 'adv.', '介词': 'prep.', '连词': 'conj.', '代词': 'pron.', '数词': 'num.', '冠词': 'art.', '感叹词': 'int.', '助动词': 'aux.', '限定词': 'det.' };
+    pos = posMap[raw] || raw;
+    if (!pos.endsWith('.')) pos += '.';
+  }
+
+  // Build Chinese: first line of definition without numbering and POS label
+  let chinese = definition
+    .replace(/【常用】/g, '')
+    .replace(/\d+\.\s*/g, '')
+    .replace(/^(n\.|v\.|vi\.|vt\.|adj\.|adv\.|prep\.|conj\.|pron\.|num\.|art\.|int\.|aux\.|det\.|auxil\.|名词|动词|形容词|副词|介词|连词|代词|数词|冠词|感叹词|助动词|限定词)[:：]\s*/, '')
+    .split('\n')[0].trim();
+  if (chinese.length > 50) chinese = chinese.substring(0, 50);
+
   const newWord = {
     id: generateId(),
     english: word,
-    chinese: definition.replace(/【常用】/g, '').replace(/\d+\.\s*/g, '').split('\n')[0].substring(0, 50),
+    chinese: chinese,
     phonetic: phonetic,
     example: firstExample,
     exampleCn: '',
-    pos: '',
+    pos: pos,
     synonyms: '',
     antonyms: '',
     collocations: '',
