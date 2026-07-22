@@ -712,17 +712,62 @@ tr:hover td { background: #f8fafc; }
 <!-- Tabs -->
 <nav class="nav-tabs">
   <div class="nav-inner">
-    <button class="nav-tab active" data-tab="manage">单词管理</button>
+    <button class="nav-tab active" data-tab="lookup">单词查询</button>
+    <button class="nav-tab" data-tab="manage">单词管理</button>
     <button class="nav-tab" data-tab="learn">AI 学习</button>
     <button class="nav-tab" data-tab="spell">拼写练习</button>
     <button class="nav-tab" data-tab="quiz">看英选中</button>
     <button class="nav-tab" data-tab="read">文章朗读</button>
-    <button class="nav-tab" data-tab="lookup">单词查询</button>
   </div>
 </nav>
 
 <!-- Main Content -->
 <main class="main">
+
+  <!-- Tab: 单词查询 -->
+  <section class="tab-panel" id="panel-lookup">
+    <div class="card">
+      <div class="card-header">
+        <span>单词查询</span>
+        <span style="font-size:0.75rem;color:var(--muted);">输入单词，AI 即时生成释义、例句、派生词等</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" id="lookupWord" placeholder="输入英文单词..." class="form-input" style="flex:1;font-size:1.1rem;padding:10px 14px;" onkeydown="if(event.key==='Enter')doLookup()">
+        <button class="btn btn-primary" id="btnLookup" onclick="doLookup()">🔍 查询</button>
+      </div>
+      <div id="lookupResult" style="display:none;margin-top:16px;border:1px solid var(--border);border-radius:10px;padding:16px;">
+        <!-- Phonetic -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span style="font-size:1.5rem;font-weight:700;color:var(--accent);" id="luWord"></span>
+          <span style="font-size:1rem;color:var(--muted);" id="luPhonetic"></span>
+          <button class="btn-speak" id="luSpeak" onclick="lookupSpeak(event)" title="朗读单词" style="display:none;">🔊</button>
+        </div>
+        <!-- Definition -->
+        <div style="margin-bottom:12px;">
+          <div class="ai-section-title">释义</div>
+          <div class="ai-section-content" id="luDefinition" style="line-height:1.8;"></div>
+        </div>
+        <!-- Examples -->
+        <div style="margin-bottom:12px;" id="luExamplesArea">
+          <div class="ai-section-title">例句 <button class="btn-speak-example" id="luSpeakExample" onclick="lookupSpeakExample(event)" title="朗读例句" style="display:none;">📢</button></div>
+          <div class="ai-section-content" id="luExamples"></div>
+        </div>
+        <!-- Derived words -->
+        <div style="margin-bottom:12px;" id="luDerivedArea">
+          <div class="ai-section-title">派生词</div>
+          <div class="ai-section-content" id="luDerived"></div>
+        </div>
+        <!-- Add to list -->
+        <div id="luAddArea" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+          <button class="btn btn-primary" id="luAddBtn" onclick="addLookedUpWord()">➕ 添加到我的单词列表</button>
+          <span id="luAddedMsg" style="display:none;margin-left:10px;color:var(--green);font-size:0.85rem;">已添加 ✓</span>
+        </div>
+      </div>
+      <div id="lookupLoading" style="display:none;text-align:center;padding:20px;color:var(--muted);">AI 正在查询中，请稍候...</div>
+      <div id="lookupError" style="display:none;text-align:center;padding:16px;color:#e74c3c;"></div>
+    </div>
+  </section>
+</main>
 
   <!-- Tab: 单词管理 -->
   <section class="tab-panel active" id="panel-manage">
@@ -999,51 +1044,6 @@ tr:hover td { background: #f8fafc; }
       </div>
     </div>
   </section>
-
-  <!-- Tab: 单词查询 -->
-  <section class="tab-panel" id="panel-lookup">
-    <div class="card">
-      <div class="card-header">
-        <span>单词查询</span>
-        <span style="font-size:0.75rem;color:var(--muted);">输入单词，AI 即时生成释义、例句、派生词等</span>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <input type="text" id="lookupWord" placeholder="输入英文单词..." class="form-input" style="flex:1;font-size:1.1rem;padding:10px 14px;" onkeydown="if(event.key==='Enter')doLookup()">
-        <button class="btn btn-primary" id="btnLookup" onclick="doLookup()">🔍 查询</button>
-      </div>
-      <div id="lookupResult" style="display:none;margin-top:16px;border:1px solid var(--border);border-radius:10px;padding:16px;">
-        <!-- Phonetic -->
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-          <span style="font-size:1.5rem;font-weight:700;color:var(--accent);" id="luWord"></span>
-          <span style="font-size:1rem;color:var(--muted);" id="luPhonetic"></span>
-          <button class="btn-speak" id="luSpeak" onclick="lookupSpeak(event)" title="朗读单词" style="display:none;">🔊</button>
-        </div>
-        <!-- Definition -->
-        <div style="margin-bottom:12px;">
-          <div class="ai-section-title">释义</div>
-          <div class="ai-section-content" id="luDefinition" style="line-height:1.8;"></div>
-        </div>
-        <!-- Examples -->
-        <div style="margin-bottom:12px;" id="luExamplesArea">
-          <div class="ai-section-title">例句 <button class="btn-speak-example" id="luSpeakExample" onclick="lookupSpeakExample(event)" title="朗读例句" style="display:none;">📢</button></div>
-          <div class="ai-section-content" id="luExamples"></div>
-        </div>
-        <!-- Derived words -->
-        <div style="margin-bottom:12px;" id="luDerivedArea">
-          <div class="ai-section-title">派生词</div>
-          <div class="ai-section-content" id="luDerived"></div>
-        </div>
-        <!-- Add to list -->
-        <div id="luAddArea" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
-          <button class="btn btn-primary" id="luAddBtn" onclick="addLookedUpWord()">➕ 添加到我的单词列表</button>
-          <span id="luAddedMsg" style="display:none;margin-left:10px;color:var(--green);font-size:0.85rem;">已添加 ✓</span>
-        </div>
-      </div>
-      <div id="lookupLoading" style="display:none;text-align:center;padding:20px;color:var(--muted);">AI 正在查询中，请稍候...</div>
-      <div id="lookupError" style="display:none;text-align:center;padding:16px;color:#e74c3c;"></div>
-    </div>
-  </section>
-</main>
 
 <footer class="site-footer">
   Created by <strong>little hc</strong> and <strong>TRAE</strong>
