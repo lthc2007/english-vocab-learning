@@ -1954,7 +1954,7 @@ function batchImport() {
 
 function deleteWord(id) {
   if (!confirm('确定删除该单词吗？')) return;
-  appData.words = appData.words.filter(w => w.id !== Number(id));
+  appData.words = appData.words.filter(w => String(w.id) !== String(id));
   persist();
   renderWordTable();
   showToast('单词已删除');
@@ -2089,7 +2089,7 @@ function parseSection(text, label) {
 async function generateAllContent(wordId) {
   let word;
   if (wordId) {
-    word = appData.words.find(w => w.id === wordId);
+    word = appData.words.find(w => String(w.id) === String(wordId));
   } else {
     word = appData.words[learnIndex];
   }
@@ -3550,7 +3550,7 @@ function addLookedUpWord() {
     : '';
 
   const newWord = {
-    id: Date.now(),
+    id: generateId(),
     english: word,
     chinese: definition.replace(/【常用】/g, '').replace(/\d+\.\s*/g, '').split('\n')[0].substring(0, 50),
     phonetic: phonetic,
