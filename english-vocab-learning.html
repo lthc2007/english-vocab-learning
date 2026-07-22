@@ -3449,7 +3449,7 @@ async function doLookup() {
     const prompt = `请为英语单词 "${word}" 生成以下学习内容，严格按照格式输出：
 
 音标: <该单词的国际音标 IPA，例如 /ˈeksəmpəl/>
-释义: <精简的中文释义，只列出1-2个最常用的义项，用序号列出。词性用英文缩写。例如：1. n. 放弃、遗弃 2. v. 放纵>
+释义: <精简的中文释义，只列出1-2个最常用的义项，不要加序号。词性用英文缩写。例如：n. 放弃、遗弃；v. 放纵>
 例句: <1个自然实用的英文例句，附中文翻译。格式：英文例句 | 中文翻译>
 词根词缀: <该单词的词根词缀拆解，例如：ab-（离开）+ bandon（命令）→ 放弃命令→遗弃。如无明确词根写"暂无">
 派生词: <该单词的派生词及其释义，用 | 分隔，例如：abandoned (adj.) 被遗弃的 | abandonment (n.) 放弃>`;
@@ -3462,8 +3462,9 @@ async function doLookup() {
       const rootAffix = parseSection(result, '词根词缀') || '';
       const derived = parseSection(result, '派生词') || '';
 
-      // Parse definition: bold 【常用】 marks
+      // Parse definition: remove numbering, bold 【常用】 marks
       const defHtml = definition
+        .replace(/^\d+\.\s*/gm, '')
         .replace(/【常用】/g, '<strong style="color:#e67e22;">●常用 </strong>')
         .replace(/\n/g, '<br>');
 
