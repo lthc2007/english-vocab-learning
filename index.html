@@ -797,6 +797,57 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   color: var(--accent);
   line-height: 1;
 }
+/* ── History ── */
+.history-item {
+  background: var(--bg2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin-bottom: 12px;
+  transition: all var(--transition);
+}
+.history-item:hover { border-color: var(--border); box-shadow: var(--shadow); }
+.history-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.history-type {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.history-type.translation { background: #e8f5e9; color: #4a7c59; }
+.history-type.writing { background: #e3f2fd; color: #4a7a9e; }
+.history-date {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.history-preview {
+  font-size: 0.88rem;
+  color: var(--ink);
+  line-height: 1.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 8px;
+}
+.history-score {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.history-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -830,6 +881,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     <button class="nav-tab" data-tab="read">文章朗读</button>
     <button class="nav-tab" data-tab="translate">翻译练习</button>
     <button class="nav-tab" data-tab="writing">作文练习</button>
+    <button class="nav-tab" data-tab="history">批改记录</button>
   </div>
 </nav>
 
@@ -965,6 +1017,10 @@ tr:hover td { background: rgba(201,169,110,0.06); }
             <div class="ai-section-title">修改后范文（基于你的译文）</div>
             <div class="result-content" id="correctFixedEssay"></div>
           </div>
+          <div style="text-align:center;margin-top:16px;">
+            <button class="btn btn-success" id="btnSaveCorrect" onclick="saveCorrection('translation')" style="display:none;">💾 保存本次批改</button>
+            <span id="correctSavedMsg" style="display:none;color:var(--success);font-size:0.85rem;margin-left:10px;">已保存 ✓</span>
+          </div>
         </div>
       </div>
     </div>
@@ -1011,10 +1067,30 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           <div class="result-content" id="writingAiEssay"></div>
         </div>
         <div class="result-card">
-          <div class="ai-section-title">修改后范文（基于你的作文）</div>
-          <div class="result-content" id="writingFixedEssay"></div>
+            <div class="ai-section-title">修改后范文（基于你的作文）</div>
+            <div class="result-content" id="writingFixedEssay"></div>
+          </div>
+          <div style="text-align:center;margin-top:16px;">
+            <button class="btn btn-success" id="btnSaveWriting" onclick="saveCorrection('writing')" style="display:none;">💾 保存本次批改</button>
+            <span id="writingSavedMsg" style="display:none;color:var(--success);font-size:0.85rem;margin-left:10px;">已保存 ✓</span>
+          </div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- Tab: 批改记录 -->
+  <section class="tab-panel" id="panel-history">
+    <div class="card">
+      <div class="card-header">
+        <span>批改记录</span>
+        <button class="btn btn-danger btn-sm" onclick="clearAllCorrections()" id="btnClearHistory" style="display:none;">清空全部记录</button>
+      </div>
+      <div id="historyEmpty" class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <p>还没有保存的批改记录</p>
+      </div>
+      <div id="historyList" style="display:none;"></div>
     </div>
   </section>
 
@@ -1380,6 +1456,16 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeSettings()">取消</button>
       <button class="btn btn-primary" onclick="saveSettings()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" id="modalDetail">
+  <div class="modal" style="max-width:640px;">
+    <div id="detailModalContent"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="$('modalDetail').classList.remove('show')">关闭</button>
     </div>
   </div>
 </div>
@@ -1910,6 +1996,7 @@ function onTabSwitch(tab) {
   if (tab === 'spell') initSpell();
   if (tab === 'quiz') initQuiz();
   if (tab === 'read') updateArticleEstimate();
+  if (tab === 'history') renderHistory();
 }
 
 // ═══════════════════════════════════════
@@ -3235,10 +3322,16 @@ function init() {
 $('modalSettings').addEventListener('click', function(e) {
   if (e.target === this) closeSettings();
 });
+$('modalDetail').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('show');
+});
 
-// ESC to close modal
+// ESC to close modals
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeSettings();
+  if (e.key === 'Escape') {
+    closeSettings();
+    $('modalDetail').classList.remove('show');
+  }
 });
 
 // ═══════════════════════════════════════
@@ -4048,6 +4141,8 @@ AI范文: <AI根据中文原文翻译的英文范文>
   $('correctAiEssay').textContent = aiEssay || '';
   $('correctFixedEssay').textContent = fixedEssay || '';
   $('correctResult').style.display = '';
+  $('btnSaveCorrect').style.display = '';
+  $('correctSavedMsg').style.display = 'none';
 }
 
 async function correctWriting() {
@@ -4094,8 +4189,170 @@ AI范文: <AI根据题目写的英文范文>
   $('writingAiEssay').textContent = aiEssay || '';
   $('writingFixedEssay').textContent = fixedEssay || '';
   $('writingResult').style.display = '';
+  $('btnSaveWriting').style.display = '';
+  $('writingSavedMsg').style.display = 'none';
 }
 
+// ═══════════════════════════════════════
+// Correction History
+// ═══════════════════════════════════════
+const HISTORY_KEY = 'eng_correction_history';
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+
+function saveHistory(records) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(records));
+}
+
+function saveCorrection(type) {
+  let record;
+  if (type === 'translation') {
+    record = {
+      id: generateId(),
+      type: 'translation',
+      difficulty: transCorrectDiff,
+      date: new Date().toISOString(),
+      score: $('correctScore').textContent,
+      original: $('correctOriginal').value.trim(),
+      translation: $('correctTranslation').value.trim(),
+      mistakes: $('correctMistakes').innerHTML,
+      aiEssay: $('correctAiEssay').textContent,
+      fixedEssay: $('correctFixedEssay').textContent
+    };
+  } else {
+    record = {
+      id: generateId(),
+      type: 'writing',
+      difficulty: writingDiff,
+      date: new Date().toISOString(),
+      score: $('writingScore').textContent,
+      topic: $('writingTopic').value.trim(),
+      essay: $('writingEssay').value.trim(),
+      detail: $('writingDetail').textContent,
+      mistakes: $('writingMistakes').innerHTML,
+      aiEssay: $('writingAiEssay').textContent,
+      fixedEssay: $('writingFixedEssay').textContent
+    };
+  }
+
+  const history = loadHistory();
+  history.unshift(record);
+  saveHistory(history);
+
+  if (type === 'translation') {
+    $('btnSaveCorrect').style.display = 'none';
+    $('correctSavedMsg').style.display = '';
+  } else {
+    $('btnSaveWriting').style.display = 'none';
+    $('writingSavedMsg').style.display = '';
+  }
+  showToast('批改记录已保存');
+  renderHistory();
+}
+
+function renderHistory() {
+  const history = loadHistory();
+  const empty = $('historyEmpty');
+  const list = $('historyList');
+  const clearBtn = $('btnClearHistory');
+
+  if (history.length === 0) {
+    empty.style.display = '';
+    list.style.display = 'none';
+    clearBtn.style.display = 'none';
+    return;
+  }
+
+  empty.style.display = 'none';
+  list.style.display = '';
+  clearBtn.style.display = '';
+
+  list.innerHTML = history.map(r => {
+    const typeLabel = r.type === 'translation' ? '翻译批改' : '作文批改';
+    const typeClass = r.type === 'translation' ? 'translation' : 'writing';
+    const date = new Date(r.date).toLocaleString('zh-CN');
+    let preview = '';
+    if (r.type === 'translation') {
+      preview = '原文: ' + (r.original || '').substring(0, 50) + (r.original && r.original.length > 50 ? '...' : '');
+    } else {
+      preview = '题目: ' + (r.topic || '').substring(0, 50) + (r.topic && r.topic.length > 50 ? '...' : '');
+    }
+    return `
+      <div class="history-item">
+        <div class="history-meta">
+          <div>
+            <span class="history-type ${typeClass}">${typeLabel}</span>
+            <span style="margin-left:8px;font-size:0.78rem;color:var(--muted);">${r.difficulty}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span class="history-score">${r.score}分</span>
+            <span class="history-date">${date}</span>
+          </div>
+        </div>
+        <div class="history-preview">${escapeHtml(preview)}</div>
+        <div class="history-actions">
+          <button class="btn btn-secondary btn-sm" onclick="viewCorrectionDetail('${r.id}')">查看详情</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteCorrection('${r.id}')">删除</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function deleteCorrection(id) {
+  if (!confirm('确定删除这条批改记录吗？')) return;
+  const history = loadHistory();
+  const filtered = history.filter(r => String(r.id) !== String(id));
+  saveHistory(filtered);
+  renderHistory();
+  showToast('记录已删除');
+}
+
+function clearAllCorrections() {
+  if (!confirm('确定清空全部批改记录吗？此操作不可恢复。')) return;
+  saveHistory([]);
+  renderHistory();
+  showToast('全部记录已清空');
+}
+
+function viewCorrectionDetail(id) {
+  const history = loadHistory();
+  const record = history.find(r => String(r.id) === String(id));
+  if (!record) return;
+  
+  // Build detail modal content
+  const typeLabel = record.type === 'translation' ? '翻译批改' : '作文批改';
+  let content = `<div class="modal-title">${typeLabel} - ${record.difficulty}</div>`;
+  content += `<div style="text-align:center;margin-bottom:16px;"><span style="font-family:var(--font-display);font-size:2.5rem;font-weight:700;color:var(--accent);">${record.score}分</span></div>`;
+  
+  if (record.type === 'translation') {
+    content += `<div class="result-card"><div class="ai-section-title">中文原文</div><div class="result-content">${escapeHtml(record.original || '')}</div></div>`;
+    content += `<div class="result-card"><div class="ai-section-title">你的译文</div><div class="result-content">${escapeHtml(record.translation || '')}</div></div>`;
+    content += `<div class="result-card"><div class="ai-section-title">错误批改</div><div class="result-content">${record.mistakes || '无'}</div></div>`;
+    content += `<div class="result-card"><div class="ai-section-title">AI 范文</div><div class="result-content">${escapeHtml(record.aiEssay || '')}</div></div>`;
+    content += `<div class="result-card"><div class="ai-section-title">修改后范文</div><div class="result-content">${escapeHtml(record.fixedEssay || '')}</div></div>`;
+  } else {
+    content += `<div class="result-card"><div class="ai-section-title">作文题目</div><div class="result-content">${escapeHtml(record.topic || '')}</div></div>`;
+    content += `<div class="result-card"><div class="ai-section-title">你的作文</div><div class="result-content">${escapeHtml(record.essay || '')}</div></div>`;
+    content += `<div class="result-card"><div class="ai-section-title">评分详情</div><div class="result-content">${escapeHtml(record.detail || '')}</div></div>`;
+    content += `<div class="result-card"><div class="ai-section-title">错误批改</div><div class="result-content">${record.mistakes || '无'}</div></div>`;
+    content += `<div class="result-card"><div class="ai-section-title">AI 范文</div><div class="result-content">${escapeHtml(record.aiEssay || '')}</div></div>`;
+    content += `<div class="result-card"><div class="ai-section-title">修改后范文</div><div class="result-content">${escapeHtml(record.fixedEssay || '')}</div></div>`;
+  }
+  
+  $('detailModalContent').innerHTML = content;
+  $('modalDetail').classList.add('show');
+}
+
+function initHistory() {
+  renderHistory();
+}
+
+initHistory();
 init();
 </script>
 </body>
