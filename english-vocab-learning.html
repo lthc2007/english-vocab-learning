@@ -3995,7 +3995,7 @@ async function generateTranslation() {
 译文: <英文译文>
 重难点: <重难点解析>`;
 
-  const result = await callAI(prompt, 2500);
+  const result = await callAI(prompt, 5000);
   $('btnGenTrans').disabled = false;
   $('transGenLoading').style.display = 'none';
 
@@ -4032,7 +4032,7 @@ async function correctTranslation() {
 AI范文: <AI根据中文原文翻译的英文范文>
 修正范文: <在学生译文基础上修改错误后得到的英文范文，保持学生原有用词和句式风格，只修正错误部分>`;
 
-  const result = await callAI(prompt, 3000);
+  const result = await callAI(prompt, 5000);
   $('btnCorrectTrans').disabled = false;
   $('correctLoading').style.display = 'none';
 
@@ -4076,7 +4076,7 @@ async function correctWriting() {
 AI范文: <AI根据题目写的英文范文>
 修正范文: <在学生作文基础上修改错误后得到的英文范文，保持学生原有用词和句式风格，只修正错误部分>`;
 
-  const result = await callAI(prompt, 3000);
+  const result = await callAI(prompt, 5000);
   $('btnWritingCorrect').disabled = false;
   $('writingLoading').style.display = 'none';
 
