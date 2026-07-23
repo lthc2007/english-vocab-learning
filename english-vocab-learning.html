@@ -740,6 +740,63 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   .score-value { font-size: 1.3rem; }
   .card { padding: 16px; }
 }
+/* ── Translation & Writing ── */
+.translate-subtab {
+  padding: 8px 20px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--muted);
+  border-radius: 18px;
+  transition: all var(--transition);
+  font-family: var(--font-body);
+  font-weight: 500;
+}
+.translate-subtab.active { color: #fff; background: var(--accent); }
+.diff-selector { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.diff-btn {
+  padding: 8px 22px;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  background: var(--bg2);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-family: var(--font-body);
+  color: var(--ink);
+  transition: all var(--transition);
+}
+.diff-btn:hover { border-color: var(--gold); color: var(--accent); }
+.diff-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.result-card {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin-bottom: 12px;
+  border: 1px solid var(--rule);
+}
+.result-content {
+  font-size: 0.95rem;
+  color: var(--ink);
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.result-content .error-highlight {
+  color: #dc2626;
+  font-weight: 700;
+}
+.result-content .correction {
+  color: var(--success);
+  font-weight: 600;
+}
+.score-big {
+  font-family: var(--font-display);
+  font-size: 4rem;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -771,6 +828,8 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     <button class="nav-tab" data-tab="spell">拼写练习</button>
     <button class="nav-tab" data-tab="quiz">看英选中</button>
     <button class="nav-tab" data-tab="read">文章朗读</button>
+    <button class="nav-tab" data-tab="translate">翻译练习</button>
+    <button class="nav-tab" data-tab="writing">作文练习</button>
   </div>
 </nav>
 
@@ -825,6 +884,140 @@ tr:hover td { background: rgba(201,169,110,0.06); }
       <div id="lookupError" style="display:none;text-align:center;padding:16px;color:#e74c3c;"></div>
     </div>
   </section>
+
+  <!-- Tab: 翻译练习 -->
+  <section class="tab-panel" id="panel-translate">
+    <!-- 子功能切换 -->
+    <div class="card" style="text-align:center;padding:12px;">
+      <div style="display:inline-flex;gap:0;background:var(--bg);border-radius:20px;padding:3px;border:1px solid var(--rule);">
+        <button class="translate-subtab active" data-sub="gen" onclick="switchTranslateTab('gen')">自主生成题目</button>
+        <button class="translate-subtab" data-sub="correct" onclick="switchTranslateTab('correct')">翻译批改</button>
+      </div>
+    </div>
+
+    <!-- 子面板：自主生成题目 -->
+    <div id="translateGenPanel">
+      <div class="card">
+        <div class="card-header"><span>难度选择</span></div>
+        <div class="diff-selector">
+          <button class="diff-btn active" data-diff="四级" onclick="selectTransDiff('四级', this)">四级</button>
+          <button class="diff-btn" data-diff="六级" onclick="selectTransDiff('六级', this)">六级</button>
+          <button class="diff-btn" data-diff="考研" onclick="selectTransDiff('考研', this)">考研</button>
+        </div>
+        <div style="text-align:center;margin-top:16px;">
+          <button class="btn btn-primary btn-lg" id="btnGenTrans" onclick="generateTranslation()">AI 生成翻译题目</button>
+        </div>
+        <div id="transGenLoading" style="display:none;text-align:center;padding:20px;color:var(--muted);">AI 正在生成翻译题目，请稍候...</div>
+        <div id="transGenResult" style="display:none;margin-top:16px;">
+          <div class="result-card">
+            <div class="ai-section-title">中文原文</div>
+            <div class="result-content" id="transOriginal"></div>
+          </div>
+          <div class="result-card">
+            <div class="ai-section-title">参考译文</div>
+            <div class="result-content" id="transReference"></div>
+          </div>
+          <div class="result-card">
+            <div class="ai-section-title">翻译重难点</div>
+            <div class="result-content" id="transKeyPoints"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 子面板：翻译批改 -->
+    <div id="translateCorrectPanel" style="display:none;">
+      <div class="card">
+        <div class="card-header"><span>难度选择</span></div>
+        <div class="diff-selector">
+          <button class="diff-btn active" data-diff="四级" onclick="selectCorrectDiff('四级', this)">四级</button>
+          <button class="diff-btn" data-diff="六级" onclick="selectCorrectDiff('六级', this)">六级</button>
+          <button class="diff-btn" data-diff="考研" onclick="selectCorrectDiff('考研', this)">考研</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="form-group">
+          <label class="form-label">中文原文</label>
+          <textarea class="form-textarea" id="correctOriginal" rows="4" placeholder="请输入中文原文..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">你的译文（英文）</label>
+          <textarea class="form-textarea" id="correctTranslation" rows="4" placeholder="请输入你的英文翻译..."></textarea>
+        </div>
+        <div style="text-align:center;">
+          <button class="btn btn-primary btn-lg" id="btnCorrectTrans" onclick="correctTranslation()">提交批改</button>
+        </div>
+        <div id="correctLoading" style="display:none;text-align:center;padding:20px;color:var(--muted);">AI 正在批改中，请稍候...</div>
+        <div id="correctResult" style="display:none;margin-top:16px;">
+          <div class="result-card" style="text-align:center;">
+            <div class="score-big" id="correctScore">0</div>
+            <div class="score-label">得分</div>
+          </div>
+          <div class="result-card">
+            <div class="ai-section-title">错误批改</div>
+            <div class="result-content" id="correctMistakes"></div>
+          </div>
+          <div class="result-card">
+            <div class="ai-section-title">AI 范文</div>
+            <div class="result-content" id="correctAiEssay"></div>
+          </div>
+          <div class="result-card">
+            <div class="ai-section-title">修改后范文（基于你的译文）</div>
+            <div class="result-content" id="correctFixedEssay"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tab: 作文练习 -->
+  <section class="tab-panel" id="panel-writing">
+    <div class="card">
+      <div class="card-header"><span>难度选择</span></div>
+      <div class="diff-selector">
+        <button class="diff-btn active" data-diff="四级" onclick="selectWritingDiff('四级', this)">四级</button>
+        <button class="diff-btn" data-diff="六级" onclick="selectWritingDiff('六级', this)">六级</button>
+        <button class="diff-btn" data-diff="考研" onclick="selectWritingDiff('考研', this)">考研</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="form-group">
+        <label class="form-label">作文题目</label>
+        <input class="form-input" id="writingTopic" placeholder="请输入作文题目...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">你的作文</label>
+        <textarea class="form-textarea" id="writingEssay" rows="10" placeholder="请输入你的英文作文..."></textarea>
+      </div>
+      <div style="text-align:center;">
+        <button class="btn btn-primary btn-lg" id="btnWritingCorrect" onclick="correctWriting()">提交批改</button>
+      </div>
+      <div id="writingLoading" style="display:none;text-align:center;padding:20px;color:var(--muted);">AI 正在批改中，请稍候...</div>
+      <div id="writingResult" style="display:none;margin-top:16px;">
+        <div class="result-card" style="text-align:center;">
+          <div class="score-big" id="writingScore">0</div>
+          <div class="score-label">得分</div>
+        </div>
+        <div class="result-card">
+          <div class="ai-section-title">评分详情</div>
+          <div class="result-content" id="writingDetail"></div>
+        </div>
+        <div class="result-card">
+          <div class="ai-section-title">错误批改</div>
+          <div class="result-content" id="writingMistakes"></div>
+        </div>
+        <div class="result-card">
+          <div class="ai-section-title">AI 范文</div>
+          <div class="result-content" id="writingAiEssay"></div>
+        </div>
+        <div class="result-card">
+          <div class="ai-section-title">修改后范文（基于你的作文）</div>
+          <div class="result-content" id="writingFixedEssay"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
 </main>
 
   <!-- Tab: 单词管理 -->
@@ -2128,7 +2321,7 @@ async function callAI(prompt, maxTokens = 1500) {
 function parseSection(text, label) {
   const patterns = [
     // 匹配：从当前标签到下一个"标签:"模式之间的所有内容（支持多行）
-    new RegExp(label + '[:：]\\s*([\\s\\S]+?)(?=\\n\\s*(?:音标|释义|例句|例句翻译|近义词|反义词|搭配|词根|词根词缀|派生词|短文|对话|形近词|填空|翻译题|难度|考频)[:：]|$)', 's'),
+    new RegExp(label + '[:：]\\s*([\\s\\S]+?)(?=\\n\\s*(?:音标|释义|例句|例句翻译|近义词|反义词|搭配|词根|词根词缀|派生词|短文|对话|形近词|填空|翻译题|难度|考频|原文|译文|重难点|错误|分数|评分详情|AI范文|修正范文)[:：]|$)', 's'),
     // 备用：单行匹配
     new RegExp(label + '\\s*[:：]\\s*(.+?)(?:\\n|$)', 's'),
   ];
@@ -3748,6 +3941,156 @@ async function speakText(text, onDone) {
       window.speechSynthesis.speak(utter);
     } else { onDone(); }
   }
+}
+
+// ═══════════════════════════════════════
+// Translation & Writing Practice
+// ═══════════════════════════════════════
+let transGenDiff = '四级';
+let transCorrectDiff = '四级';
+let writingDiff = '四级';
+
+function switchTranslateTab(sub) {
+  document.querySelectorAll('#panel-translate .translate-subtab').forEach(b => b.classList.remove('active'));
+  document.querySelector(`#panel-translate .translate-subtab[data-sub="${sub}"]`).classList.add('active');
+  $('translateGenPanel').style.display = sub === 'gen' ? '' : 'none';
+  $('translateCorrectPanel').style.display = sub === 'correct' ? '' : 'none';
+}
+
+function selectTransDiff(diff, btn) {
+  transGenDiff = diff;
+  btn.parentElement.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function selectCorrectDiff(diff, btn) {
+  transCorrectDiff = diff;
+  btn.parentElement.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function selectWritingDiff(diff, btn) {
+  writingDiff = diff;
+  btn.parentElement.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+async function generateTranslation() {
+  if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
+  $('btnGenTrans').disabled = true;
+  $('transGenLoading').style.display = '';
+  $('transGenResult').style.display = 'none';
+
+  const prompt = `请为${transGenDiff}英语考试生成一道翻译题目。要求：
+1. 题目难度严格对应${transGenDiff}水平
+2. 中文原文应为一段完整的句子或段落（2-4句话），话题贴近${transGenDiff}考试常考主题
+3. 提供标准英文译文
+4. 列出翻译过程中的重难点解析（包括关键句型、词汇选择、语法难点等）
+
+请严格按照以下格式输出：
+原文: <中文原文>
+译文: <英文译文>
+重难点: <重难点解析>`;
+
+  const result = await callAI(prompt, 2000);
+  $('btnGenTrans').disabled = false;
+  $('transGenLoading').style.display = 'none';
+
+  if (!result) return;
+
+  $('transOriginal').textContent = parseSection(result, '原文');
+  $('transReference').textContent = parseSection(result, '译文');
+  $('transKeyPoints').textContent = parseSection(result, '重难点');
+  $('transGenResult').style.display = '';
+}
+
+async function correctTranslation() {
+  const original = $('correctOriginal').value.trim();
+  const translation = $('correctTranslation').value.trim();
+  if (!original || !translation) { showToast('请填写中文原文和你的译文'); return; }
+  if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
+
+  $('btnCorrectTrans').disabled = true;
+  $('correctLoading').style.display = '';
+  $('correctResult').style.display = 'none';
+
+  const prompt = `你是${transCorrectDiff}英语翻译考试的评分老师。请对以下翻译进行批改。
+
+中文原文：${original}
+学生译文：${translation}
+
+请严格按照${transCorrectDiff}翻译评分标准（满分15分）进行评分，并按以下格式输出：
+
+分数: <数字，满分15分>
+错误: <用HTML格式标注错误，错误部分用红色加粗，用<span class="error-highlight">错误内容</span>包裹，并在每个错误下方用箭头→给出正确写法。格式示例：
+- <span class="error-highlight">错误单词或短语</span> → 正确写法
+- <span class="error-highlight">另一处错误</span> → 正确写法
+如果没有任何错误，写明"译文正确，无错误">
+AI范文: <AI根据中文原文翻译的英文范文>
+修正范文: <在学生译文基础上修改错误后得到的英文范文，保持学生原有用词和句式风格，只修正错误部分>`;
+
+  const result = await callAI(prompt, 3000);
+  $('btnCorrectTrans').disabled = false;
+  $('correctLoading').style.display = 'none';
+
+  if (!result) return;
+
+  const score = parseSection(result, '分数');
+  const mistakes = parseSection(result, '错误');
+  const aiEssay = parseSection(result, 'AI范文');
+  const fixedEssay = parseSection(result, '修正范文');
+
+  $('correctScore').textContent = score || '—';
+  $('correctMistakes').innerHTML = mistakes.replace(/\n/g, '<br>') || '无';
+  $('correctAiEssay').textContent = aiEssay || '';
+  $('correctFixedEssay').textContent = fixedEssay || '';
+  $('correctResult').style.display = '';
+}
+
+async function correctWriting() {
+  const topic = $('writingTopic').value.trim();
+  const essay = $('writingEssay').value.trim();
+  if (!topic || !essay) { showToast('请填写作文题目和你的作文'); return; }
+  if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
+
+  $('btnWritingCorrect').disabled = true;
+  $('writingLoading').style.display = '';
+  $('writingResult').style.display = 'none';
+
+  const prompt = `你是${writingDiff}英语考试作文评分老师。请对以下作文进行批改。
+
+作文题目：${topic}
+学生作文：${essay}
+
+请严格按照${writingDiff}作文评分标准进行评分，并按以下格式输出：
+
+分数: <数字，满分15分>
+评分详情: <简要说明扣分原因和各维度得分情况（内容、语言、结构等）>
+错误: <用HTML格式标注错误，错误部分用红色加粗，用<span class="error-highlight">错误内容</span>包裹，并在每个错误下方用箭头→给出正确写法。格式示例：
+- <span class="error-highlight">错误单词或短语</span> → 正确写法
+- <span class="error-highlight">语法错误</span> → 正确写法
+如果没有任何错误，写明"作文正确，无错误">
+AI范文: <AI根据题目写的英文范文>
+修正范文: <在学生作文基础上修改错误后得到的英文范文，保持学生原有用词和句式风格，只修正错误部分>`;
+
+  const result = await callAI(prompt, 3000);
+  $('btnWritingCorrect').disabled = false;
+  $('writingLoading').style.display = 'none';
+
+  if (!result) return;
+
+  const score = parseSection(result, '分数');
+  const detail = parseSection(result, '评分详情');
+  const mistakes = parseSection(result, '错误');
+  const aiEssay = parseSection(result, 'AI范文');
+  const fixedEssay = parseSection(result, '修正范文');
+
+  $('writingScore').textContent = score || '—';
+  $('writingDetail').textContent = detail || '';
+  $('writingMistakes').innerHTML = mistakes.replace(/\n/g, '<br>') || '无';
+  $('writingAiEssay').textContent = aiEssay || '';
+  $('writingFixedEssay').textContent = fixedEssay || '';
+  $('writingResult').style.display = '';
 }
 
 init();
