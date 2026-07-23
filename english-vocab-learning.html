@@ -503,13 +503,13 @@ tr:hover td { background: rgba(201,169,110,0.06); }
 }
 .score-value {
   font-family: var(--font-display);
-  font-size: 1.6rem;
+  font-size: 2.2rem;
   font-weight: 700;
   color: var(--accent);
   line-height: 1.2;
 }
 .score-label {
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   color: var(--muted);
   margin-top: 2px;
 }
@@ -737,7 +737,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   .form-row { flex-direction: column; }
   .stats-section { max-width: 100%; }
   .score-bar { gap: 10px; padding: 10px 12px; max-width: 100%; }
-  .score-value { font-size: 1.3rem; }
+  .score-value { font-size: 1.7rem; }
   .card { padding: 16px; }
 }
 /* ── Translation & Writing ── */
@@ -847,6 +847,47 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+/* ── Saved Audio ── */
+.audio-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  background: var(--bg2);
+  flex-wrap: wrap;
+  gap: 8px;
+  transition: all var(--transition);
+}
+.audio-item:hover { border-color: var(--border); box-shadow: var(--shadow); }
+.audio-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.audio-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+.audio-date {
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.audio-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 /* ── AI Progress Bar ── */
 .ai-progress-wrap {
@@ -1425,6 +1466,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
         <button class="btn btn-secondary" id="btnReadResume" onclick="resumeArticleRead()" style="display:none;">▶ 继续</button>
         <button class="btn btn-secondary" id="btnReadStop" onclick="stopArticleRead()" style="display:none;">⏹ 停止</button>
         <button class="btn btn-outline" id="btnReadDownload" onclick="downloadArticleAudio()" style="display:none;">💾 下载音频</button>
+        <button class="btn btn-success" id="btnReadSave" onclick="saveArticleAudio()" style="display:none;">📁 保存音频</button>
         <button class="btn btn-secondary btn-sm" id="btnReadClear" onclick="clearArticle()" title="清空文章">🗑 清除</button>
         <span id="readStatus" style="font-size:0.8rem;color:var(--muted);"></span>
       </div>
@@ -1434,6 +1476,14 @@ tr:hover td { background: rgba(201,169,110,0.06); }
         </div>
         <span id="readProgressText" style="font-size:0.75rem;color:var(--muted);display:none;"></span>
       </div>
+    </div>
+    <!-- Saved Audio List -->
+    <div class="card" id="savedAudioCard" style="display:none;">
+      <div class="card-header">
+        <span>已保存的音频</span>
+        <span style="font-size:0.78rem;color:var(--muted);" id="savedAudioCount">0 个音频</span>
+      </div>
+      <div id="savedAudioList"></div>
     </div>
   </section>
 
@@ -1532,6 +1582,21 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     <div class="modal-actions">
       <button class="btn btn-accent" onclick="exportCorrection()" id="btnExportCorrection" style="background:var(--gold);color:#fff;">导出 PDF / 打印</button>
       <button class="btn btn-secondary" onclick="$('modalDetail').classList.remove('show')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rename Audio Modal -->
+<div class="modal-overlay" id="modalRenameAudio">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-title">重命名音频</div>
+    <div class="form-group">
+      <label class="form-label">音频名称</label>
+      <input class="form-input" id="renameAudioInput" type="text" placeholder="输入新名称">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeRenameModal()">取消</button>
+      <button class="btn btn-primary" onclick="confirmRenameAudio()">确认</button>
     </div>
   </div>
 </div>
@@ -2061,7 +2126,7 @@ function onTabSwitch(tab) {
   if (tab === 'learn') renderLearn();
   if (tab === 'spell') initSpell();
   if (tab === 'quiz') initQuiz();
-  if (tab === 'read') updateArticleEstimate();
+  if (tab === 'read') { updateArticleEstimate(); renderSavedAudio(); }
   if (tab === 'history') renderHistory();
 }
 
@@ -3391,12 +3456,16 @@ $('modalSettings').addEventListener('click', function(e) {
 $('modalDetail').addEventListener('click', function(e) {
   if (e.target === this) this.classList.remove('show');
 });
+$('modalRenameAudio').addEventListener('click', function(e) {
+  if (e.target === this) closeRenameModal();
+});
 
 // ESC to close modals
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     closeSettings();
     $('modalDetail').classList.remove('show');
+    closeRenameModal();
   }
 });
 
@@ -3595,6 +3664,7 @@ async function startArticleRead() {
       $('readProgressBar').style.display = 'none';
       $('readProgressText').style.display = 'none';
       $('btnReadDownload').style.display = '';
+      $('btnReadSave').style.display = '';
       $('btnReadPause').style.display = '';
       playArticleChunks(0);
       return;
@@ -3661,6 +3731,7 @@ function stopArticleRead() {
   $('btnReadResume').style.display = 'none';
   $('btnReadStop').style.display = 'none';
   $('btnReadDownload').style.display = 'none';
+  $('btnReadSave').style.display = 'none';
   $('readStatus').textContent = '';
   $('readProgressBar').style.display = 'none';
   $('readProgressText').style.display = 'none';
@@ -3693,6 +3764,148 @@ function downloadArticleAudio() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   showToast('音频下载中...');
+}
+
+// ═══════════════════════════════════════
+// Saved Audio Management
+// ═══════════════════════════════════════
+const SAVED_AUDIO_KEY = 'saved_article_audio';
+let _renameAudioId = null;
+
+function loadSavedAudio() {
+  try {
+    const raw = localStorage.getItem(SAVED_AUDIO_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+
+function saveSavedAudio(list) {
+  localStorage.setItem(SAVED_AUDIO_KEY, JSON.stringify(list));
+}
+
+function saveArticleAudio() {
+  if (!articleBlob) { showToast('没有可保存的音频'); return; }
+
+  const reader = new FileReader();
+  reader.onload = function() {
+    const list = loadSavedAudio();
+    const now = new Date();
+    const name = '朗读 ' + now.toLocaleDateString('zh-CN') + ' ' + now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    list.unshift({
+      id: generateId(),
+      name: name,
+      date: now.toISOString(),
+      dataUrl: reader.result,
+      size: articleBlob.size
+    });
+    saveSavedAudio(list);
+    renderSavedAudio();
+    showToast('音频已保存');
+  };
+  reader.readAsDataURL(articleBlob);
+}
+
+function renderSavedAudio() {
+  const list = loadSavedAudio();
+  const card = $('savedAudioCard');
+  const listEl = $('savedAudioList');
+  const countEl = $('savedAudioCount');
+
+  if (list.length === 0) {
+    card.style.display = 'none';
+    return;
+  }
+
+  card.style.display = '';
+  countEl.textContent = list.length + ' 个音频';
+
+  listEl.innerHTML = list.map(r => {
+    const date = new Date(r.date).toLocaleString('zh-CN');
+    const sizeStr = r.size ? (r.size / 1024).toFixed(0) + ' KB' : '';
+    return `
+      <div class="audio-item">
+        <div class="audio-info">
+          <span style="font-size:1.2rem;">🎵</span>
+          <div style="min-width:0;">
+            <div class="audio-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</div>
+            <div class="audio-date">${date} ${sizeStr ? '· ' + sizeStr : ''}</div>
+          </div>
+        </div>
+        <div class="audio-actions">
+          <button class="btn btn-success btn-sm" onclick="playSavedAudio('${r.id}')">▶ 播放</button>
+          <button class="btn btn-secondary btn-sm" onclick="downloadSavedAudio('${r.id}')">⬇ 下载</button>
+          <button class="btn btn-secondary btn-sm" onclick="openRenameAudio('${r.id}')">✏ 重命名</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteSavedAudio('${r.id}')">🗑</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function playSavedAudio(id) {
+  const list = loadSavedAudio();
+  const record = list.find(r => String(r.id) === String(id));
+  if (!record) return;
+
+  const audio = new Audio(record.dataUrl);
+  audio.onerror = () => showToast('音频播放失败');
+  audio.play();
+  showToast('正在播放: ' + record.name);
+}
+
+function downloadSavedAudio(id) {
+  const list = loadSavedAudio();
+  const record = list.find(r => String(r.id) === String(id));
+  if (!record) return;
+
+  const a = document.createElement('a');
+  a.href = record.dataUrl;
+  a.download = record.name + '.mp3';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast('音频下载中...');
+}
+
+function openRenameAudio(id) {
+  const list = loadSavedAudio();
+  const record = list.find(r => String(r.id) === String(id));
+  if (!record) return;
+  _renameAudioId = id;
+  $('renameAudioInput').value = record.name;
+  $('modalRenameAudio').classList.add('show');
+  setTimeout(() => $('renameAudioInput').focus(), 100);
+}
+
+function closeRenameModal() {
+  $('modalRenameAudio').classList.remove('show');
+  _renameAudioId = null;
+}
+
+function confirmRenameAudio() {
+  const newName = $('renameAudioInput').value.trim();
+  if (!newName) { showToast('名称不能为空'); return; }
+  const list = loadSavedAudio();
+  const idx = list.findIndex(r => String(r.id) === String(_renameAudioId));
+  if (idx === -1) return;
+  list[idx].name = newName;
+  saveSavedAudio(list);
+  renderSavedAudio();
+  closeRenameModal();
+  showToast('已重命名');
+}
+
+function deleteSavedAudio(id) {
+  if (!confirm('确定删除这个音频吗？')) return;
+  const list = loadSavedAudio();
+  const filtered = list.filter(r => String(r.id) !== String(id));
+  saveSavedAudio(filtered);
+  renderSavedAudio();
+  showToast('音频已删除');
+}
+
+// Init saved audio on load
+function initSavedAudio() {
+  renderSavedAudio();
 }
 
 function doWebSpeechRead(text) {
@@ -4542,6 +4755,7 @@ function initHistory() {
 }
 
 initHistory();
+initSavedAudio();
 init();
 </script>
 <!-- Hidden print area for export -->
