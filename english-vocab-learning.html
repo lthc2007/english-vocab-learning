@@ -288,7 +288,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   cursor: default;
   min-height: auto;
 }
-.flashcard .word-front { font-family: var(--font-display); font-size: 3rem; font-weight: 700; color: var(--accent); white-space: nowrap; display: inline-block; letter-spacing: 0.02em; }
+.flashcard .word-front { font-family: var(--font-display); font-size: 3.8rem; font-weight: 700; color: var(--accent); white-space: nowrap; display: inline-block; letter-spacing: 0.02em; }
 .btn-speak {
   display: inline-flex;
   align-items: center;
@@ -310,7 +310,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
 .btn-speak-example:hover { color: var(--gold); transform: scale(1.15); }
 .btn-speak-example.speaking { color: var(--accent); animation: pulse 0.6s infinite; }
 @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
-.flashcard .word-back { font-size: 1.3rem; color: var(--accent); margin-top: 8px; text-align: center; }
+.flashcard .word-back { font-size: 1.5rem; color: var(--accent); margin-top: 8px; text-align: center; }
 .flashcard .word-meta { margin-top: 8px; text-align: center; }
 .flashcard .word-example-full { font-size: 1rem; color: var(--muted); margin-top: 16px; line-height: 1.6; }
 .card-hint {
@@ -320,7 +320,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   margin-top: 4px;
 }
 .phonetic {
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   font-weight: 400;
   color: var(--muted);
   font-family: var(--font-display);
@@ -345,13 +345,13 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   text-transform: uppercase;
 }
 .ai-section-content {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: var(--ink);
-  line-height: 1.6;
+  line-height: 1.7;
 }
 .ai-section-content small {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.88rem;
 }
 .ai-tag-list {
   display: flex;
@@ -361,9 +361,9 @@ tr:hover td { background: rgba(201,169,110,0.06); }
 }
 .ai-tag {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 0.82rem;
   background: var(--bg);
   border: 1px solid var(--rule);
   color: var(--ink);
@@ -719,9 +719,9 @@ tr:hover td { background: rgba(201,169,110,0.06); }
 @media (max-width: 640px) {
   .header-inner { padding: 0 8px; }
   .main { padding: 16px; }
-  .nav-tab { padding: 12px 14px; font-size: 0.82rem; }
+  .nav-tab { padding: 12px 14px; font-size: 0.85rem; }
   .flashcard { padding: 28px; min-height: 220px; }
-  .flashcard .word-front { font-size: 1.8rem; }
+  .flashcard .word-front { font-size: 2.2rem; }
   .options-grid { grid-template-columns: 1fr; }
   .form-row { flex-direction: column; }
   .score-bar { gap: 16px; }
@@ -940,7 +940,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
         <div class="flashcard" id="flashcard" onclick="handleCardClick()">
           <div class="word-front" id="fcFront">click</div>
           <button class="btn-speak" id="btnSpeak" onclick="speakWord(event)" title="朗读">🔊</button>
-          <div id="fcExampleFront" style="font-size:0.85rem;color:var(--ink);margin-top:6px;line-height:1.5;text-align:center;display:none;"></div>
+          <div id="fcExampleFront" style="font-size:0.95rem;color:var(--ink);margin-top:8px;line-height:1.6;text-align:center;display:none;"></div>
             <div class="word-meta" id="fcMeta" style="display:none;"></div>
           <div id="fcBack" style="display:none;">
             <div class="word-back" id="fcWordHeader"></div>
