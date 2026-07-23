@@ -880,6 +880,20 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+/* ── Print / Export ── */
+@media print {
+  body * { visibility: hidden; }
+  #printArea, #printArea * { visibility: visible; }
+  #printArea { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
+  .export-header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #2d5a5a; padding-bottom: 12px; }
+  .export-header h1 { font-family: 'Playfair Display', serif; font-size: 1.4rem; color: #2d5a5a; }
+  .export-header p { font-size: 0.8rem; color: #9a958f; }
+  .export-score { text-align: center; font-size: 2.5rem; font-weight: 700; color: #2d5a5a; margin: 16px 0; }
+  .export-section { margin-bottom: 14px; border: 1px solid #eeeae5; border-radius: 8px; padding: 12px; }
+  .export-section-title { font-size: 0.78rem; font-weight: 600; color: #2d5a5a; text-transform: uppercase; margin-bottom: 6px; }
+  .export-section-content { font-size: 0.85rem; line-height: 1.7; white-space: pre-wrap; }
+  .export-section-content .error-highlight { color: #dc2626; font-weight: 700; }
+}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1062,6 +1076,8 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           <div style="text-align:center;margin-top:16px;">
             <button class="btn btn-success" id="btnSaveCorrect" onclick="saveCorrection('translation')" style="display:none;">💾 保存本次批改</button>
             <span id="correctSavedMsg" style="display:none;color:var(--success);font-size:0.85rem;margin-left:10px;">已保存 ✓</span>
+            <button class="btn btn-secondary" id="btnNextCorrect" onclick="resetCorrection('translation')" style="display:none;margin-left:10px;">批改下一篇 ➤</button>
+          </div>
           </div>
         </div>
       </div>
@@ -1120,6 +1136,8 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           <div style="text-align:center;margin-top:16px;">
             <button class="btn btn-success" id="btnSaveWriting" onclick="saveCorrection('writing')" style="display:none;">💾 保存本次批改</button>
             <span id="writingSavedMsg" style="display:none;color:var(--success);font-size:0.85rem;margin-left:10px;">已保存 ✓</span>
+            <button class="btn btn-secondary" id="btnNextWriting" onclick="resetCorrection('writing')" style="display:none;margin-left:10px;">批改下一篇 ➤</button>
+          </div>
           </div>
         </div>
       </div>
@@ -1512,6 +1530,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   <div class="modal" style="max-width:640px;">
     <div id="detailModalContent"></div>
     <div class="modal-actions">
+      <button class="btn btn-accent" onclick="exportCorrection()" id="btnExportCorrection" style="background:var(--gold);color:#fff;">导出 PDF / 打印</button>
       <button class="btn btn-secondary" onclick="$('modalDetail').classList.remove('show')">关闭</button>
     </div>
   </div>
@@ -4193,6 +4212,7 @@ AI范文: <AI根据中文原文翻译的英文范文>
   $('correctFixedEssay').textContent = fixedEssay || '';
   $('correctResult').style.display = '';
   $('btnSaveCorrect').style.display = '';
+  $('btnNextCorrect').style.display = '';
   $('correctSavedMsg').style.display = 'none';
 }
 
@@ -4243,6 +4263,7 @@ AI范文: <AI根据题目写的英文范文>
   $('writingFixedEssay').textContent = fixedEssay || '';
   $('writingResult').style.display = '';
   $('btnSaveWriting').style.display = '';
+  $('btnNextWriting').style.display = '';
   $('writingSavedMsg').style.display = 'none';
 }
 
@@ -4257,18 +4278,27 @@ function startProgress(elementId) {
   if (!el) return;
   el.style.width = '0%';
 
-  // Simulate realistic progress: fast start, then slow down, never reaching 100%
-  const steps = [
-    { at: 500, to: 15 },
-    { at: 1500, to: 35 },
-    { at: 3000, to: 55 },
-    { at: 5000, to: 70 },
-    { at: 8000, to: 82 },
-    { at: 12000, to: 90 },
-    { at: 18000, to: 94 },
-    { at: 25000, to: 96 },
-    { at: 30000, to: 97 },
-  ];
+  // Randomized progress: generates different steps each time
+  const count = 6 + Math.floor(Math.random() * 5); // 6-10 steps
+  const steps = [];
+  let currentPercent = 0;
+  let currentTime = 0;
+  const maxTime = 25000 + Math.floor(Math.random() * 15000); // 25-40s max
+
+  for (let i = 0; i < count; i++) {
+    // Time gap: 200ms-4s, progressively longer
+    const minGap = 200 + (i * 500);
+    const maxGap = 1500 + (i * 1500);
+    currentTime += minGap + Math.floor(Math.random() * (maxGap - minGap));
+
+    // Percentage jump: 3-20%, progressively smaller
+    const maxJump = Math.max(3, 20 - i * 2);
+    const minJump = Math.max(2, Math.floor(maxJump * 0.4));
+    currentPercent += minJump + Math.floor(Math.random() * (maxJump - minJump));
+    currentPercent = Math.min(currentPercent, 96); // never reach 100%
+
+    steps.push({ at: currentTime, to: currentPercent });
+  }
 
   const timers = [];
   steps.forEach(s => {
@@ -4284,6 +4314,26 @@ function stopProgress(elementId) {
   }
   const el = $(elementId);
   if (el) el.style.width = '100%';
+}
+
+function resetCorrection(type) {
+  if (type === 'translation') {
+    $('correctOriginal').value = '';
+    $('correctTranslation').value = '';
+    $('correctResult').style.display = 'none';
+    $('btnSaveCorrect').style.display = 'none';
+    $('btnNextCorrect').style.display = 'none';
+    $('correctSavedMsg').style.display = 'none';
+    $('correctOriginal').focus();
+  } else {
+    $('writingTopic').value = '';
+    $('writingEssay').value = '';
+    $('writingResult').style.display = 'none';
+    $('btnSaveWriting').style.display = 'none';
+    $('btnNextWriting').style.display = 'none';
+    $('writingSavedMsg').style.display = 'none';
+    $('writingTopic').focus();
+  }
 }
 
 // ═══════════════════════════════════════
@@ -4390,6 +4440,7 @@ function renderHistory() {
         <div class="history-preview">${escapeHtml(preview)}</div>
         <div class="history-actions">
           <button class="btn btn-secondary btn-sm" onclick="viewCorrectionDetail('${r.id}')">查看详情</button>
+          <button class="btn btn-secondary btn-sm" onclick="quickExport('${r.id}')">导出</button>
           <button class="btn btn-danger btn-sm" onclick="deleteCorrection('${r.id}')">删除</button>
         </div>
       </div>`;
@@ -4416,6 +4467,8 @@ function viewCorrectionDetail(id) {
   const history = loadHistory();
   const record = history.find(r => String(r.id) === String(id));
   if (!record) return;
+  // Store current record for export
+  window._currentExportRecord = record;
   
   // Build detail modal content
   const typeLabel = record.type === 'translation' ? '翻译批改' : '作文批改';
@@ -4441,6 +4494,44 @@ function viewCorrectionDetail(id) {
   $('modalDetail').classList.add('show');
 }
 
+function quickExport(id) {
+  const history = loadHistory();
+  const record = history.find(r => String(r.id) === String(id));
+  if (!record) return;
+  window._currentExportRecord = record;
+  exportCorrection();
+}
+
+function exportCorrection() {
+  const record = window._currentExportRecord;
+  if (!record) { showToast('没有可导出的记录'); return; }
+
+  const typeLabel = record.type === 'translation' ? '翻译批改' : '作文批改';
+  const date = new Date(record.date).toLocaleString('zh-CN');
+  let html = '';
+
+  html += `<div class="export-header"><h1>${typeLabel} - ${record.difficulty}</h1><p>日期：${date}</p></div>`;
+  html += `<div class="export-score">${record.score}分</div>`;
+
+  if (record.type === 'translation') {
+    html += `<div class="export-section"><div class="export-section-title">中文原文</div><div class="export-section-content">${escapeHtml(record.original || '')}</div></div>`;
+    html += `<div class="export-section"><div class="export-section-title">你的译文</div><div class="export-section-content">${escapeHtml(record.translation || '')}</div></div>`;
+    html += `<div class="export-section"><div class="export-section-title">错误批改</div><div class="export-section-content">${record.mistakes || '无'}</div></div>`;
+    html += `<div class="export-section"><div class="export-section-title">AI 范文</div><div class="export-section-content">${escapeHtml(record.aiEssay || '')}</div></div>`;
+    html += `<div class="export-section"><div class="export-section-title">修改后范文</div><div class="export-section-content">${escapeHtml(record.fixedEssay || '')}</div></div>`;
+  } else {
+    html += `<div class="export-section"><div class="export-section-title">作文题目</div><div class="export-section-content">${escapeHtml(record.topic || '')}</div></div>`;
+    html += `<div class="export-section"><div class="export-section-title">你的作文</div><div class="export-section-content">${escapeHtml(record.essay || '')}</div></div>`;
+    html += `<div class="export-section"><div class="export-section-title">评分详情</div><div class="export-section-content">${escapeHtml(record.detail || '')}</div></div>`;
+    html += `<div class="export-section"><div class="export-section-title">错误批改</div><div class="export-section-content">${record.mistakes || '无'}</div></div>`;
+    html += `<div class="export-section"><div class="export-section-title">AI 范文</div><div class="export-section-content">${escapeHtml(record.aiEssay || '')}</div></div>`;
+    html += `<div class="export-section"><div class="export-section-title">修改后范文</div><div class="export-section-content">${escapeHtml(record.fixedEssay || '')}</div></div>`;
+  }
+
+  $('printArea').innerHTML = html;
+  window.print();
+}
+
 function initHistory() {
   renderHistory();
 }
@@ -4448,5 +4539,7 @@ function initHistory() {
 initHistory();
 init();
 </script>
+<!-- Hidden print area for export -->
+<div id="printArea" style="display:none;"></div>
 </body>
 </html>
