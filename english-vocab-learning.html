@@ -186,6 +186,8 @@ body {
 .btn-danger:hover { background: #9a4542; transform: translateY(-1px); }
 .btn-success { background: var(--success); color: #fff; }
 .btn-success:hover { background: #4a7a5a; transform: translateY(-1px); }
+.btn-warning { background: var(--warning); color: #fff; }
+.btn-warning:hover { background: #b07d2e; transform: translateY(-1px); }
 .btn-sm { padding: 4px 10px; font-size: 0.8rem; }
 .btn-lg { padding: 12px 28px; font-size: 1rem; }
 
@@ -3832,24 +3834,54 @@ function renderSavedAudio() {
           </div>
         </div>
         <div class="audio-actions">
-          <button class="btn btn-success btn-sm" onclick="playSavedAudio('${r.id}')">▶ 播放</button>
+          <button class="btn btn-success btn-sm audio-play-btn" data-audio-id="${r.id}" onclick="playSavedAudio('${r.id}')">▶ 播放</button>
           <button class="btn btn-secondary btn-sm" onclick="downloadSavedAudio('${r.id}')">⬇ 下载</button>
           <button class="btn btn-secondary btn-sm" onclick="openRenameAudio('${r.id}')">✏ 重命名</button>
           <button class="btn btn-danger btn-sm" onclick="deleteSavedAudio('${r.id}')">🗑</button>
         </div>
       </div>`;
   }).join('');
+  // Restore playing button state after re-render
+  if (_audioPlayer && !_audioPlayer.audio.paused) {
+    updateAudioPlayBtn(_audioPlayer.id, true);
+  }
 }
 
+let _audioPlayer = null; // { id, audio }
+
 function playSavedAudio(id) {
+  // If same audio is playing, pause it
+  if (_audioPlayer && _audioPlayer.id === id) {
+    _audioPlayer.audio.pause();
+    updateAudioPlayBtn(id, false);
+    _audioPlayer = null;
+    return;
+  }
+
+  // Stop any currently playing audio
+  if (_audioPlayer) {
+    _audioPlayer.audio.pause();
+    updateAudioPlayBtn(_audioPlayer.id, false);
+  }
+
   const list = loadSavedAudio();
   const record = list.find(r => String(r.id) === String(id));
   if (!record) return;
 
   const audio = new Audio(record.dataUrl);
-  audio.onerror = () => showToast('音频播放失败');
+  audio.onerror = () => { showToast('音频播放失败'); updateAudioPlayBtn(id, false); _audioPlayer = null; };
+  audio.onended = () => { updateAudioPlayBtn(id, false); _audioPlayer = null; };
   audio.play();
-  showToast('正在播放: ' + record.name);
+  _audioPlayer = { id, audio };
+  updateAudioPlayBtn(id, true);
+}
+
+function updateAudioPlayBtn(id, isPlaying) {
+  const btn = document.querySelector(`.audio-play-btn[data-audio-id="${id}"]`);
+  if (btn) {
+    btn.textContent = isPlaying ? '⏸ 暂停' : '▶ 播放';
+    btn.className = isPlaying ? 'btn btn-warning btn-sm audio-play-btn' : 'btn btn-success btn-sm audio-play-btn';
+  }
 }
 
 function downloadSavedAudio(id) {
