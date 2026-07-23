@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>英语单词学习助手</title>
+<title>英语学习助手</title>
 <style>
 :root {
   --bg: #faf9f7;
@@ -288,7 +288,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   cursor: default;
   min-height: auto;
 }
-.flashcard .word-front { font-family: var(--font-display); font-size: 3.8rem; font-weight: 700; color: var(--accent); white-space: nowrap; display: inline-block; letter-spacing: 0.02em; }
+.flashcard .word-front { font-family: var(--font-display); font-size: 3.8rem; font-weight: 700; color: var(--accent); display: inline-block; letter-spacing: 0.02em; word-break: break-word; overflow-wrap: break-word; max-width: 100%; text-align: center; }
 .flashcard .word-front .word-eng { font-family: var(--font-display); font-size: inherit; font-weight: 700; color: inherit; }
 .btn-speak {
   display: inline-flex;
@@ -732,7 +732,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   .main { padding: 16px; }
   .nav-tab { padding: 12px 14px; font-size: 0.85rem; }
   .flashcard { padding: 28px; min-height: 220px; }
-  .flashcard .word-front { font-size: 2.2rem; }
+  .flashcard .word-front { font-size: clamp(1.4rem, 5vw, 2.2rem); }
   .options-grid { grid-template-columns: 1fr; }
   .form-row { flex-direction: column; }
   .stats-section { max-width: 100%; }
@@ -811,7 +811,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
       </svg>
-      英语单词学习助手
+      英语学习助手
     </div>
     <button class="settings-btn" onclick="openSettings()" title="API 设置">
       <span class="api-status" id="apiStatusDot"></span> API 设置
