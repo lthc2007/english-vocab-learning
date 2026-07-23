@@ -848,6 +848,38 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   gap: 8px;
   justify-content: flex-end;
 }
+/* ── AI Progress Bar ── */
+.ai-progress-wrap {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 20px;
+  text-align: center;
+}
+.ai-progress-text {
+  font-size: 0.88rem;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.ai-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+.ai-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--gold), var(--accent));
+  background-size: 200% 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  animation: progressShimmer 1.5s ease-in-out infinite;
+}
+@keyframes progressShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -959,7 +991,12 @@ tr:hover td { background: rgba(201,169,110,0.06); }
         <div style="text-align:center;margin-top:16px;">
           <button class="btn btn-primary btn-lg" id="btnGenTrans" onclick="generateTranslation()">AI 生成翻译题目</button>
         </div>
-        <div id="transGenLoading" style="display:none;text-align:center;padding:20px;color:var(--muted);">AI 正在生成翻译题目，请稍候...</div>
+        <div id="transGenLoading" style="display:none;">
+          <div class="ai-progress-wrap">
+            <div class="ai-progress-text">AI 正在生成翻译题目，请稍候...</div>
+            <div class="ai-progress-bar"><div class="ai-progress-fill" id="transGenProgress" style="width:0%"></div></div>
+          </div>
+        </div>
         <div id="transGenResult" style="display:none;margin-top:16px;">
           <div class="result-card">
             <div class="ai-section-title">中文原文</div>
@@ -999,7 +1036,12 @@ tr:hover td { background: rgba(201,169,110,0.06); }
         <div style="text-align:center;">
           <button class="btn btn-primary btn-lg" id="btnCorrectTrans" onclick="correctTranslation()">提交批改</button>
         </div>
-        <div id="correctLoading" style="display:none;text-align:center;padding:20px;color:var(--muted);">AI 正在批改中，请稍候...</div>
+        <div id="correctLoading" style="display:none;">
+          <div class="ai-progress-wrap">
+            <div class="ai-progress-text">AI 正在批改中，请稍候...</div>
+            <div class="ai-progress-bar"><div class="ai-progress-fill" id="correctProgress" style="width:0%"></div></div>
+          </div>
+        </div>
         <div id="correctResult" style="display:none;margin-top:16px;">
           <div class="result-card" style="text-align:center;">
             <div class="score-big" id="correctScore">0</div>
@@ -1048,7 +1090,12 @@ tr:hover td { background: rgba(201,169,110,0.06); }
       <div style="text-align:center;">
         <button class="btn btn-primary btn-lg" id="btnWritingCorrect" onclick="correctWriting()">提交批改</button>
       </div>
-      <div id="writingLoading" style="display:none;text-align:center;padding:20px;color:var(--muted);">AI 正在批改中，请稍候...</div>
+      <div id="writingLoading" style="display:none;">
+        <div class="ai-progress-wrap">
+          <div class="ai-progress-text">AI 正在批改中，请稍候...</div>
+          <div class="ai-progress-bar"><div class="ai-progress-fill" id="writingProgress" style="width:0%"></div></div>
+        </div>
+      </div>
       <div id="writingResult" style="display:none;margin-top:16px;">
         <div class="result-card" style="text-align:center;">
           <div class="score-big" id="writingScore">0</div>
@@ -4072,6 +4119,7 @@ async function generateTranslation() {
   if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
   $('btnGenTrans').disabled = true;
   $('transGenLoading').style.display = '';
+  startProgress('transGenProgress');
   $('transGenResult').style.display = 'none';
 
   const prompt = `你是${transGenDiff}英语考试翻译真题的研究专家。请先回忆${transGenDiff}考试近年出现的翻译真题，分析其典型特征（话题类型、段落长度、句子结构复杂度、词汇难度），然后仿照真题风格生成一道全新的翻译题目。
@@ -4090,6 +4138,7 @@ async function generateTranslation() {
 
   const result = await callAI(prompt, 5000);
   $('btnGenTrans').disabled = false;
+  stopProgress('transGenProgress');
   $('transGenLoading').style.display = 'none';
 
   if (!result) return;
@@ -4108,6 +4157,7 @@ async function correctTranslation() {
 
   $('btnCorrectTrans').disabled = true;
   $('correctLoading').style.display = '';
+  startProgress('correctProgress');
   $('correctResult').style.display = 'none';
 
   const prompt = `你是${transCorrectDiff}英语翻译考试的评分老师。请对以下翻译进行批改。
@@ -4127,6 +4177,7 @@ AI范文: <AI根据中文原文翻译的英文范文>
 
   const result = await callAI(prompt, 5000);
   $('btnCorrectTrans').disabled = false;
+  stopProgress('correctProgress');
   $('correctLoading').style.display = 'none';
 
   if (!result) return;
@@ -4153,6 +4204,7 @@ async function correctWriting() {
 
   $('btnWritingCorrect').disabled = true;
   $('writingLoading').style.display = '';
+  startProgress('writingProgress');
   $('writingResult').style.display = 'none';
 
   const prompt = `你是${writingDiff}英语考试作文评分老师。请对以下作文进行批改。
@@ -4173,6 +4225,7 @@ AI范文: <AI根据题目写的英文范文>
 
   const result = await callAI(prompt, 5000);
   $('btnWritingCorrect').disabled = false;
+  stopProgress('writingProgress');
   $('writingLoading').style.display = 'none';
 
   if (!result) return;
@@ -4191,6 +4244,46 @@ AI范文: <AI根据题目写的英文范文>
   $('writingResult').style.display = '';
   $('btnSaveWriting').style.display = '';
   $('writingSavedMsg').style.display = 'none';
+}
+
+// ═══════════════════════════════════════
+// AI Progress Bar
+// ═══════════════════════════════════════
+const progressTimers = {};
+
+function startProgress(elementId) {
+  stopProgress(elementId);
+  const el = $(elementId);
+  if (!el) return;
+  el.style.width = '0%';
+
+  // Simulate realistic progress: fast start, then slow down, never reaching 100%
+  const steps = [
+    { at: 500, to: 15 },
+    { at: 1500, to: 35 },
+    { at: 3000, to: 55 },
+    { at: 5000, to: 70 },
+    { at: 8000, to: 82 },
+    { at: 12000, to: 90 },
+    { at: 18000, to: 94 },
+    { at: 25000, to: 96 },
+    { at: 30000, to: 97 },
+  ];
+
+  const timers = [];
+  steps.forEach(s => {
+    timers.push(setTimeout(() => { el.style.width = s.to + '%'; }, s.at));
+  });
+  progressTimers[elementId] = timers;
+}
+
+function stopProgress(elementId) {
+  if (progressTimers[elementId]) {
+    progressTimers[elementId].forEach(t => clearTimeout(t));
+    delete progressTimers[elementId];
+  }
+  const el = $(elementId);
+  if (el) el.style.width = '100%';
 }
 
 // ═══════════════════════════════════════
