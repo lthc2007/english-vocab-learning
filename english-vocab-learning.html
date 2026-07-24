@@ -4388,21 +4388,13 @@ async function generateTranslation() {
   startProgress('transGenProgress');
   $('transGenResult').style.display = 'none';
 
-  const prompt = `你是${transGenDiff}英语考试翻译真题的研究专家。请先回忆${transGenDiff}考试近年出现的翻译真题，分析其典型特征（话题类型、段落长度、句子结构复杂度、词汇难度），然后仿照真题风格生成一道全新的翻译题目。
+  const prompt = `请仿照${transGenDiff}翻译真题风格，生成一道翻译题目，直接按以下格式输出，不要输出任何分析或额外说明：
 
-要求：
-1. 严格仿照${transGenDiff}翻译真题的难度、字数、话题范围、句式复杂度
-2. ${transGenDiff === '四级' ? '四级翻译真题通常为140-160个汉字，话题涵盖中国文化、社会发展、历史地理等' : transGenDiff === '六级' ? '六级翻译真题通常为180-200个汉字，话题涵盖中国传统文化、经济、科技、历史等，词汇和句式较四级更难' : '考研翻译真题通常为一段约150词的英文段落（英译中），话题涵盖社会、文化、科学、教育等，要求准确理解原文并通顺表达'}
-3. 中文原文应为一段完整的段落，话题和字数严格对照${transGenDiff}真题水平
-4. 提供标准英文译文
-5. 列出翻译重难点解析（包括关键句型、词汇选择、语法难点、易错点）
+原文: <${transGenDiff === '四级' ? '一段140-160个汉字的中文，话题为中国文化/社会发展/历史地理' : transGenDiff === '六级' ? '一段180-200个汉字的中文，话题为中国传统文化/经济/科技/历史' : '一段约150词的英文段落，话题为社会/文化/科学/教育'}>
+译文: <标准英文译文>
+重难点: <3-5条翻译重难点，包括关键句型、词汇选择、语法难点、易错点>`;
 
-请严格按照以下格式输出：
-原文: <中文原文>
-译文: <英文译文>
-重难点: <重难点解析>`;
-
-  const result = await callAI(prompt, 5000);
+  const result = await callAI(prompt, 8000);
   $('btnGenTrans').disabled = false;
   stopProgress('transGenProgress');
   $('transGenLoading').style.display = 'none';
@@ -4441,7 +4433,7 @@ async function correctTranslation() {
 AI范文: <AI根据中文原文翻译的英文范文>
 修正范文: <在学生译文基础上修改错误后得到的英文范文，保持学生原有用词和句式风格，只修正错误部分>`;
 
-  const result = await callAI(prompt, 5000);
+  const result = await callAI(prompt, 8000);
   $('btnCorrectTrans').disabled = false;
   stopProgress('correctProgress');
   $('correctLoading').style.display = 'none';
@@ -4490,7 +4482,7 @@ async function correctWriting() {
 AI范文: <AI根据题目写的英文范文>
 修正范文: <在学生作文基础上修改错误后得到的英文范文，保持学生原有用词和句式风格，只修正错误部分>`;
 
-  const result = await callAI(prompt, 5000);
+  const result = await callAI(prompt, 8000);
   $('btnWritingCorrect').disabled = false;
   stopProgress('writingProgress');
   $('writingLoading').style.display = 'none';
