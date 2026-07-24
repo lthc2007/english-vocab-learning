@@ -384,6 +384,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
 .diff-高考 { background: #e3f2fd; color: #4a7a9e; }
 .diff-四级 { background: #fff8e1; color: #9a7a3a; }
 .diff-六级 { background: #fff3e0; color: #a0682a; }
+.diff-考研 { background: #e8eaf6; color: #4a5a8a; }
 .diff-雅思 { background: #f3e5f5; color: #7a5a8a; }
 .diff-托福 { background: #fce4ec; color: #9a5a6e; }
 .diff-专八 { background: #ffebee; color: #a05050; }
@@ -990,8 +991,9 @@ tr:hover td { background: rgba(201,169,110,0.06); }
       </div>
       <div id="lookupResult" style="display:none;margin-top:16px;border:1px solid var(--border);border-radius:10px;padding:16px;">
         <!-- Phonetic -->
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
           <span style="font-size:1.5rem;font-weight:700;color:var(--accent);" id="luWord"></span>
+          <span id="luDifficulty" style="display:none;"></span>
           <span style="font-size:1rem;color:var(--muted);" id="luPhonetic"></span>
           <button class="btn-speak" id="luSpeak" onclick="lookupSpeak(event)" title="朗读单词" style="display:none;">🔊</button>
         </div>
@@ -2300,7 +2302,7 @@ function newWord(english, pos, chinese) {
     similarWords: '',
     clozeTest: '',
     translationExercise: '',
-    difficulty: '',
+    difficulty: difficulty || '',
     frequency: '',
     isPhrase: false,
     aiGenerated: false,
@@ -4104,15 +4106,17 @@ async function doLookup() {
 释义: <精简的中文释义，只列出1-2个最常用的义项，不要加序号。词性用英文缩写。例如：n. 放弃、遗弃；v. 放纵>
 例句: <1个自然实用的英文例句，附中文翻译。格式：英文例句 | 中文翻译>
 词根词缀: <该单词的词根词缀拆解，例如：ab-（离开）+ bandon（命令）→ 放弃命令→遗弃。如无明确词根写"暂无">
-派生词: <该单词的派生词及其释义，用 | 分隔，例如：abandoned (adj.) 被遗弃的 | abandonment (n.) 放弃>`;
+派生词: <该单词的派生词及其释义，用 | 分隔，例如：abandoned (adj.) 被遗弃的 | abandonment (n.) 放弃>
+难度: <中考/高考/四级/六级/考研/雅思/托福/专八 中选一个最符合的>`;
 
-    const result = await callAI(prompt, 2000);
+  const result = await callAI(prompt, 2000);
     if (result) {
       const phonetic = parseSection(result, '音标') || '';
       const definition = parseSection(result, '释义') || '';
       const examplesRaw = parseSection(result, '例句') || '';
       const rootAffix = parseSection(result, '词根词缀') || '';
       const derived = parseSection(result, '派生词') || '';
+      const difficulty = parseSection(result, '难度') || '';
 
       // Parse definition: remove numbering, bold 【常用】 marks
       const defHtml = definition
@@ -4140,6 +4144,13 @@ async function doLookup() {
 
       // Populate UI
       $('luWord').textContent = word;
+      // Difficulty tag
+      if (difficulty) {
+        $('luDifficulty').innerHTML = `<span class="diff-tag diff-${difficulty}">${difficulty}</span>`;
+        $('luDifficulty').style.display = '';
+      } else {
+        $('luDifficulty').style.display = 'none';
+      }
       $('luPhonetic').textContent = phonetic;
       $('luSpeak').style.display = phonetic ? '' : 'none';
       $('luDefinition').innerHTML = defHtml;
@@ -4168,7 +4179,8 @@ async function doLookup() {
         examplesHtml: exampleItem,
         rootAffix: rootAffix,
         derived: derived,
-        derivedHtml: derivedHtml
+        derivedHtml: derivedHtml,
+        difficulty: difficulty
       };
 
       $('lookupResult').style.display = '';
@@ -4188,7 +4200,7 @@ async function doLookup() {
 
 function addLookedUpWord() {
   if (!lookupData) return;
-  const { word, phonetic, definition, examples, rootAffix, derived } = lookupData;
+  const { word, phonetic, definition, examples, rootAffix, derived, difficulty } = lookupData;
 
   // Check duplicate
   if (appData.words.find(w => w.english.toLowerCase() === word.toLowerCase())) {
@@ -4239,7 +4251,7 @@ function addLookedUpWord() {
     similarWords: '',
     clozeTest: '',
     translationExercise: '',
-    difficulty: '',
+    difficulty: difficulty || '',
     frequency: '',
     aiGenerated: false
   };
