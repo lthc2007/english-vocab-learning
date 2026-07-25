@@ -1885,17 +1885,29 @@ async function cloudSubmit() {
   }
 
   // 注册前检查用户数量是否已达上限
+  // 优先使用 RPC 函数（需在 Supabase SQL Editor 中创建 count_user_words 函数以绕过 RLS）
+  // CREATE OR REPLACE FUNCTION count_user_words() RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT count(*)::integer FROM user_words; $$;
   if (cloudLoginMode === 'register') {
+    let userCount = null;
     try {
-      const { count, error: countErr } = await sbClient
-        .from('user_words')
-        .select('*', { count: 'exact', head: true });
-      if (!countErr && count !== null && count >= 30) {
-        $('cloudError').textContent = '注册人数已达上限（30人），暂时无法注册新账号';
-        $('cloudError').style.display = '';
-        return;
-      }
-    } catch (e) { /* 计数查询失败则不阻止注册 */ }
+      // 尝试 RPC 调用（绕过 RLS）
+      const { data: rpcCount, error: rpcErr } = await sbClient.rpc('count_user_words');
+      if (!rpcErr && typeof rpcCount === 'number') userCount = rpcCount;
+    } catch (e) { /* RPC 不可用 */ }
+    if (userCount === null) {
+      try {
+        // 回退：直接查询表（可能被 RLS 阻止，返回 0）
+        const { count, error: countErr } = await sbClient
+          .from('user_words')
+          .select('*', { count: 'exact', head: true });
+        if (!countErr && count !== null) userCount = count;
+      } catch (e) { /* 计数查询失败则不阻止注册 */ }
+    }
+    if (userCount !== null && userCount >= 30) {
+      $('cloudError').textContent = '注册人数已达上限（30人），暂时无法注册新账号';
+      $('cloudError').style.display = '';
+      return;
+    }
   }
 
   try {
@@ -1904,6 +1916,15 @@ async function cloudSubmit() {
       result = await sbClient.auth.signInWithPassword({ email, password });
     } else {
       result = await sbClient.auth.signUp({ email, password });
+      // 先检查是否有错误（如用户已存在）
+      if (result.error) throw result.error;
+      // 检查是否为新用户（identities 为空表示用户已存在）
+      if (result.data.user && result.data.user.identities && result.data.user.identities.length === 0) {
+        $('cloudError').textContent = '该邮箱已注册，请直接登录';
+        $('cloudError').style.display = '';
+        switchLoginTab('login');
+        return;
+      }
       if (result.data.user && !result.data.session) {
         showToast('注册成功！请检查邮箱中的确认链接后再登录。');
         switchLoginTab('login');
@@ -1995,11 +2016,15 @@ async function cloudDownload() {
 
     // Merge strategy: cloud data wins, but keep local if cloud is empty
     if (data.words && data.words.length > 0) {
-      appData.words = data.words;
+      // 真正的合并：按 english 去重，云端数据优先
+      const merged = new Map();
+      appData.words.forEach(w => merged.set(w.english.toLowerCase(), w));
+      data.words.forEach(w => merged.set(w.english.toLowerCase(), w));
+      appData.words = Array.from(merged.values());
       persist();
       renderWordTable();
       $('cloudSyncTime').textContent = '云端时间: ' + new Date(data.updated_at).toLocaleString('zh-CN');
-      showToast('从云端下载了 ' + data.words.length + ' 个单词');
+      showToast('从云端合并了 ' + data.words.length + ' 个单词（云端优先）');
     } else {
       showToast('云端暂无单词数据');
     }
@@ -2317,7 +2342,7 @@ async function testAiConnection() {
         model: model,
         messages: [{ role: 'user', content: 'Hello' }],
         max_tokens: 5,
-        thinking: { type: 'disabled' }
+        ...(appData.provider === 'deepseek' ? { thinking: { type: 'disabled' } } : {})
       }),
       signal: AbortSignal.timeout(15000)
     });
@@ -2910,7 +2935,7 @@ async function callAI(prompt, maxTokens = 1500) {
         ],
         temperature: 0.7,
         max_tokens: maxTokens,
-        thinking: { type: 'disabled' }
+        ...(appData.provider === 'deepseek' ? { thinking: { type: 'disabled' } } : {})
       })
     });
     if (!resp.ok) {
@@ -2974,7 +2999,7 @@ async function generateAllContent(wordId) {
 
     const result = await callAI(prompt, 4000);
     if (result) {
-      word.example = parseSection(result, '例句') || parseSection(result, '例句');
+      word.example = parseSection(result, '例句');
       word.phonetic = parseSection(result, '音标');
       word.exampleCn = parseSection(result, '例句翻译');
       word.synonyms = parseSection(result, '近义词');
@@ -3150,11 +3175,6 @@ ${missing.includes('对话') ? '对话: <A:... B:... 一个包含该单词的雅
   showToast(`批量生成完成: ${done}/${wordsToGen.length} 成功`);
 }
 
-// Also support calling with wordId from table
-async function generateSingleExample(wordId) {
-  await generateAllContent(wordId);
-}
-
 // ═══════════════════════════════════════
 // Learning (Flashcard)
 // ═══════════════════════════════════════
@@ -3232,7 +3252,7 @@ function showCard() {
     }
     section.style.display = 'block';
     if (formatter) formatter();
-    else $('fc' + id).textContent = content;
+    else $('fc' + id).innerText = content;
   }
 
   // 例句已在 card front/back 分别处理，不需要在这里重复填充
@@ -3879,11 +3899,15 @@ $('modalSettings').addEventListener('click', function(e) {
 $('modalDetail').addEventListener('click', function(e) {
   if (e.target === this) this.classList.remove('show');
 });
+$('modalCloud').addEventListener('click', function(e) {
+  if (e.target === this) closeCloudPanel();
+});
 // ESC to close modals
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     closeSettings();
     $('modalDetail').classList.remove('show');
+    closeCloudPanel();
   }
 });
 
@@ -3939,7 +3963,7 @@ function updateArticleEstimate() {
   }
 }
 
-// Shared MiniMax TTS helper: returns { blob, error }
+// Shared TTS helper: supports MiniMax, OpenAI, Volcano Engine. Returns { blob, error }
 async function callMiniMaxTTS(text, speed = 1.0) {
   const ttsProvider = appData.ttsProvider || 'none';
   const ttsCfg = TTS_PROVIDERS[ttsProvider];
@@ -4205,6 +4229,10 @@ function resumeArticleRead() {
 function stopArticleRead() {
   if (articleAudio) {
     articleAudio.pause();
+    // 释放当前音频块的 blob URL
+    if (articleAudio.src && articleAudio.src.startsWith('blob:')) {
+      URL.revokeObjectURL(articleAudio.src);
+    }
     articleAudio = null;
   }
   window.speechSynthesis && window.speechSynthesis.cancel();
