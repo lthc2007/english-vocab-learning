@@ -3530,9 +3530,36 @@ function mergeAudioBlobs(blobs) {
   return new Blob(blobs, { type: 'audio/mp3' });
 }
 
+function replayArticleBlob() {
+  if (!articleBlob) return;
+  // Stop any current playback
+  if (articleAudio) {
+    articleAudio.pause();
+    articleAudio = null;
+  }
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  articleIsPlaying = false;
+  articleIsPaused = false;
+  articleChunkIdx = -1;
+
+  $('btnReadPlay').style.display = 'none';
+  $('btnReadStop').style.display = '';
+  $('btnReadPause').style.display = 'none';
+  $('btnReadResume').style.display = 'none';
+  $('btnReadDownload').style.display = '';
+  $('readStatus').textContent = '朗读中... (已缓存)';
+  playArticleChunks(0);
+}
+
 async function startArticleRead() {
   const text = $('articleText').value.trim();
   if (!text) { showToast('请先粘贴英文文章'); return; }
+
+  // If we already have generated audio, replay it without API call
+  if (articleBlob) {
+    replayArticleBlob();
+    return;
+  }
 
   const ttsProvider = appData.ttsProvider || 'none';
   const ttsCfg = TTS_PROVIDERS[ttsProvider];
@@ -3669,14 +3696,13 @@ function stopArticleRead() {
   window.speechSynthesis && window.speechSynthesis.cancel();
   articleIsPlaying = false;
   articleIsPaused = false;
-  articleChunks = [];
   articleChunkIdx = -1;
-  articleBlob = null;
   $('btnReadPlay').style.display = '';
+  $('btnReadPlay').textContent = articleBlob ? '🔄 重新播放' : '▶ 朗读';
   $('btnReadPause').style.display = 'none';
   $('btnReadResume').style.display = 'none';
   $('btnReadStop').style.display = 'none';
-  $('btnReadDownload').style.display = 'none';
+  $('btnReadDownload').style.display = articleBlob ? '' : 'none';
   $('readStatus').textContent = '';
   $('readProgressBar').style.display = 'none';
   $('readProgressText').style.display = 'none';
@@ -3686,15 +3712,21 @@ function clearArticle() {
   $('articleText').value = '';
   $('articleEstimate').style.display = 'none';
   stopArticleRead();
+  articleChunks = [];
+  articleBlob = null;
+  $('btnReadPlay').textContent = '▶ 朗读';
+  $('btnReadDownload').style.display = 'none';
 }
 
 function onArticleEnded() {
   articleIsPlaying = false;
   articleIsPaused = false;
   $('btnReadPlay').style.display = '';
+  $('btnReadPlay').textContent = '🔄 重新播放';
   $('btnReadPause').style.display = 'none';
   $('btnReadResume').style.display = 'none';
   $('btnReadStop').style.display = 'none';
+  if (articleBlob) $('btnReadDownload').style.display = '';
   $('readStatus').textContent = '朗读完毕';
 }
 
