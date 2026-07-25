@@ -1464,6 +1464,11 @@ tr:hover td { background: rgba(201,169,110,0.06); }
       <div id="articleEstimate" style="font-size:0.8rem;color:var(--muted);margin-top:6px;display:none;">
         预估字符数: <strong id="estChars">0</strong> &nbsp;|&nbsp; 预估费用: <strong id="estCost">¥0.00</strong> <span style="color:var(--muted);" id="estPriceLabel"></span>
       </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap;">
+        <span style="font-size:0.82rem;color:var(--muted);white-space:nowrap;">语速:</span>
+        <input type="range" id="articleSpeedSlider" min="0.5" max="2.0" step="0.1" value="1.0" oninput="updateArticleSpeedLabel()" style="width:100px;accent-color:var(--accent);">
+        <span id="articleSpeedLabel" style="font-size:0.82rem;font-weight:600;color:var(--accent);min-width:32px;">1.0x</span>
+      </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;">
         <button class="btn btn-primary" id="btnReadPlay" onclick="startArticleRead()">▶ 朗读</button>
         <button class="btn btn-secondary" id="btnReadPause" onclick="pauseArticleRead()" style="display:none;">⏸ 暂停</button>
@@ -3489,6 +3494,11 @@ let articlePausedAt = 0;
 // TTS pricing: 元/万字符 (MiniMax China)
 const TTS_PRICING = { 'speech-2.8-hd': 3.5, 'speech-2.8-turbo': 2, 'speech-2.6-hd': 3.5, 'speech-2.6-turbo': 2, 'speech-02-hd': 3.5, 'speech-02-turbo': 2 };
 
+function updateArticleSpeedLabel() {
+  const val = parseFloat($('articleSpeedSlider').value);
+  $('articleSpeedLabel').textContent = val.toFixed(1) + 'x';
+}
+
 function updateArticleEstimate() {
   const text = $('articleText').value;
   const est = $('articleEstimate');
@@ -3514,7 +3524,7 @@ function updateArticleEstimate() {
 }
 
 // Shared MiniMax TTS helper: returns { blob, error }
-async function callMiniMaxTTS(text) {
+async function callMiniMaxTTS(text, speed = 1.0) {
   const ttsProvider = appData.ttsProvider || 'none';
   const ttsCfg = TTS_PROVIDERS[ttsProvider];
   if (ttsProvider === 'none' || !appData.ttsKey || !ttsCfg) {
@@ -3531,7 +3541,7 @@ async function callMiniMaxTTS(text) {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
       body: JSON.stringify({
         model: ttsModel, text, stream: false, language_boost: 'English', output_format: 'hex',
-        voice_setting: { voice_id: ttsVoice, speed: 0.95, vol: 1, pitch: 0 },
+        voice_setting: { voice_id: ttsVoice, speed: speed, vol: 1, pitch: 0 },
         audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
       })
     });
@@ -3553,7 +3563,7 @@ async function callMiniMaxTTS(text) {
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
           body: JSON.stringify({
             model: ttsModel, text, stream: false, language_boost: 'English', output_format: 'hex',
-            voice_setting: { voice_id: ttsVoice, speed: 0.95, vol: 1, pitch: 0 },
+            voice_setting: { voice_id: ttsVoice, speed: speed, vol: 1, pitch: 0 },
             audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
           })
         });
@@ -3574,7 +3584,7 @@ async function callMiniMaxTTS(text) {
     const resp = await fetch(ttsUrl + '/audio/speech', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
-      body: JSON.stringify({ model: ttsModel, input: text, voice: ttsVoice, response_format: 'mp3', speed: 0.95 })
+      body: JSON.stringify({ model: ttsModel, input: text, voice: ttsVoice, response_format: 'mp3', speed: speed })
     });
     if (resp.ok) {
       const blob = await resp.blob();
@@ -3648,8 +3658,9 @@ async function startArticleRead() {
     $('readStatus').textContent = '正在生成 AI 语音...';
 
     const blobs = [];
+    const speed = parseFloat($('articleSpeedSlider').value) || 1.0;
     for (let i = 0; i < chunks.length; i++) {
-      const { blob, error } = await callMiniMaxTTS(chunks[i]);
+      const { blob, error } = await callMiniMaxTTS(chunks[i], speed);
       if (blob) {
         blobs.push(blob);
         $('readProgressText').textContent = '正在生成 AI 语音... ' + (i + 1) + '/' + chunks.length;
@@ -3953,7 +3964,8 @@ function doWebSpeechRead(text) {
   window.speechSynthesis.cancel();
   const utter = new SpeechSynthesisUtterance(text);
   utter.lang = 'en-US';
-  utter.rate = 0.85;
+  const speed = parseFloat($('articleSpeedSlider').value) || 1.0;
+  utter.rate = speed;
   utter.pitch = 1.0;
   utter.volume = 1;
   const voices = window.speechSynthesis.getVoices();
