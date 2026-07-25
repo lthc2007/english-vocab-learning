@@ -1790,7 +1790,7 @@ function persist() { saveData(appData); }
 // ═══════════════════════════════════════
 // Cloud Sync (Supabase)
 // ═══════════════════════════════════════
-let supabase = null;
+let sbClient = null;
 let cloudLoginMode = 'login';
 
 // Load cloud config from localStorage
@@ -1810,7 +1810,7 @@ function initSupabase() {
   const cfg = loadCloudConfig();
   if (cfg.supabaseUrl && cfg.supabaseKey && window.supabase) {
     try {
-      supabase = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
+      sbClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
       return true;
     } catch (e) {
       console.error('Supabase init error:', e);
@@ -1827,7 +1827,7 @@ async function checkCloudSession() {
     return;
   }
   try {
-    const { data: { session }, error } = await supabase.auth.getSession();
+    const { data: { session }, error } = await sbClient.auth.getSession();
     if (error) throw error;
     if (session) {
       updateCloudUI(true, session.user.email);
@@ -1908,7 +1908,7 @@ function saveCloudConfig() {
   if (!url || !key) { showToast('请填写 Supabase URL 和 Anon Key'); return; }
   saveCloudConfigData({ supabaseUrl: url, supabaseKey: key });
   $('cloudSetupHint').style.display = 'none';
-  supabase = null;
+  sbClient = null;
   if (initSupabase()) {
     showToast('Supabase 配置已保存');
     checkCloudSession();
@@ -1947,9 +1947,9 @@ async function cloudSubmit() {
   try {
     let result;
     if (cloudLoginMode === 'login') {
-      result = await supabase.auth.signInWithPassword({ email, password });
+      result = await sbClient.auth.signInWithPassword({ email, password });
     } else {
-      result = await supabase.auth.signUp({ email, password });
+      result = await sbClient.auth.signUp({ email, password });
       if (result.data.user && !result.data.session) {
         showToast('注册成功！请检查邮箱中的确认链接后再登录。');
         switchLoginTab('login');
@@ -1972,8 +1972,8 @@ async function cloudSubmit() {
 
 async function cloudLogout() {
   if (!confirm('确定要退出登录吗？本地数据不会丢失。')) return;
-  if (supabase) {
-    try { await supabase.auth.signOut(); } catch (e) { /* ignore */ }
+  if (sbClient) {
+    try { await sbClient.auth.signOut(); } catch (e) { /* ignore */ }
   }
   updateCloudUI(false);
   showToast('已退出登录');
@@ -1981,8 +1981,8 @@ async function cloudLogout() {
 
 // Upload words to cloud
 async function cloudUpload() {
-  if (!supabase || !initSupabase()) { showToast('请先登录'); return; }
-  const { data: { session } } = await supabase.auth.getSession();
+  if (!sbClient || !initSupabase()) { showToast('请先登录'); return; }
+  const { data: { session } } = await sbClient.auth.getSession();
   if (!session) { showToast('登录已过期，请重新登录'); updateCloudUI(false); return; }
 
   const btn = $('btnCloudUpload');
@@ -1993,7 +1993,7 @@ async function cloudUpload() {
   try {
     const userId = session.user.id;
     // Upsert user's word data
-    const { error } = await supabase
+    const { error } = await sbClient
       .from('user_words')
       .upsert({
         user_id: userId,
@@ -2016,8 +2016,8 @@ async function cloudUpload() {
 
 // Download words from cloud
 async function cloudDownload() {
-  if (!supabase || !initSupabase()) { showToast('请先登录'); return; }
-  const { data: { session } } = await supabase.auth.getSession();
+  if (!sbClient || !initSupabase()) { showToast('请先登录'); return; }
+  const { data: { session } } = await sbClient.auth.getSession();
   if (!session) { showToast('登录已过期，请重新登录'); updateCloudUI(false); return; }
 
   const btn = $('btnCloudDownload');
@@ -2026,7 +2026,7 @@ async function cloudDownload() {
   $('cloudStatusDot').className = 'cloud-status syncing';
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await sbClient
       .from('user_words')
       .select('words, updated_at')
       .eq('user_id', session.user.id)
@@ -2062,14 +2062,14 @@ async function cloudDownload() {
 // Auto-sync after changes (upload local to cloud)
 let _cloudSyncTimer = null;
 function cloudAutoSync() {
-  if (!supabase) return;
+  if (!sbClient) return;
   clearTimeout(_cloudSyncTimer);
   _cloudSyncTimer = setTimeout(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await sbClient.auth.getSession();
       if (!session) return;
       $('cloudStatusDot').className = 'cloud-status syncing';
-      await supabase
+      await sbClient
         .from('user_words')
         .upsert({
           user_id: session.user.id,
