@@ -1627,9 +1627,33 @@ tr:hover td { background: rgba(201,169,110,0.06); }
       <div class="cloud-info" style="margin-top:16px;">
         <strong>💡 使用说明：</strong><br>
         1. 前往 <a href="https://supabase.com" target="_blank">supabase.com</a> 注册免费账号<br>
-        2. 创建项目，在 SQL Editor 中执行建表语句<br>
+        2. 创建项目，进入 SQL Editor，执行下方建表语句<br>
         3. 填入下方 Supabase 配置信息<br>
         <span id="cloudSetupHint" style="display:none;margin-top:6px;color:var(--warning);">⚠️ 请先在下方配置 Supabase URL 和 Anon Key</span>
+        <details style="margin-top:8px;">
+          <summary style="cursor:pointer;color:var(--accent);font-weight:500;">📋 点击展开建表 SQL</summary>
+          <div style="position:relative;margin-top:6px;">
+            <textarea readonly id="sqlCode" style="width:100%;height:180px;font-family:monospace;font-size:0.72rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;resize:none;color:var(--ink);" spellcheck="false">-- 创建单词数据表
+CREATE TABLE IF NOT EXISTS user_words (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL UNIQUE,
+  words JSONB NOT NULL DEFAULT '[]'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 启用行级安全（RLS）
+ALTER TABLE user_words ENABLE ROW LEVEL SECURITY;
+
+-- 用户仅可读写自己的数据
+CREATE POLICY "读自己的数据" ON user_words
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "插自己的数据" ON user_words
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "改自己的数据" ON user_words
+  FOR UPDATE USING (auth.uid() = user_id);</textarea>
+            <button onclick="copySQL()" style="position:absolute;top:6px;right:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:0.7rem;cursor:pointer;color:var(--muted);">📋 复制</button>
+          </div>
+        </details>
       </div>
     </div>
     <div id="cloudConfigForm" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--rule);">
@@ -1848,6 +1872,17 @@ function openCloudPanel() {
 
 function closeCloudPanel() {
   $('modalCloud').classList.remove('show');
+}
+
+function copySQL() {
+  const sql = $('sqlCode').value;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(sql).then(() => showToast('SQL 已复制到剪贴板'));
+  } else {
+    $('sqlCode').select();
+    document.execCommand('copy');
+    showToast('SQL 已复制');
+  }
 }
 
 function switchLoginTab(tab) {
