@@ -96,6 +96,47 @@ body {
 }
 .api-status.ok { background: var(--success); }
 .api-status.no { background: var(--danger); }
+/* ── Cloud Sync & Login ── */
+.cloud-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 7px 14px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--transition);
+  font-family: var(--font-body);
+}
+.cloud-btn:hover { border-color: var(--gold); color: var(--accent); background: var(--gold-soft); }
+.cloud-btn.logged-in { border-color: var(--success); color: var(--success); background: #f0fdf4; }
+.cloud-btn.logged-in:hover { border-color: var(--success); color: #fff; background: var(--success); }
+.cloud-status {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-right: 2px;
+}
+.cloud-status.synced { background: var(--success); }
+.cloud-status.syncing { background: var(--warning); animation: pulse 0.8s infinite; }
+.cloud-status.offline { background: var(--danger); }
+.cloud-status.local { background: var(--muted); }
+.login-tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid var(--rule); }
+.login-tab {
+  flex: 1; padding: 10px; border: none; background: none;
+  cursor: pointer; font-size: 0.9rem; font-weight: 500; color: var(--muted);
+  transition: all var(--transition); font-family: var(--font-body);
+  border-bottom: 2px solid transparent; margin-bottom: -2px;
+}
+.login-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.login-tab:hover { color: var(--ink); }
+.cloud-info {
+  font-size: 0.78rem; color: var(--muted); margin-top: 8px; line-height: 1.5;
+}
+.cloud-info a { color: var(--accent); }
 
 /* ── Tabs ── */
 .nav-tabs {
@@ -913,6 +954,9 @@ tr:hover td { background: rgba(201,169,110,0.06); }
       </svg>
       英语学习助手
     </div>
+    <button class="cloud-btn" id="cloudBtn" onclick="openCloudPanel()" title="云同步">
+      <span class="cloud-status local" id="cloudStatusDot"></span> <span id="cloudBtnText">未登录</span>
+    </button>
     <button class="settings-btn" onclick="openSettings()" title="API 设置">
       <span class="api-status" id="apiStatusDot"></span> API 设置
     </button>
@@ -1170,13 +1214,28 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     <div class="card">
       <div class="card-header">
         <span>数据同步</span>
-        <span style="font-size:0.75rem;color:var(--muted);">跨设备同步单词数据</span>
+        <span style="font-size:0.75rem;color:var(--muted);">云端自动同步 + 本地备份</span>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <button class="btn btn-primary btn-sm" onclick="exportData()">📤 导出备份</button>
-        <button class="btn btn-secondary btn-sm" onclick="$('importFileInput').click()">📥 导入合并</button>
-        <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
-        <span style="font-size:0.7rem;color:var(--muted);">导出为 JSON 文件，在其他设备导入即可同步</span>
+      <div id="cloudSyncArea">
+        <div id="cloudNotLoggedIn" style="text-align:center;padding:16px 0;">
+          <p style="color:var(--muted);margin-bottom:12px;">登录后可自动同步数据到云端，跨设备使用</p>
+          <button class="btn btn-primary" onclick="openCloudPanel()">🔐 登录 / 注册</button>
+        </div>
+        <div id="cloudLoggedIn" style="display:none;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+            <span style="font-size:0.85rem;color:var(--success);">✅ 已登录：<strong id="cloudUserEmail"></strong></span>
+            <span style="font-size:0.75rem;color:var(--muted);" id="cloudSyncTime"></span>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <button class="btn btn-primary btn-sm" id="btnCloudUpload" onclick="cloudUpload()">☁️ 上传到云端</button>
+            <button class="btn btn-secondary btn-sm" id="btnCloudDownload" onclick="cloudDownload()">⬇️ 从云端下载</button>
+            <button class="btn btn-secondary btn-sm" onclick="exportData()">📤 导出备份</button>
+            <button class="btn btn-secondary btn-sm" onclick="$('importFileInput').click()">📥 导入合并</button>
+            <button class="btn btn-danger btn-sm" onclick="cloudLogout()">退出登录</button>
+          </div>
+          <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
+          <div class="cloud-info" style="margin-top:8px;">数据会自动保存到云端，登录其他设备即可同步。导出备份作为额外保险。</div>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -1539,6 +1598,54 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   </div>
 </div>
 
+<!-- Cloud Login Modal -->
+<div class="modal-overlay" id="modalCloud">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-title">☁️ 云同步</div>
+    <div class="login-tabs">
+      <button class="login-tab active" onclick="switchLoginTab('login')" id="tabLogin">登录</button>
+      <button class="login-tab" onclick="switchLoginTab('register')" id="tabRegister">注册</button>
+    </div>
+    <div id="loginForm">
+      <div class="form-group">
+        <label class="form-label">邮箱</label>
+        <input class="form-input" id="cloudEmail" type="email" placeholder="your@email.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label class="form-label">密码</label>
+        <input class="form-input" id="cloudPassword" type="password" placeholder="至少6位" autocomplete="current-password">
+      </div>
+      <div class="form-group" id="confirmPasswordGroup" style="display:none;">
+        <label class="form-label">确认密码</label>
+        <input class="form-input" id="cloudConfirmPassword" type="password" placeholder="再次输入密码">
+      </div>
+      <div id="cloudError" style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;"></div>
+      <div style="display:flex;gap:12px;">
+        <button class="btn btn-primary" id="btnCloudSubmit" onclick="cloudSubmit()" style="flex:1;">登录</button>
+        <button class="btn btn-secondary" onclick="closeCloudPanel()">取消</button>
+      </div>
+      <div class="cloud-info" style="margin-top:16px;">
+        <strong>💡 使用说明：</strong><br>
+        1. 前往 <a href="https://supabase.com" target="_blank">supabase.com</a> 注册免费账号<br>
+        2. 创建项目，在 SQL Editor 中执行建表语句<br>
+        3. 填入下方 Supabase 配置信息<br>
+        <span id="cloudSetupHint" style="display:none;margin-top:6px;color:var(--warning);">⚠️ 请先在下方配置 Supabase URL 和 Anon Key</span>
+      </div>
+    </div>
+    <div id="cloudConfigForm" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--rule);">
+      <div class="form-group">
+        <label class="form-label">Supabase URL</label>
+        <input class="form-input" id="supabaseUrl" type="text" placeholder="https://xxxxx.supabase.co" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Supabase Anon Key</label>
+        <input class="form-input" id="supabaseKey" type="password" placeholder="eyJhbGci..." autocomplete="off">
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="saveCloudConfig()" style="width:100%;">💾 保存配置</button>
+    </div>
+  </div>
+</div>
+
 <!-- Detail Modal -->
 <div class="modal-overlay" id="modalDetail">
   <div class="modal" style="max-width:640px;">
@@ -1553,6 +1660,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
 <!-- Toast container -->
 <div id="toastContainer"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 // ═══════════════════════════════════════
 // Data Layer
@@ -1654,6 +1762,299 @@ function saveData(data) {
 let appData = loadData();
 
 function persist() { saveData(appData); }
+
+// ═══════════════════════════════════════
+// Cloud Sync (Supabase)
+// ═══════════════════════════════════════
+let supabase = null;
+let cloudLoginMode = 'login';
+
+// Load cloud config from localStorage
+function loadCloudConfig() {
+  try {
+    const raw = localStorage.getItem('eng_cloud_config');
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* ignore */ }
+  return { supabaseUrl: '', supabaseKey: '' };
+}
+
+function saveCloudConfigData(cfg) {
+  localStorage.setItem('eng_cloud_config', JSON.stringify(cfg));
+}
+
+function initSupabase() {
+  const cfg = loadCloudConfig();
+  if (cfg.supabaseUrl && cfg.supabaseKey && window.supabase) {
+    try {
+      supabase = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
+      return true;
+    } catch (e) {
+      console.error('Supabase init error:', e);
+      return false;
+    }
+  }
+  return false;
+}
+
+// Check if session exists and restore on page load
+async function checkCloudSession() {
+  if (!initSupabase()) {
+    updateCloudUI(false);
+    return;
+  }
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    if (session) {
+      updateCloudUI(true, session.user.email);
+    } else {
+      updateCloudUI(false);
+    }
+  } catch (e) {
+    console.error('Session check error:', e);
+    updateCloudUI(false);
+  }
+}
+
+function updateCloudUI(loggedIn, email) {
+  const btn = $('cloudBtn');
+  const dot = $('cloudStatusDot');
+  const text = $('cloudBtnText');
+  if (loggedIn) {
+    btn.className = 'cloud-btn logged-in';
+    dot.className = 'cloud-status synced';
+    text.textContent = email || '已登录';
+    $('cloudNotLoggedIn') && ($('cloudNotLoggedIn').style.display = 'none');
+    $('cloudLoggedIn') && ($('cloudLoggedIn').style.display = '');
+    if ($('cloudUserEmail')) $('cloudUserEmail').textContent = email || '';
+  } else {
+    btn.className = 'cloud-btn';
+    dot.className = 'cloud-status local';
+    text.textContent = '未登录';
+    $('cloudNotLoggedIn') && ($('cloudNotLoggedIn').style.display = '');
+    $('cloudLoggedIn') && ($('cloudLoggedIn').style.display = 'none');
+  }
+}
+
+function openCloudPanel() {
+  const cfg = loadCloudConfig();
+  $('supabaseUrl').value = cfg.supabaseUrl || '';
+  $('supabaseKey').value = cfg.supabaseKey || '';
+  $('cloudSetupHint').style.display = (!cfg.supabaseUrl || !cfg.supabaseKey) ? '' : 'none';
+  $('modalCloud').classList.add('show');
+  switchLoginTab('login');
+  clearCloudForm();
+}
+
+function closeCloudPanel() {
+  $('modalCloud').classList.remove('show');
+}
+
+function switchLoginTab(tab) {
+  cloudLoginMode = tab;
+  $('tabLogin').classList.toggle('active', tab === 'login');
+  $('tabRegister').classList.toggle('active', tab === 'register');
+  $('confirmPasswordGroup').style.display = tab === 'register' ? '' : 'none';
+  $('btnCloudSubmit').textContent = tab === 'login' ? '登录' : '注册';
+  $('cloudError').style.display = 'none';
+  clearCloudForm();
+}
+
+function clearCloudForm() {
+  $('cloudEmail').value = '';
+  $('cloudPassword').value = '';
+  $('cloudConfirmPassword').value = '';
+  $('cloudError').style.display = 'none';
+}
+
+function saveCloudConfig() {
+  const url = $('supabaseUrl').value.trim();
+  const key = $('supabaseKey').value.trim();
+  if (!url || !key) { showToast('请填写 Supabase URL 和 Anon Key'); return; }
+  saveCloudConfigData({ supabaseUrl: url, supabaseKey: key });
+  $('cloudSetupHint').style.display = 'none';
+  supabase = null;
+  if (initSupabase()) {
+    showToast('Supabase 配置已保存');
+    checkCloudSession();
+  } else {
+    showToast('配置保存成功，但初始化失败，请检查 URL 和 Key');
+  }
+}
+
+async function cloudSubmit() {
+  const email = $('cloudEmail').value.trim();
+  const password = $('cloudPassword').value.trim();
+  $('cloudError').style.display = 'none';
+
+  const cfg = loadCloudConfig();
+  if (!cfg.supabaseUrl || !cfg.supabaseKey) {
+    $('cloudError').textContent = '请先在下方配置 Supabase URL 和 Anon Key';
+    $('cloudError').style.display = '';
+    $('cloudSetupHint').style.display = '';
+    return;
+  }
+
+  if (!email || !password) { showToast('请填写邮箱和密码'); return; }
+  if (password.length < 6) { showToast('密码至少需要6位'); return; }
+
+  if (cloudLoginMode === 'register') {
+    const confirm = $('cloudConfirmPassword').value.trim();
+    if (password !== confirm) { showToast('两次密码输入不一致'); return; }
+  }
+
+  if (!initSupabase()) {
+    $('cloudError').textContent = 'Supabase 配置无效，请检查 URL 和 Key';
+    $('cloudError').style.display = '';
+    return;
+  }
+
+  try {
+    let result;
+    if (cloudLoginMode === 'login') {
+      result = await supabase.auth.signInWithPassword({ email, password });
+    } else {
+      result = await supabase.auth.signUp({ email, password });
+      if (result.data.user && !result.data.session) {
+        showToast('注册成功！请检查邮箱中的确认链接后再登录。');
+        switchLoginTab('login');
+        return;
+      }
+    }
+    if (result.error) throw result.error;
+    if (result.data.session) {
+      updateCloudUI(true, result.data.user.email);
+      showToast('登录成功！');
+      closeCloudPanel();
+      // Auto download from cloud
+      setTimeout(() => cloudDownload(), 500);
+    }
+  } catch (e) {
+    $('cloudError').textContent = e.message || '操作失败，请重试';
+    $('cloudError').style.display = '';
+  }
+}
+
+async function cloudLogout() {
+  if (!confirm('确定要退出登录吗？本地数据不会丢失。')) return;
+  if (supabase) {
+    try { await supabase.auth.signOut(); } catch (e) { /* ignore */ }
+  }
+  updateCloudUI(false);
+  showToast('已退出登录');
+}
+
+// Upload words to cloud
+async function cloudUpload() {
+  if (!supabase || !initSupabase()) { showToast('请先登录'); return; }
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) { showToast('登录已过期，请重新登录'); updateCloudUI(false); return; }
+
+  const btn = $('btnCloudUpload');
+  btn.disabled = true;
+  btn.textContent = '⏳ 上传中...';
+  $('cloudStatusDot').className = 'cloud-status syncing';
+
+  try {
+    const userId = session.user.id;
+    // Upsert user's word data
+    const { error } = await supabase
+      .from('user_words')
+      .upsert({
+        user_id: userId,
+        words: appData.words,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+
+    if (error) throw error;
+    $('cloudSyncTime').textContent = '上次同步: ' + new Date().toLocaleString('zh-CN');
+    $('cloudStatusDot').className = 'cloud-status synced';
+    showToast('数据已上传到云端 ✓');
+  } catch (e) {
+    showToast('上传失败: ' + (e.message || '网络错误'));
+    $('cloudStatusDot').className = 'cloud-status offline';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '☁️ 上传到云端';
+  }
+}
+
+// Download words from cloud
+async function cloudDownload() {
+  if (!supabase || !initSupabase()) { showToast('请先登录'); return; }
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) { showToast('登录已过期，请重新登录'); updateCloudUI(false); return; }
+
+  const btn = $('btnCloudDownload');
+  btn.disabled = true;
+  btn.textContent = '⏳ 下载中...';
+  $('cloudStatusDot').className = 'cloud-status syncing';
+
+  try {
+    const { data, error } = await supabase
+      .from('user_words')
+      .select('words, updated_at')
+      .eq('user_id', session.user.id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    if (!data || !data.words) {
+      showToast('云端暂无数据，请先上传');
+      $('cloudStatusDot').className = 'cloud-status synced';
+      return;
+    }
+
+    // Merge strategy: cloud data wins, but keep local if cloud is empty
+    if (data.words && data.words.length > 0) {
+      appData.words = data.words;
+      persist();
+      renderWordTable();
+      $('cloudSyncTime').textContent = '云端时间: ' + new Date(data.updated_at).toLocaleString('zh-CN');
+      showToast('从云端下载了 ' + data.words.length + ' 个单词');
+    } else {
+      showToast('云端暂无单词数据');
+    }
+    $('cloudStatusDot').className = 'cloud-status synced';
+  } catch (e) {
+    showToast('下载失败: ' + (e.message || '网络错误'));
+    $('cloudStatusDot').className = 'cloud-status offline';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⬇️ 从云端下载';
+  }
+}
+
+// Auto-sync after changes (upload local to cloud)
+let _cloudSyncTimer = null;
+function cloudAutoSync() {
+  if (!supabase) return;
+  clearTimeout(_cloudSyncTimer);
+  _cloudSyncTimer = setTimeout(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      $('cloudStatusDot').className = 'cloud-status syncing';
+      await supabase
+        .from('user_words')
+        .upsert({
+          user_id: session.user.id,
+          words: appData.words,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' });
+      $('cloudSyncTime').textContent = '自动同步: ' + new Date().toLocaleString('zh-CN');
+      $('cloudStatusDot').className = 'cloud-status synced';
+    } catch (e) {
+      $('cloudStatusDot').className = 'cloud-status offline';
+    }
+  }, 3000);
+}
+
+// Override persist to trigger auto-sync
+const _originalPersist = persist;
+persist = function() {
+  _originalPersist();
+  cloudAutoSync();
+};
 
 // ═══════════════════════════════════════
 // Helpers
