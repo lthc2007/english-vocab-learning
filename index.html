@@ -1628,31 +1628,50 @@ tr:hover td { background: rgba(201,169,110,0.06); }
 <div class="modal-overlay" id="modalCloud">
   <div class="modal" style="max-width:420px;">
     <div class="modal-title">☁️ 云同步</div>
-    <div class="login-tabs">
-      <button class="login-tab active" onclick="switchLoginTab('login')" id="tabLogin">登录</button>
-      <button class="login-tab" onclick="switchLoginTab('register')" id="tabRegister">注册</button>
+    <!-- 未登录视图 -->
+    <div id="cloudLoginView">
+      <div class="login-tabs">
+        <button class="login-tab active" onclick="switchLoginTab('login')" id="tabLogin">登录</button>
+        <button class="login-tab" onclick="switchLoginTab('register')" id="tabRegister">注册</button>
+      </div>
+      <div id="loginForm">
+        <div class="form-group">
+          <label class="form-label">邮箱</label>
+          <input class="form-input" id="cloudEmail" type="email" placeholder="your@email.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">密码</label>
+          <input class="form-input" id="cloudPassword" type="password" placeholder="至少6位" autocomplete="current-password">
+        </div>
+        <div class="form-group" id="confirmPasswordGroup" style="display:none;">
+          <label class="form-label">确认密码</label>
+          <input class="form-input" id="cloudConfirmPassword" type="password" placeholder="再次输入密码">
+        </div>
+        <div id="cloudError" style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;"></div>
+        <div style="display:flex;gap:12px;">
+          <button class="btn btn-primary" id="btnCloudSubmit" onclick="cloudSubmit()" style="flex:1;">登录</button>
+          <button class="btn btn-secondary" onclick="closeCloudPanel()">取消</button>
+        </div>
+        <div class="cloud-info" style="margin-top:16px;">
+          <strong>🔐 注册即用：</strong>输入邮箱和密码即可创建账号，数据自动同步到云端。<br>
+          <span style="font-size:0.75rem;color:var(--muted);">数据通过 Supabase 加密存储，仅你自己可见。</span>
+        </div>
+      </div>
     </div>
-    <div id="loginForm">
-      <div class="form-group">
-        <label class="form-label">邮箱</label>
-        <input class="form-input" id="cloudEmail" type="email" placeholder="your@email.com" autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label class="form-label">密码</label>
-        <input class="form-input" id="cloudPassword" type="password" placeholder="至少6位" autocomplete="current-password">
-      </div>
-      <div class="form-group" id="confirmPasswordGroup" style="display:none;">
-        <label class="form-label">确认密码</label>
-        <input class="form-input" id="cloudConfirmPassword" type="password" placeholder="再次输入密码">
-      </div>
-      <div id="cloudError" style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;"></div>
-      <div style="display:flex;gap:12px;">
-        <button class="btn btn-primary" id="btnCloudSubmit" onclick="cloudSubmit()" style="flex:1;">登录</button>
-        <button class="btn btn-secondary" onclick="closeCloudPanel()">取消</button>
-      </div>
-      <div class="cloud-info" style="margin-top:16px;">
-        <strong>🔐 注册即用：</strong>输入邮箱和密码即可创建账号，数据自动同步到云端。<br>
-        <span style="font-size:0.75rem;color:var(--muted);">数据通过 Supabase 加密存储，仅你自己可见。</span>
+    <!-- 已登录视图 -->
+    <div id="cloudProfileView" style="display:none;">
+      <div class="cloud-info" style="text-align:center;padding:16px 0;">
+        <div style="font-size:2.5rem;margin-bottom:12px;">✅</div>
+        <div style="font-size:1rem;font-weight:600;color:var(--accent);margin-bottom:4px;">已登录</div>
+        <div style="font-size:0.9rem;color:var(--ink);margin-bottom:4px;" id="cloudProfileEmail"></div>
+        <div style="font-size:0.75rem;color:var(--muted);margin-bottom:16px;">数据自动同步到云端</div>
+        <div style="display:flex;gap:8px;justify-content:center;">
+          <button class="btn btn-primary btn-sm" onclick="cloudUpload()">☁️ 上传到云端</button>
+          <button class="btn btn-secondary btn-sm" onclick="cloudDownload()">⬇️ 从云端下载</button>
+        </div>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--rule);">
+          <button class="btn btn-danger" onclick="cloudLogout()" style="width:100%;">退出登录</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1780,6 +1799,7 @@ function persist() { saveData(appData); }
 // ═══════════════════════════════════════
 let sbClient = null;
 let cloudLoginMode = 'login';
+let cloudUserEmail = null;
 
 // Hardcoded Supabase credentials (already configured)
 const SUPABASE_URL = 'https://mmdhtyuyirukvtmfzeby.supabase.co';
@@ -1823,6 +1843,7 @@ function updateCloudUI(loggedIn, email) {
   const dot = $('cloudStatusDot');
   const text = $('cloudBtnText');
   if (loggedIn) {
+    cloudUserEmail = email || '';
     btn.className = 'cloud-btn logged-in';
     dot.className = 'cloud-status synced';
     text.textContent = email || '已登录';
@@ -1830,6 +1851,7 @@ function updateCloudUI(loggedIn, email) {
     $('cloudLoggedIn') && ($('cloudLoggedIn').style.display = '');
     if ($('cloudUserEmail')) $('cloudUserEmail').textContent = email || '';
   } else {
+    cloudUserEmail = null;
     btn.className = 'cloud-btn';
     dot.className = 'cloud-status local';
     text.textContent = '未登录';
@@ -1840,8 +1862,17 @@ function updateCloudUI(loggedIn, email) {
 
 function openCloudPanel() {
   $('modalCloud').classList.add('show');
-  switchLoginTab('login');
-  clearCloudForm();
+  // 已登录则显示账户信息，未登录则显示登录表单
+  if (cloudUserEmail) {
+    $('cloudLoginView').style.display = 'none';
+    $('cloudProfileView').style.display = '';
+    if ($('cloudProfileEmail')) $('cloudProfileEmail').textContent = cloudUserEmail;
+  } else {
+    $('cloudLoginView').style.display = '';
+    $('cloudProfileView').style.display = 'none';
+    switchLoginTab('login');
+    clearCloudForm();
+  }
 }
 
 function closeCloudPanel() {
@@ -1940,7 +1971,27 @@ async function cloudSubmit() {
       setTimeout(() => cloudDownload(), 500);
     }
   } catch (e) {
-    $('cloudError').textContent = e.message || '操作失败，请重试';
+    // 登录失败时，尝试区分"账号不存在"和"密码错误"
+    if (cloudLoginMode === 'login') {
+      // 三态：null=RPC不可用, true=邮箱存在, false=邮箱不存在
+      let emailExists = null;
+      try {
+        const { data: exists, error: rpcErr } = await sbClient.rpc('check_email_exists', { target_email: email });
+        if (!rpcErr && typeof exists === 'boolean') emailExists = exists;
+      } catch (rpcE) { /* RPC 不可用 */ }
+      if (emailExists === true) {
+        // 邮箱存在但密码错误
+        $('cloudError').textContent = '账号或密码错误';
+      } else if (emailExists === false) {
+        // RPC 确认邮箱不存在
+        $('cloudError').textContent = '该账号不存在，请先注册';
+      } else {
+        // RPC 不可用，使用通用提示
+        $('cloudError').textContent = '账号或密码错误';
+      }
+    } else {
+      $('cloudError').textContent = e.message || '操作失败，请重试';
+    }
     $('cloudError').style.display = '';
   }
 }
@@ -1951,6 +2002,7 @@ async function cloudLogout() {
     try { await sbClient.auth.signOut(); } catch (e) { /* ignore */ }
   }
   updateCloudUI(false);
+  closeCloudPanel();
   showToast('已退出登录');
 }
 
