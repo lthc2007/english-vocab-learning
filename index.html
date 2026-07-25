@@ -1625,47 +1625,9 @@ tr:hover td { background: rgba(201,169,110,0.06); }
         <button class="btn btn-secondary" onclick="closeCloudPanel()">取消</button>
       </div>
       <div class="cloud-info" style="margin-top:16px;">
-        <strong>💡 使用说明：</strong><br>
-        1. 前往 <a href="https://supabase.com" target="_blank">supabase.com</a> 注册免费账号<br>
-        2. 创建项目，进入 SQL Editor，执行下方建表语句<br>
-        3. 填入下方 Supabase 配置信息<br>
-        <span id="cloudSetupHint" style="display:none;margin-top:6px;color:var(--warning);">⚠️ 请先在下方配置 Supabase URL 和 Anon Key</span>
-        <details style="margin-top:8px;">
-          <summary style="cursor:pointer;color:var(--accent);font-weight:500;">📋 点击展开建表 SQL</summary>
-          <div style="position:relative;margin-top:6px;">
-            <textarea readonly id="sqlCode" style="width:100%;height:180px;font-family:monospace;font-size:0.72rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;resize:none;color:var(--ink);" spellcheck="false">-- 创建单词数据表
-CREATE TABLE IF NOT EXISTS user_words (
-  id SERIAL PRIMARY KEY,
-  user_id UUID NOT NULL UNIQUE,
-  words JSONB NOT NULL DEFAULT '[]'::jsonb,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- 启用行级安全（RLS）
-ALTER TABLE user_words ENABLE ROW LEVEL SECURITY;
-
--- 用户仅可读写自己的数据
-CREATE POLICY "读自己的数据" ON user_words
-  FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "插自己的数据" ON user_words
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "改自己的数据" ON user_words
-  FOR UPDATE USING (auth.uid() = user_id);</textarea>
-            <button onclick="copySQL()" style="position:absolute;top:6px;right:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:0.7rem;cursor:pointer;color:var(--muted);">📋 复制</button>
-          </div>
-        </details>
+        <strong>🔐 注册即用：</strong>输入邮箱和密码即可创建账号，数据自动同步到云端。<br>
+        <span style="font-size:0.75rem;color:var(--muted);">数据通过 Supabase 加密存储，仅你自己可见。</span>
       </div>
-    </div>
-    <div id="cloudConfigForm" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--rule);">
-      <div class="form-group">
-        <label class="form-label">Supabase URL</label>
-        <input class="form-input" id="supabaseUrl" type="text" placeholder="https://xxxxx.supabase.co" autocomplete="off">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Supabase Anon Key</label>
-        <input class="form-input" id="supabaseKey" type="password" placeholder="eyJhbGci..." autocomplete="off">
-      </div>
-      <button class="btn btn-secondary btn-sm" onclick="saveCloudConfig()" style="width:100%;">💾 保存配置</button>
     </div>
   </div>
 </div>
@@ -1793,24 +1755,14 @@ function persist() { saveData(appData); }
 let sbClient = null;
 let cloudLoginMode = 'login';
 
-// Load cloud config from localStorage
-function loadCloudConfig() {
-  try {
-    const raw = localStorage.getItem('eng_cloud_config');
-    if (raw) return JSON.parse(raw);
-  } catch (e) { /* ignore */ }
-  return { supabaseUrl: '', supabaseKey: '' };
-}
-
-function saveCloudConfigData(cfg) {
-  localStorage.setItem('eng_cloud_config', JSON.stringify(cfg));
-}
+// Hardcoded Supabase credentials (already configured)
+const SUPABASE_URL = 'https://mmdhtyuyirukvtmfzeby.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_rPnHnnwRKm-fi14h_zWE6w_SJVMO61c';
 
 function initSupabase() {
-  const cfg = loadCloudConfig();
-  if (cfg.supabaseUrl && cfg.supabaseKey && window.supabase) {
+  if (window.supabase) {
     try {
-      sbClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
+      sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       return true;
     } catch (e) {
       console.error('Supabase init error:', e);
@@ -1861,10 +1813,6 @@ function updateCloudUI(loggedIn, email) {
 }
 
 function openCloudPanel() {
-  const cfg = loadCloudConfig();
-  $('supabaseUrl').value = cfg.supabaseUrl || '';
-  $('supabaseKey').value = cfg.supabaseKey || '';
-  $('cloudSetupHint').style.display = (!cfg.supabaseUrl || !cfg.supabaseKey) ? '' : 'none';
   $('modalCloud').classList.add('show');
   switchLoginTab('login');
   clearCloudForm();
@@ -1872,17 +1820,6 @@ function openCloudPanel() {
 
 function closeCloudPanel() {
   $('modalCloud').classList.remove('show');
-}
-
-function copySQL() {
-  const sql = $('sqlCode').value;
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(sql).then(() => showToast('SQL 已复制到剪贴板'));
-  } else {
-    $('sqlCode').select();
-    document.execCommand('copy');
-    showToast('SQL 已复制');
-  }
 }
 
 function switchLoginTab(tab) {
@@ -1902,33 +1839,10 @@ function clearCloudForm() {
   $('cloudError').style.display = 'none';
 }
 
-function saveCloudConfig() {
-  const url = $('supabaseUrl').value.trim();
-  const key = $('supabaseKey').value.trim();
-  if (!url || !key) { showToast('请填写 Supabase URL 和 Anon Key'); return; }
-  saveCloudConfigData({ supabaseUrl: url, supabaseKey: key });
-  $('cloudSetupHint').style.display = 'none';
-  sbClient = null;
-  if (initSupabase()) {
-    showToast('Supabase 配置已保存');
-    checkCloudSession();
-  } else {
-    showToast('配置保存成功，但初始化失败，请检查 URL 和 Key');
-  }
-}
-
 async function cloudSubmit() {
   const email = $('cloudEmail').value.trim();
   const password = $('cloudPassword').value.trim();
   $('cloudError').style.display = 'none';
-
-  const cfg = loadCloudConfig();
-  if (!cfg.supabaseUrl || !cfg.supabaseKey) {
-    $('cloudError').textContent = '请先在下方配置 Supabase URL 和 Anon Key';
-    $('cloudError').style.display = '';
-    $('cloudSetupHint').style.display = '';
-    return;
-  }
 
   if (!email || !password) { showToast('请填写邮箱和密码'); return; }
   if (password.length < 6) { showToast('密码至少需要6位'); return; }
@@ -1939,7 +1853,7 @@ async function cloudSubmit() {
   }
 
   if (!initSupabase()) {
-    $('cloudError').textContent = 'Supabase 配置无效，请检查 URL 和 Key';
+    $('cloudError').textContent = '服务暂不可用，请稍后重试';
     $('cloudError').style.display = '';
     return;
   }
