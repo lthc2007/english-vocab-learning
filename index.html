@@ -1500,11 +1500,16 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           <option value="none">不使用 API</option>
           <option value="minimax">MiniMax TTS</option>
           <option value="openai">OpenAI TTS</option>
+          <option value="volcano">火山引擎 TTS</option>
         </select>
       </div>
       <div class="form-group" id="ttsUrlGroup">
         <label class="form-label">TTS API 地址</label>
         <input class="form-input" id="ttsUrlInput" type="text" placeholder="https://api.minimaxi.com/v1" autocomplete="off">
+      </div>
+      <div class="form-group" id="ttsAppIdGroup" style="display:none;">
+        <label class="form-label">App ID</label>
+        <input class="form-input" id="ttsAppIdInput" type="text" placeholder="火山引擎 App ID..." autocomplete="off">
       </div>
       <div class="form-group" id="ttsModelGroup">
         <label class="form-label">TTS 模型</label>
@@ -1560,7 +1565,7 @@ function loadData() {
     if (raw) return JSON.parse(raw);
   } catch (e) { /* ignore */ }
   return { apiKey: '', apiUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-pro', provider: 'deepseek',
-    ttsKey: '', ttsProvider: 'minimax', ttsUrl: 'https://api.minimaxi.com', ttsModel: 'speech-2.8-hd', ttsVoice: 'English_Graceful_Lady',
+    ttsKey: '', ttsAppId: '', ttsProvider: 'minimax', ttsUrl: 'https://api.minimaxi.com', ttsModel: 'speech-2.8-hd', ttsVoice: 'English_Graceful_Lady',
     words: [] };
 }
 
@@ -1632,6 +1637,13 @@ const TTS_PROVIDERS = {
     voices: ['English_Graceful_Lady', 'English_Trustworth_Man', 'English_ReservedYoungMan', 'English_PlayfulGirl', 'English_ManWithDeepVoice', 'English_CalmWoman', 'English_magnetic_voiced_man', 'English_captivating_female1'],
     keyHint: '获取 API Key: <a href="https://platform.minimaxi.com/user-center/basic-information/interface-key" target="_blank" style="color:var(--accent);">platform.minimaxi.com</a>',
     ttsType: 'minimax'
+  },
+  volcano: {
+    name: '火山引擎 TTS', url: 'https://openspeech.bytedance.com',
+    models: ['seed-tts-1.1', 'default'],
+    voices: ['zh_female_cancan_mars_bigtts', 'zh_male_M392_conversation_wvae_bigtts', 'zh_female_shuangkuaisisi_moon_bigtts', 'zh_male_wennuanahu_moon_bigtts'],
+    keyHint: '获取 App ID & Access Token: <a href="https://console.volcengine.com/ark/region:ark+cn-beijing/tts" target="_blank" style="color:var(--accent);">console.volcengine.com</a>',
+    ttsType: 'volcano'
   }
 };
 
@@ -1715,6 +1727,7 @@ function exportData() {
     model: appData.model,
     provider: appData.provider,
     ttsKey: appData.ttsKey,
+    ttsAppId: appData.ttsAppId,
     ttsProvider: appData.ttsProvider,
     ttsUrl: appData.ttsUrl,
     ttsModel: appData.ttsModel,
@@ -1758,6 +1771,7 @@ function importData(event) {
         if (data.model) appData.model = data.model;
         if (data.provider) appData.provider = data.provider;
         if (data.ttsKey) appData.ttsKey = data.ttsKey;
+        if (data.ttsAppId) appData.ttsAppId = data.ttsAppId;
         if (data.ttsProvider) appData.ttsProvider = data.ttsProvider;
         if (data.ttsUrl) appData.ttsUrl = data.ttsUrl;
         if (data.ttsModel) appData.ttsModel = data.ttsModel;
@@ -1815,6 +1829,7 @@ function openSettings() {
   }
   $('ttsUrlInput').value = appData.ttsUrl || '';
   $('ttsKeyInput').value = appData.ttsKey || '';
+  $('ttsAppIdInput').value = appData.ttsAppId || '';
   if (appData.ttsModel) $('ttsModelSelect').value = appData.ttsModel;
   if (appData.ttsVoice) $('ttsVoiceSelect').value = appData.ttsVoice;
   $('modalSettings').classList.add('show');
@@ -1851,10 +1866,11 @@ function onTtsProviderChange() {
   const provider = $('ttsProviderSelect').value;
   const cfg = TTS_PROVIDERS[provider];
   if (provider === 'none') {
-    ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup'].forEach(id => $(id).style.display = 'none');
+    ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup', 'ttsAppIdGroup'].forEach(id => $(id).style.display = 'none');
     return;
   }
   ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup'].forEach(id => $(id).style.display = '');
+  $('ttsAppIdGroup').style.display = provider === 'volcano' ? '' : 'none';
   $('ttsUrlInput').value = cfg.url;
   $('ttsKeyHint').innerHTML = cfg.keyHint;
   const sel = $('ttsModelSelect');
@@ -1950,11 +1966,20 @@ async function testTtsConnection() {
   }
 
   const key = $('ttsKeyInput').value.trim();
+  const appId = $('ttsAppIdInput').value.trim();
   const url = ($('ttsUrlInput').value.trim() || TTS_PROVIDERS[provider].url).replace(/\/$/, '');
   const cfg = TTS_PROVIDERS[provider];
 
   if (!key) {
     result.textContent = '请先填写 TTS API Key';
+    result.style.color = '#e74c3c';
+    btn.disabled = false;
+    btn.textContent = '🔍 测试 TTS 连接';
+    return;
+  }
+
+  if (provider === 'volcano' && !appId) {
+    result.textContent = '请先填写 App ID';
     result.style.color = '#e74c3c';
     btn.disabled = false;
     btn.textContent = '🔍 测试 TTS 连接';
@@ -2000,6 +2025,33 @@ async function testTtsConnection() {
         result.textContent = '连接失败: HTTP ' + resp.status + (err ? ' — ' + err.substring(0, 200) : '');
         result.style.color = '#e74c3c';
       }
+    } else if (cfg.ttsType === 'volcano') {
+      const reqId = crypto.randomUUID ? crypto.randomUUID() : 'test-' + Date.now();
+      const resp = await fetch(url + '/api/v1/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer;' + key },
+        body: JSON.stringify({
+          app: { appid: appId, token: key, cluster: 'volcano_tts' },
+          user: { uid: 'test-user' },
+          audio: { voice_type: cfg.voices[0], encoding: 'mp3', speed_ratio: 1.0 },
+          request: { reqid: reqId, text: 'Hello', operation: 'query' }
+        }),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.code === 3000 || data.data?.audio) {
+          result.textContent = 'TTS 连接成功！(火山引擎)';
+          result.style.color = '#27ae60';
+        } else {
+          result.textContent = '连接失败: ' + (data.message || data.code || '未知错误');
+          result.style.color = '#e74c3c';
+        }
+      } else {
+        const err = await resp.text().catch(() => '');
+        result.textContent = '连接失败: HTTP ' + resp.status + (err ? ' — ' + err.substring(0, 200) : '');
+        result.style.color = '#e74c3c';
+      }
     }
   } catch (e) {
     result.textContent = '连接失败: ' + (e.name === 'TimeoutError' ? '请求超时' : e.message);
@@ -2025,6 +2077,7 @@ function saveSettings() {
   appData.ttsProvider = $('ttsProviderSelect').value;
   appData.ttsUrl = $('ttsUrlInput').value.trim();
   appData.ttsKey = $('ttsKeyInput').value.trim();
+  appData.ttsAppId = $('ttsAppIdInput').value.trim();
   appData.ttsModel = $('ttsModelSelect').value;
   appData.ttsVoice = $('ttsVoiceSelect').value;
   persist();
@@ -2962,6 +3015,40 @@ async function speakWord(e) {
         } else {
           ttsError = 'OpenAI TTS HTTP ' + resp.status;
         }
+      } else if (ttsCfg.ttsType === 'volcano') {
+        const ttsAppId = appData.ttsAppId || '';
+        const reqId = crypto.randomUUID ? crypto.randomUUID() : 'tts-' + Date.now();
+        const reqBody = {
+          app: { appid: ttsAppId, token: ttsKey, cluster: 'volcano_tts' },
+          user: { uid: 'vocab-user' },
+          audio: { voice_type: ttsVoice, encoding: 'mp3', speed_ratio: 0.85 },
+          request: { reqid: reqId, text: speakText, operation: 'query' }
+        };
+        if (ttsModel && ttsModel !== 'default') reqBody.request.model = ttsModel;
+        const resp = await fetch(ttsUrl + '/api/v1/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer;' + ttsKey },
+          body: JSON.stringify(reqBody)
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const audioBase64 = data.data?.audio;
+          if (audioBase64) {
+            const byteChars = atob(audioBase64);
+            const bytes = new Uint8Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+            const blob = new Blob([bytes], { type: 'audio/mp3' });
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+            await audio.play();
+            played = true;
+          } else {
+            ttsError = '火山引擎返回空音频 (code=' + (data.code || '?') + ')';
+          }
+        } else {
+          const errBody = await resp.text().catch(() => '');
+          ttsError = '火山引擎 HTTP ' + resp.status + ': ' + errBody.substring(0, 100);
+        }
       }
     } catch (e) {
       ttsError = e.message || String(e);
@@ -3421,8 +3508,9 @@ let articleIsPlaying = false;
 let articleIsPaused = false;
 let articlePausedAt = 0;
 
-// TTS pricing: 元/万字符 (MiniMax China)
+// TTS pricing: 元/万字符 (MiniMax China) or 元/万字符 (Volcano)
 const TTS_PRICING = { 'speech-2.8-hd': 3.5, 'speech-2.8-turbo': 2, 'speech-2.6-hd': 3.5, 'speech-2.6-turbo': 2, 'speech-02-hd': 3.5, 'speech-02-turbo': 2 };
+const TTS_PRICING_VOLCANO = 5; // 5元/万字符 for 大模型语音合成
 
 function updateArticleSpeedLabel() {
   const val = parseFloat($('articleSpeedSlider').value);
@@ -3442,12 +3530,20 @@ function updateArticleEstimate() {
     // CJK characters count as 2
     return n + (/[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/.test(c) ? 2 : 1);
   }, 0);
+  const ttsProvider = appData.ttsProvider || 'none';
   const ttsModel = appData.ttsModel || 'speech-2.8-hd';
-  const pricePer10k = TTS_PRICING[ttsModel] || 3.5;
+  let pricePer10k, modelLabel;
+  if (ttsProvider === 'volcano') {
+    pricePer10k = TTS_PRICING_VOLCANO;
+    modelLabel = '火山引擎大模型';
+  } else {
+    pricePer10k = TTS_PRICING[ttsModel] || 3.5;
+    modelLabel = ttsModel;
+  }
   const cost = (charCount / 10000) * pricePer10k;
   $('estChars').textContent = charCount.toLocaleString();
   $('estCost').textContent = '¥' + cost.toFixed(cost < 0.01 ? 4 : 2);
-  $('estPriceLabel').textContent = '(' + ttsModel + ': ¥' + pricePer10k + '/万字符)';
+  $('estPriceLabel').textContent = '(' + modelLabel + ': ¥' + pricePer10k + '/万字符)';
   if (cost < 0.01 && cost > 0) {
     $('estCost').textContent = '¥<0.01';
   }
@@ -3522,6 +3618,34 @@ async function callMiniMaxTTS(text, speed = 1.0) {
       return { blob: null, error: 'OpenAI TTS 返回空音频' };
     }
     return { blob: null, error: 'OpenAI TTS HTTP ' + resp.status };
+  } else if (ttsCfg.ttsType === 'volcano') {
+    const ttsAppId = appData.ttsAppId || '';
+    const reqId = crypto.randomUUID ? crypto.randomUUID() : 'tts-' + Date.now();
+    const reqBody = {
+      app: { appid: ttsAppId, token: ttsKey, cluster: 'volcano_tts' },
+      user: { uid: 'article-user' },
+      audio: { voice_type: ttsVoice, encoding: 'mp3', speed_ratio: speed },
+      request: { reqid: reqId, text: text, operation: 'query' }
+    };
+    if (ttsModel && ttsModel !== 'default') reqBody.request.model = ttsModel;
+    const resp = await fetch(ttsUrl + '/api/v1/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer;' + ttsKey },
+      body: JSON.stringify(reqBody)
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      const audioBase64 = data.data?.audio;
+      if (audioBase64) {
+        const byteChars = atob(audioBase64);
+        const bytes = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+        return { blob: new Blob([bytes], { type: 'audio/mp3' }), error: null };
+      }
+      return { blob: null, error: '火山引擎返回空音频 (code=' + (data.code || '?') + ')' };
+    }
+    const errBody = await resp.text().catch(() => '');
+    return { blob: null, error: '火山引擎 HTTP ' + resp.status + ': ' + errBody.substring(0, 100) };
   }
   return { blob: null, error: '未知 TTS 类型' };
 }
@@ -3581,8 +3705,8 @@ async function startArticleRead() {
   $('readStatus').textContent = '';
 
   if (hasTTS) {
-    // Split text into chunks (MiniMax limit is ~10k chars, use 8000 for safety)
-    const MAX_CHUNK = 8000;
+    // Split text into chunks. Volcano V1 API limit: 1024 bytes, MiniMax: ~10k chars
+    const MAX_CHUNK = ttsCfg.ttsType === 'volcano' ? 250 : 8000;
     let chunks = [];
     if (text.length <= MAX_CHUNK) {
       chunks = [text];
