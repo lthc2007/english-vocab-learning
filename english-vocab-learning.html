@@ -225,6 +225,14 @@ body {
 .btn-secondary:hover { background: var(--rule); border-color: var(--gold); color: var(--accent); }
 .btn-danger { background: var(--danger); color: #fff; }
 .btn-danger:hover { background: #9a4542; transform: translateY(-1px); }
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--ink);
+}
+.btn-outline:hover { border-color: var(--gold); color: var(--accent); background: var(--gold-soft); transform: translateY(-1px); }
+.btn-accent { background: var(--gold); color: #fff; }
+.btn-accent:hover { background: #b8945e; transform: translateY(-1px); }
 .btn-success { background: var(--success); color: #fff; }
 .btn-success:hover { background: #4a7a5a; transform: translateY(-1px); }
 .btn-warning { background: var(--warning); color: #fff; }
@@ -452,10 +460,6 @@ tr:hover td { background: rgba(201,169,110,0.06); }
 .freq-高频 { background: #e8f5e9; color: #4a7c59; }
 .freq-中频 { background: #fff8e1; color: #9a7a3a; }
 .freq-低频 { background: #f5f5f0; color: #8c8279; }
-.word-meta {
-  margin-top: 8px;
-  text-align: center;
-}
 .ai-gen-status {
   font-size: 0.8rem;
   color: var(--muted);
@@ -1230,9 +1234,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     </div>
   </section>
 
-</main>
-
-  <!-- Tab: 单词管理 -->
+<!-- Tab: 单词管理 -->
   <section class="tab-panel" id="panel-manage">
     <div class="card">
       <div class="card-header">
@@ -1531,6 +1533,8 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     </div>
     </section>
 
+</main>
+
 <footer class="site-footer">
   Created by <strong>little hc</strong> and <strong>TRAE</strong>
 </footer>
@@ -1762,7 +1766,7 @@ const PROVIDERS = {
 
 // TTS-only providers (separate from AI learning providers)
 const TTS_PROVIDERS = {
-  none: { name: '不使用 API 朗读', url: '', keyHint: '使用浏览器内置语音朗读', ttsType: 'web' },
+  none: { name: '不使用 API 朗读', url: '', keyHint: '使用浏览器内置语音朗读', ttsType: 'web', models: [], voices: [] },
   openai: {
     name: 'OpenAI TTS', url: 'https://api.openai.com/v1',
     models: ['tts-1', 'tts-1-hd'],
@@ -1927,12 +1931,17 @@ async function cloudSubmit() {
     } catch (e) { /* RPC 不可用 */ }
     if (userCount === null) {
       try {
-        // 回退：直接查询表（可能被 RLS 阻止，返回 0）
         const { count, error: countErr } = await sbClient
           .from('user_words')
           .select('*', { count: 'exact', head: true });
         if (!countErr && count !== null) userCount = count;
       } catch (e) { /* 计数查询失败则不阻止注册 */ }
+    }
+    // RPC 和直接查询均失败时，保守阻止注册
+    if (userCount === null) {
+      $('cloudError').textContent = '无法验证注册名额，请稍后重试';
+      $('cloudError').style.display = '';
+      return;
     }
     if (userCount !== null && userCount >= 30) {
       $('cloudError').textContent = '注册人数已达上限（30人），暂时无法注册新账号';
@@ -1945,11 +1954,9 @@ async function cloudSubmit() {
     let result;
     if (cloudLoginMode === 'login') {
       result = await sbClient.auth.signInWithPassword({ email, password });
-    } else {
+    } else if (cloudLoginMode === 'register') {
       result = await sbClient.auth.signUp({ email, password });
-      // 先检查是否有错误（如用户已存在）
       if (result.error) throw result.error;
-      // 检查是否为新用户（identities 为空表示用户已存在）
       if (result.data.user && result.data.user.identities && result.data.user.identities.length === 0) {
         $('cloudError').textContent = '该邮箱已注册，请直接登录';
         $('cloudError').style.display = '';
@@ -1961,6 +1968,10 @@ async function cloudSubmit() {
         switchLoginTab('login');
         return;
       }
+    } else {
+      $('cloudError').textContent = '未知操作，请刷新页面重试';
+      $('cloudError').style.display = '';
+      return;
     }
     if (result.error) throw result.error;
     if (result.data.session) {
@@ -2178,7 +2189,7 @@ function shakeElement(el) {
 }
 
 function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
 // ═══════════════════════════════════════
@@ -2496,7 +2507,7 @@ async function testTtsConnection() {
       const reqId = crypto.randomUUID ? crypto.randomUUID() : 'test-' + Date.now();
       const resp = await fetch(url + '/api/v1/tts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer;' + key },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
         body: JSON.stringify({
           app: { appid: appId, token: key, cluster: 'volcano_tts' },
           user: { uid: 'test-user' },
@@ -3005,7 +3016,7 @@ async function callAI(prompt, maxTokens = 1500) {
 function parseSection(text, label) {
   const patterns = [
     // 匹配：从当前标签到下一个"标签:"模式之间的所有内容（支持多行）
-    new RegExp(label + '[:：]\\s*([\\s\\S]+?)(?=\\n\\s*(?:音标|释义|例句|例句翻译|近义词|反义词|搭配|词根|词根词缀|派生词|短文|对话|形近词|填空|翻译题|难度|考频|原文|译文|重难点|错误|分数|评分详情|AI范文|修正范文)[:：]|$)', 's'),
+    new RegExp(label + '[:：]\\s*([\\s\\S]+?)(?=\\r?\\n\\s*(?:音标|释义|例句|例句翻译|近义词|反义词|搭配|词根|词根词缀|派生词|短文|对话|形近词|填空|翻译题|难度|考频|原文|译文|重难点|错误|分数|评分详情|AI范文|修正范文)[:：]|$)', 's'),
     // 备用：单行匹配
     new RegExp(label + '\\s*[:：]\\s*(.+?)(?:\\n|$)', 's'),
   ];
@@ -3489,7 +3500,7 @@ async function speakWord(e) {
         if (ttsModel && ttsModel !== 'default') reqBody.request.model = ttsModel;
         const resp = await fetch(ttsUrl + '/api/v1/tts', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer;' + ttsKey },
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
           body: JSON.stringify(reqBody)
         });
         if (resp.ok) {
@@ -3628,6 +3639,7 @@ let spellState = { words: [], wrongWords: [], current: 0, correct: 0, total: 0, 
 let spellTimerInterval = null;
 
 function initSpell() {
+  clearInterval(spellTimerInterval);
   if (appData.words.length < 1) {
     $('spellEmpty').style.display = '';
     $('spellArea').style.display = 'none';
@@ -3784,6 +3796,7 @@ let quizState = { words: [], wrongWords: [], current: 0, correct: 0, total: 0, a
 let quizTimerInterval = null;
 
 function initQuiz() {
+  clearInterval(quizTimerInterval);
   if (appData.words.length < 4) {
     $('quizEmpty').style.display = '';
     $('quizArea').style.display = 'none';
@@ -4097,7 +4110,7 @@ async function callMiniMaxTTS(text, speed = 1.0) {
     if (ttsModel && ttsModel !== 'default') reqBody.request.model = ttsModel;
     const resp = await fetch(ttsUrl + '/api/v1/tts', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer;' + ttsKey },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
       body: JSON.stringify(reqBody)
     });
     if (resp.ok) {
@@ -4436,6 +4449,39 @@ async function speakExample(e) {
         } else {
           ttsError = 'OpenAI HTTP ' + resp.status;
         }
+      } else if (ttsCfg.ttsType === 'volcano') {
+        const ttsAppId = appData.ttsAppId || '';
+        const reqId = crypto.randomUUID ? crypto.randomUUID() : 'ex-' + Date.now();
+        const reqBody = {
+          app: { appid: ttsAppId, token: ttsKey, cluster: 'volcano_tts' },
+          user: { uid: 'vocab-user' },
+          audio: { voice_type: ttsVoice, encoding: 'mp3', speed_ratio: 0.85 },
+          request: { reqid: reqId, text: speakText, operation: 'query' }
+        };
+        if (ttsModel && ttsModel !== 'default') reqBody.request.model = ttsModel;
+        const resp = await fetch(ttsUrl + '/api/v1/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+          body: JSON.stringify(reqBody)
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const audioBase64 = data.data?.audio;
+          if (audioBase64) {
+            const byteChars = atob(audioBase64);
+            const bytes = new Uint8Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+            const blob = new Blob([bytes], { type: 'audio/mp3' });
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+            await audio.play(); played = true;
+          } else {
+            ttsError = '火山引擎返回空音频 (code=' + (data.code || '?') + ')';
+          }
+        } else {
+          const errBody = await resp.text().catch(() => '');
+          ttsError = '火山引擎 HTTP ' + resp.status + ': ' + errBody.substring(0, 100);
+        }
       }
     } catch (e) {
       ttsError = e.message || String(e);
@@ -4728,6 +4774,34 @@ async function speakText(text, onDone) {
         if (resp.ok) {
           const blob = await resp.blob();
           if (blob.size > 0) {
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.onended = onDone; audio.onerror = onDone;
+            await audio.play(); played = true;
+          }
+        }
+      } else if (ttsCfg.ttsType === 'volcano') {
+        const ttsAppId = appData.ttsAppId || '';
+        const reqId = crypto.randomUUID ? crypto.randomUUID() : 'st-' + Date.now();
+        const reqBody = {
+          app: { appid: ttsAppId, token: ttsKey, cluster: 'volcano_tts' },
+          user: { uid: 'vocab-user' },
+          audio: { voice_type: ttsVoice, encoding: 'mp3', speed_ratio: 0.85 },
+          request: { reqid: reqId, text: text, operation: 'query' }
+        };
+        if (ttsModel && ttsModel !== 'default') reqBody.request.model = ttsModel;
+        const resp = await fetch(ttsUrl + '/api/v1/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+          body: JSON.stringify(reqBody)
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const audioBase64 = data.data?.audio;
+          if (audioBase64) {
+            const byteChars = atob(audioBase64);
+            const bytes = new Uint8Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+            const blob = new Blob([bytes], { type: 'audio/mp3' });
             const audio = new Audio(URL.createObjectURL(blob));
             audio.onended = onDone; audio.onerror = onDone;
             await audio.play(); played = true;
