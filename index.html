@@ -2276,7 +2276,7 @@ function parsePos(text) {
 }
 
 // 创建新单词对象（含所有 AI 字段）
-function newWord(english, pos, chinese) {
+function newWord(english, pos, chinese, difficulty) {
   return {
     id: generateId(),
     english: english,
