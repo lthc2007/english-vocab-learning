@@ -772,17 +772,40 @@ tr:hover td { background: rgba(201,169,110,0.06); }
 
 /* ── Responsive ── */
 @media (max-width: 640px) {
-  .header-inner { padding: 0 8px; }
-  .main { padding: 16px; }
-  .nav-tab { padding: 12px 14px; font-size: 0.85rem; }
-  .flashcard { padding: 28px; min-height: 220px; }
+  .header { padding: 0 10px; }
+  .header-inner { padding: 0 4px; gap: 6px; }
+  .logo { font-size: 1.1rem; gap: 6px; }
+  .logo svg { width: 22px; height: 22px; }
+  .cloud-btn { padding: 5px 10px; font-size: 0.78rem; }
+  .settings-btn { padding: 5px 10px; font-size: 0.78rem; }
+  .main { padding: 12px; }
+  .nav-tabs { top: 52px; }
+  .nav-inner { padding: 0 4px; gap: 2px; }
+  .nav-tab { padding: 8px 10px; font-size: 0.78rem; margin: 4px 2px; border-radius: 16px; }
+  .flashcard { padding: 20px; min-height: 180px; }
   .flashcard .word-front { font-size: clamp(1.4rem, 5vw, 2.2rem); }
   .options-grid { grid-template-columns: 1fr; }
   .form-row { flex-direction: column; }
   .stats-section { max-width: 100%; }
   .score-bar { gap: 10px; padding: 10px 12px; max-width: 100%; }
   .score-value { font-size: 1.7rem; }
-  .card { padding: 16px; }
+  .card { padding: 14px; }
+  .card-header { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .modal { max-width: 92vw !important; margin: 20px auto; padding: 20px; }
+  .modal-title { font-size: 1.1rem; }
+  .modal-actions { flex-direction: column; gap: 8px; }
+  .modal-actions .btn { width: 100%; }
+  .diff-selector { gap: 6px; }
+  .diff-btn { padding: 6px 14px; font-size: 0.8rem; }
+  .form-group { width: 100%; }
+  .form-input, .form-select { font-size: 0.9rem; }
+  .btn { font-size: 0.85rem; padding: 8px 16px; }
+  .btn-sm { padding: 6px 12px; font-size: 0.78rem; }
+  .import-rules { padding: 10px; }
+  .rules-grid { grid-template-columns: 1fr; }
+  .result-card { padding: 12px; }
+  .result-content { font-size: 0.88rem; }
+  .login-tab { padding: 8px; font-size: 0.85rem; }
 }
 /* ── Translation & Writing ── */
 .translate-subtab {
@@ -1229,13 +1252,16 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
             <button class="btn btn-primary btn-sm" id="btnCloudUpload" onclick="cloudUpload()">☁️ 上传到云端</button>
             <button class="btn btn-secondary btn-sm" id="btnCloudDownload" onclick="cloudDownload()">⬇️ 从云端下载</button>
-            <button class="btn btn-secondary btn-sm" onclick="exportData()">📤 导出备份</button>
-            <button class="btn btn-secondary btn-sm" onclick="$('importFileInput').click()">📥 导入合并</button>
             <button class="btn btn-danger btn-sm" onclick="cloudLogout()">退出登录</button>
           </div>
-          <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
           <div class="cloud-info" style="margin-top:8px;">数据会自动保存到云端，登录其他设备即可同步。导出备份作为额外保险。</div>
         </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--rule);">
+          <button class="btn btn-secondary btn-sm" onclick="exportData()">📤 导出备份</button>
+          <button class="btn btn-secondary btn-sm" onclick="$('importFileInput').click()">📥 导入合并</button>
+          <span style="font-size:0.72rem;color:var(--muted);">无需登录，本地操作</span>
+        </div>
+        <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
       </div>
     </div>
     <div class="card">
@@ -1856,6 +1882,20 @@ async function cloudSubmit() {
     $('cloudError').textContent = '服务暂不可用，请稍后重试';
     $('cloudError').style.display = '';
     return;
+  }
+
+  // 注册前检查用户数量是否已达上限
+  if (cloudLoginMode === 'register') {
+    try {
+      const { count, error: countErr } = await sbClient
+        .from('user_words')
+        .select('*', { count: 'exact', head: true });
+      if (!countErr && count !== null && count >= 30) {
+        $('cloudError').textContent = '注册人数已达上限（30人），暂时无法注册新账号';
+        $('cloudError').style.display = '';
+        return;
+      }
+    } catch (e) { /* 计数查询失败则不阻止注册 */ }
   }
 
   try {
