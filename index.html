@@ -1458,7 +1458,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     <div class="card">
       <div class="card-header">
         <span>文章朗读</span>
-        <span style="font-size:0.75rem;color:var(--muted);">导入英文文章，AI 真人朗读，可下载音频</span>
+        <span style="font-size:0.75rem;color:var(--muted);">导入英文文章，AI 自动生成音频，可下载和保存</span>
       </div>
       <textarea id="articleText" placeholder="在此粘贴英文文章..." oninput="updateArticleEstimate()" style="width:100%;height:200px;font-family:var(--mono);font-size:0.9rem;line-height:1.6;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink);resize:vertical;"></textarea>
       <div id="articleEstimate" style="font-size:0.8rem;color:var(--muted);margin-top:6px;display:none;">
@@ -1466,7 +1466,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
       </div>
       <div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap;">
         <span style="font-size:0.82rem;color:var(--muted);white-space:nowrap;">语速:</span>
-        <input type="range" id="articleSpeedSlider" min="0.5" max="2.0" step="0.1" value="1.0" oninput="updateArticleSpeedLabel()" style="width:100px;accent-color:var(--accent);">
+        <input type="range" id="articleSpeedSlider" min="0.5" max="1.5" step="0.1" value="1.0" oninput="updateArticleSpeedLabel()" style="width:100px;accent-color:var(--accent);">
         <span id="articleSpeedLabel" style="font-size:0.82rem;font-weight:600;color:var(--accent);min-width:32px;">1.0x</span>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;">
@@ -3803,21 +3803,36 @@ function saveSavedAudio(list) {
 function saveArticleAudio() {
   if (!articleBlob) { showToast('没有可保存的音频'); return; }
 
+  // Check size before saving (localStorage limit ~5MB, base64 adds ~33% overhead)
+  const estSize = articleBlob.size * 1.37;
+  if (estSize > 4.5 * 1024 * 1024) {
+    showToast('音频文件过大（约 ' + (estSize / 1024 / 1024).toFixed(1) + ' MB），超出浏览器存储限制，请使用下载功能保存');
+    return;
+  }
+
   const reader = new FileReader();
   reader.onload = function() {
-    const list = loadSavedAudio();
-    const now = new Date();
-    const name = '朗读 ' + now.toLocaleDateString('zh-CN') + ' ' + now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-    list.unshift({
-      id: generateId(),
-      name: name,
-      date: now.toISOString(),
-      dataUrl: reader.result,
-      size: articleBlob.size
-    });
-    saveSavedAudio(list);
-    renderSavedAudio();
-    showToast('音频已保存');
+    try {
+      const list = loadSavedAudio();
+      const now = new Date();
+      const name = '朗读 ' + now.toLocaleDateString('zh-CN') + ' ' + now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+      list.unshift({
+        id: generateId(),
+        name: name,
+        date: now.toISOString(),
+        dataUrl: reader.result,
+        size: articleBlob.size
+      });
+      saveSavedAudio(list);
+      renderSavedAudio();
+      showToast('音频已保存');
+    } catch (e) {
+      console.error('saveArticleAudio error:', e);
+      showToast('保存失败：存储空间不足，请使用下载功能保存到本地');
+    }
+  };
+  reader.onerror = function() {
+    showToast('音频读取失败，请使用下载功能保存');
   };
   reader.readAsDataURL(articleBlob);
 }
