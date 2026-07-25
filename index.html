@@ -979,7 +979,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
         <!-- Add to list -->
         <div id="luAddArea" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
           <button class="btn btn-primary" id="luAddBtn" onclick="addLookedUpWord()">➕ 添加到我的单词列表</button>
-          <span id="luAddedMsg" style="display:none;margin-left:10px;color:var(--green);font-size:0.85rem;">已添加 ✓</span>
+          <span id="luAddedMsg" style="display:none;margin-left:10px;color:var(--success);font-size:0.85rem;">已添加 ✓</span>
         </div>
       </div>
       <div id="lookupLoading" style="display:none;text-align:center;padding:20px;color:var(--muted);">AI 正在查询中，请稍候...</div>
@@ -1419,7 +1419,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
         <span>文章朗读</span>
         <span style="font-size:0.75rem;color:var(--muted);">导入英文文章，AI 自动生成音频，可下载</span>
       </div>
-      <textarea id="articleText" placeholder="在此粘贴英文文章..." oninput="updateArticleEstimate()" style="width:100%;height:200px;font-family:var(--mono);font-size:0.9rem;line-height:1.6;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink);resize:vertical;"></textarea>
+      <textarea id="articleText" placeholder="在此粘贴英文文章..." oninput="updateArticleEstimate()" style="width:100%;height:200px;font-family:var(--font-body);font-size:0.9rem;line-height:1.6;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink);resize:vertical;"></textarea>
       <div id="articleEstimate" style="font-size:0.8rem;color:var(--muted);margin-top:6px;display:none;">
         预估字符数: <strong id="estChars">0</strong> &nbsp;|&nbsp; 预估费用: <strong id="estCost">¥0.00</strong> <span style="color:var(--muted);" id="estPriceLabel"></span>
       </div>
@@ -1660,13 +1660,13 @@ function persist() { saveData(appData); }
 // ═══════════════════════════════════════
 function $(id) { return document.getElementById(id); }
 
-function showToast(msg) {
+function showToast(msg, duration) {
   const container = $('toastContainer');
   const el = document.createElement('div');
   el.className = 'toast';
   el.textContent = msg;
   container.appendChild(el);
-  setTimeout(() => el.remove(), 3000);
+  setTimeout(() => el.remove(), duration || 3000);
 }
 
 function playDing() {
@@ -2124,7 +2124,7 @@ function onTabSwitch(tab) {
   if (tab === 'learn') renderLearn();
   if (tab === 'spell') initSpell();
   if (tab === 'quiz') initQuiz();
-  if (tab === 'read') { updateArticleEstimate(); renderSavedAudio(); }
+  if (tab === 'read') { updateArticleEstimate(); }
   if (tab === 'history') renderHistory();
 }
 
@@ -3074,7 +3074,7 @@ async function speakWord(e) {
           utter.volume = 1;
           const voices = window.speechSynthesis.getVoices();
           const preferred = [
-            v => v.name.includes('Google') && v.voiceURI.includes('en-US') && v.name.includes('Neural'),
+            v => v.name.includes('Google') && v.voiceURI && v.voiceURI.includes('en-US') && v.name.includes('Neural'),
             v => v.name.includes('Google') && v.lang.startsWith('en-US'),
             v => v.name.includes('Google') && v.lang.startsWith('en'),
             v => v.name.includes('Microsoft') && v.name.includes('Jenny') && v.lang === 'en-US',
@@ -3882,7 +3882,7 @@ function doWebSpeechRead(text) {
   utter.volume = 1;
   const voices = window.speechSynthesis.getVoices();
   const preferred = [
-    v => v.name.includes('Google') && v.voiceURI.includes('en-US') && v.name.includes('Neural'),
+    v => v.name.includes('Google') && v.voiceURI && v.voiceURI.includes('en-US') && v.name.includes('Neural'),
     v => v.name.includes('Google') && v.lang.startsWith('en-US'),
     v => v.name.includes('Google') && v.lang.startsWith('en'),
     v => v.name.includes('Microsoft') && v.name.includes('Jenny') && v.lang === 'en-US',
@@ -4158,7 +4158,7 @@ function addLookedUpWord() {
     .split('\n')[0].trim();
   if (chinese.length > 50) chinese = chinese.substring(0, 50);
 
-  const newWord = {
+  const wordEntry = {
     id: generateId(),
     english: word,
     chinese: chinese,
@@ -4177,10 +4177,12 @@ function addLookedUpWord() {
     translationExercise: '',
     difficulty: difficulty || '',
     frequency: '',
-    aiGenerated: false
+    isPhrase: false,
+    aiGenerated: false,
+    createdAt: new Date().toISOString()
   };
 
-  appData.words.push(newWord);
+  appData.words.push(wordEntry);
   persist();
   renderWordTable();
   $('luAddBtn').style.display = 'none';
