@@ -1669,10 +1669,14 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           <input class="form-input" id="cloudConfirmPassword" type="password" placeholder="再次输入密码">
         </div>
         <div class="form-group" id="verificationGroup" style="display:none;">
-          <label class="form-label">邮箱验证码</label>
+          <label class="form-label">邮箱验证</label>
           <div style="display:flex;gap:8px;">
-            <input class="form-input" id="cloudVerificationCode" type="text" placeholder="输入8位验证码" maxlength="8" autocomplete="one-time-code" style="flex:1;letter-spacing:4px;font-size:1.1rem;font-family:monospace;text-align:center;">
-            <button class="btn btn-secondary" id="btnSendCode" onclick="sendVerificationCode()" style="white-space:nowrap;">发送验证码</button>
+            <input class="form-input" id="cloudVerificationCode" type="text" placeholder="输入6位验证码" maxlength="6" autocomplete="one-time-code" style="flex:1;">
+            <button class="btn btn-primary" id="btnSendCode" onclick="sendVerificationCode()" style="white-space:nowrap;">发送验证码</button>
+          </div>
+          <div id="verificationSentMsg" style="display:none;margin-top:8px;padding:10px 12px;background:var(--success-soft);border-radius:8px;border:1px solid var(--success);">
+            <div style="font-size:0.9rem;color:var(--success);font-weight:600;">✅ 验证码已发送</div>
+            <div style="font-size:0.82rem;color:var(--ink);margin-top:4px;">请查看邮箱中的6位验证码。如未收到，请检查垃圾邮件箱。</div>
           </div>
           <div id="verificationCountdown" style="font-size:0.78rem;color:var(--muted);margin-top:4px;display:none;"></div>
         </div>
@@ -1686,8 +1690,8 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           <span style="font-size:0.75rem;color:var(--muted);">数据通过 Supabase 加密存储，仅你自己可见。</span>
         </div>
         <div class="cloud-info" id="cloudInfoVerification" style="display:none;margin-top:16px;background:var(--gold-soft);border-radius:8px;padding:12px;">
-          <strong>📧 验证说明：</strong>点击"发送验证码"后，系统会向你的邮箱发送一封包含6位数字验证码的邮件。<br>
-          <span style="font-size:0.75rem;color:var(--muted);">如未收到，请检查垃圾邮件箱。</span>
+          <strong>📧 验证说明：</strong>点击"发送验证码"后，系统会向你的邮箱发送一封包含6位验证码的邮件。<br>
+          <span style="font-size:0.75rem;color:var(--muted);">输入验证码并点击"验证并注册"即可完成注册。如未收到，请检查垃圾邮件箱。</span>
         </div>
       </div>
     </div>
@@ -1926,6 +1930,7 @@ function switchLoginTab(tab) {
   $('tabRegister').classList.toggle('active', tab === 'register');
   $('confirmPasswordGroup').style.display = tab === 'register' ? '' : 'none';
   $('verificationGroup').style.display = tab === 'register' ? '' : 'none';
+  $('verificationSentMsg').style.display = 'none';
   $('cloudInfoRegister').style.display = tab === 'register' ? '' : 'none';
   $('cloudInfoVerification').style.display = 'none';
   $('btnCloudSubmit').textContent = tab === 'login' ? '登录' : '注册';
@@ -1938,7 +1943,6 @@ function clearCloudForm() {
   $('cloudEmail').value = '';
   $('cloudPassword').value = '';
   $('cloudConfirmPassword').value = '';
-  $('cloudVerificationCode').value = '';
   $('cloudError').style.display = 'none';
 }
 
@@ -1948,7 +1952,12 @@ function clearVerificationState() {
   verificationCodeSent = false;
   $('btnSendCode').disabled = false;
   $('btnSendCode').textContent = '发送验证码';
+  $('verificationSentMsg').style.display = 'none';
   $('verificationCountdown').style.display = 'none';
+  $('btnCloudSubmit').textContent = '注册';
+  $('btnCloudSubmit').disabled = false;
+  $('cloudInfoRegister').style.display = '';
+  $('cloudInfoVerification').style.display = 'none';
 }
 
 function startVerificationCountdown() {
@@ -1998,7 +2007,6 @@ async function sendVerificationCode() {
 
   try {
     // 注册前检查用户数量是否已达上限
-    // 注意：此为客户端检查，不保证安全性。攻击者可以绕过此检查。
     let userCount = null;
     try {
       const { data: rpcCount, error: rpcErr } = await sbClient.rpc('count_user_words');
@@ -2016,22 +2024,25 @@ async function sendVerificationCode() {
       $('cloudError').textContent = '无法验证注册名额，请稍后重试';
       $('cloudError').style.display = '';
       btn.disabled = false;
-      btn.textContent = '发送验证码';
+      btn.textContent = '发送验证邮件';
       return;
     }
     if (userCount >= 30) {
       $('cloudError').textContent = '注册人数已达上限（30人），暂时无法注册新账号';
       $('cloudError').style.display = '';
       btn.disabled = false;
-      btn.textContent = '发送验证码';
+      btn.textContent = '发送验证邮件';
       return;
     }
+
+    // 存储邮箱和密码，供验证码验证后使用
+    sessionStorage.setItem('pendingRegEmail', email);
+    sessionStorage.setItem('pendingRegPassword', password);
 
     const { error } = await sbClient.auth.signInWithOtp({
       email,
       options: {
-        shouldCreateUser: true,
-        data: { email_confirm: true }
+        shouldCreateUser: true
       }
     });
 
@@ -2041,17 +2052,21 @@ async function sendVerificationCode() {
         $('cloudError').style.display = '';
         switchLoginTab('login');
         $('cloudEmail').value = email;
+        sessionStorage.removeItem('pendingRegEmail');
+        sessionStorage.removeItem('pendingRegPassword');
         return;
       }
       throw error;
     }
 
     verificationCodeSent = true;
-    $('verificationGroup').style.display = '';
+    $('verificationSentMsg').style.display = '';
+    $('btnSendCode').textContent = '已发送';
+    $('btnCloudSubmit').textContent = '验证并注册';
+    $('btnCloudSubmit').disabled = false;
     $('cloudVerificationCode').focus();
     $('cloudInfoRegister').style.display = 'none';
     $('cloudInfoVerification').style.display = '';
-    $('btnCloudSubmit').textContent = '验证并注册';
     showToast('验证码已发送，请检查邮箱');
     startVerificationCountdown();
   } catch (e) {
@@ -2059,6 +2074,8 @@ async function sendVerificationCode() {
     $('cloudError').style.display = '';
     btn.disabled = false;
     btn.textContent = '发送验证码';
+    sessionStorage.removeItem('pendingRegEmail');
+    sessionStorage.removeItem('pendingRegPassword');
   }
 }
 
@@ -2081,7 +2098,7 @@ async function cloudSubmit() {
     }
 
     const code = $('cloudVerificationCode').value.trim();
-    if (!code || code.length < 8) { showToast('请输入8位验证码'); return; }
+    if (!code || code.length < 6) { showToast('请输入6位验证码'); return; }
 
     if (!initSupabase()) {
       $('cloudError').textContent = '服务暂不可用，请稍后重试';
@@ -2120,12 +2137,13 @@ async function cloudSubmit() {
           const { error: pwdError } = await sbClient.auth.updateUser({ password });
           if (pwdError) {
             showToast('密码设置失败: ' + pwdError.message);
-            // User is still logged in with verified email, proceed
           }
         } catch (pwdE) {
           console.error('Password update error:', pwdE);
         }
 
+        sessionStorage.removeItem('pendingRegEmail');
+        sessionStorage.removeItem('pendingRegPassword');
         clearVerificationState();
         updateCloudUI(true, verifyData.user.email);
         showToast('注册成功！邮箱已验证 ✓');
