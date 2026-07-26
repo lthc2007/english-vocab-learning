@@ -1724,7 +1724,7 @@ function loadData() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch (e) { /* ignore */ }
-  return { apiKey: '', apiUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-pro', provider: 'deepseek',
+  return { apiKey: '', apiUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', provider: 'deepseek',
     ttsKey: '', ttsAppId: '', ttsProvider: 'minimax', ttsUrl: 'https://api.minimaxi.com', ttsModel: 'speech-2.8-hd', ttsVoice: 'English_Graceful_Lady',
     words: [] };
 }
@@ -1734,7 +1734,7 @@ const PROVIDERS = {
   deepseek: {
     name: 'DeepSeek',
     url: 'https://api.deepseek.com/v1',
-    models: ['deepseek-v4-pro', 'deepseek-v4-flash'],
+    models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'],
     keyHint: '获取 API Key: <a href="https://platform.deepseek.com/api_keys" target="_blank" style="color:var(--accent);">platform.deepseek.com</a>',
     tts: false
   },
@@ -2971,7 +2971,7 @@ function renderWordTable() {
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
-  return div.innerHTML;
+  return div.innerHTML.replace(/'/g, '&#39;');
 }
 
 function posClass(pos) {
@@ -3013,7 +3013,7 @@ async function callAI(prompt, maxTokens = 1500) {
         'Authorization': 'Bearer ' + appData.apiKey
       },
       body: JSON.stringify({
-        model: appData.model || 'deepseek-v4-pro',
+        model: appData.model || 'deepseek-chat',
         messages: [
           { role: 'system', content: '你是一个专业的英语学习助手。请严格按照用户要求的格式输出内容，不要添加额外说明。' },
           { role: 'user', content: prompt }
@@ -3021,7 +3021,8 @@ async function callAI(prompt, maxTokens = 1500) {
         temperature: 0.7,
         max_tokens: maxTokens,
         ...(appData.provider === 'deepseek' ? { thinking: { type: 'disabled' } } : {})
-      })
+      }),
+      signal: AbortSignal.timeout(30000)
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
@@ -3821,9 +3822,11 @@ $('spellInput').addEventListener('keydown', function(e) {
 // ═══════════════════════════════════════
 let quizState = { words: [], wrongWords: [], current: 0, correct: 0, total: 0, answered: false, options: [], startTime: 0, totalTime: 0 };
 let quizTimerInterval = null;
+let quizAdvanceTimer = null;
 
 function initQuiz() {
   clearInterval(quizTimerInterval);
+  clearTimeout(quizAdvanceTimer);
   if (appData.words.length < 4) {
     $('quizEmpty').style.display = '';
     $('quizArea').style.display = 'none';
@@ -3840,6 +3843,7 @@ function initQuiz() {
 
 function resetQuiz() {
   clearInterval(quizTimerInterval);
+  clearTimeout(quizAdvanceTimer);
   quizState = {
     words: shuffleArray([...appData.words]),
     wrongWords: [],
@@ -3884,7 +3888,14 @@ function updateQuizScores() {
 function generateOptions(correctWord) {
   const others = appData.words.filter(w => w.id !== correctWord.id);
   const shuffledOthers = shuffleArray([...others]);
-  const selected = shuffledOthers.slice(0, 3);
+  // Deduplicate by chinese meaning to avoid duplicate options
+  const seen = new Set();
+  const uniqueOthers = shuffledOthers.filter(w => {
+    if (seen.has(w.chinese)) return false;
+    seen.add(w.chinese);
+    return true;
+  });
+  const selected = uniqueOthers.slice(0, 3);
   const options = [
     { id: correctWord.id, chinese: correctWord.chinese, pos: correctWord.pos, isCorrect: true },
     ...selected.map(w => ({ id: w.id, chinese: w.chinese, pos: w.pos, isCorrect: false }))
@@ -3955,7 +3966,7 @@ function selectQuizOption(idx) {
   }
   updateQuizScores();
   // Auto advance after 1.5s
-  setTimeout(() => {
+  quizAdvanceTimer = setTimeout(() => {
     quizState.current++;
     renderQuizQuestion();
   }, 1500);
@@ -4505,8 +4516,7 @@ async function speakExample(e) {
         if (resp.ok) {
           const blob = await resp.blob();
           if (blob.size > 0) {
-            const audio = new Audio(URL.createObjectURL(blob));
-            audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+            const audio = playTTSBlob(blob, removeSpeaking);
             await audio.play(); played = true;
           }
         } else {
@@ -4822,8 +4832,7 @@ async function speakText(text, onDone) {
             const bytes = new Uint8Array(audioHex.length / 2);
             for (let i = 0; i < audioHex.length; i += 2) bytes[i / 2] = parseInt(audioHex.substring(i, i + 2), 16);
             const blob = new Blob([bytes], { type: 'audio/mp3' });
-            const audio = new Audio(URL.createObjectURL(blob));
-            audio.onended = onDone; audio.onerror = onDone;
+            const audio = playTTSBlob(blob, onDone);
             await audio.play(); played = true;
           }
         }
@@ -4836,8 +4845,7 @@ async function speakText(text, onDone) {
         if (resp.ok) {
           const blob = await resp.blob();
           if (blob.size > 0) {
-            const audio = new Audio(URL.createObjectURL(blob));
-            audio.onended = onDone; audio.onerror = onDone;
+            const audio = playTTSBlob(blob, onDone);
             await audio.play(); played = true;
           }
         }
@@ -4864,8 +4872,7 @@ async function speakText(text, onDone) {
             const bytes = new Uint8Array(byteChars.length);
             for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
             const blob = new Blob([bytes], { type: 'audio/mp3' });
-            const audio = new Audio(URL.createObjectURL(blob));
-            audio.onended = onDone; audio.onerror = onDone;
+            const audio = playTTSBlob(blob, onDone);
             await audio.play(); played = true;
           }
         }
