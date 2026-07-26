@@ -1925,7 +1925,7 @@ function switchLoginTab(tab) {
   $('tabLogin').classList.toggle('active', tab === 'login');
   $('tabRegister').classList.toggle('active', tab === 'register');
   $('confirmPasswordGroup').style.display = tab === 'register' ? '' : 'none';
-  $('verificationGroup').style.display = 'none';
+  $('verificationGroup').style.display = tab === 'register' ? '' : 'none';
   $('cloudInfoRegister').style.display = tab === 'register' ? '' : 'none';
   $('cloudInfoVerification').style.display = 'none';
   $('btnCloudSubmit').textContent = tab === 'login' ? '登录' : '注册';
