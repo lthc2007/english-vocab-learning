@@ -1607,6 +1607,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           <option value="minimax">MiniMax TTS</option>
           <option value="openai">OpenAI TTS</option>
           <option value="volcano">火山引擎 TTS</option>
+          <option value="edge">Edge TTS (免费)</option>
         </select>
       </div>
       <div class="form-group" id="ttsUrlGroup">
@@ -1804,6 +1805,13 @@ const TTS_PROVIDERS = {
     voices: ['zh_female_cancan_mars_bigtts', 'zh_male_M392_conversation_wvae_bigtts', 'zh_female_shuangkuaisisi_moon_bigtts', 'zh_male_wennuanahu_moon_bigtts'],
     keyHint: '获取 App ID & Access Token: <a href="https://console.volcengine.com/ark/region:ark+cn-beijing/tts" target="_blank" style="color:var(--accent);">console.volcengine.com</a>',
     ttsType: 'volcano'
+  },
+  edge: {
+    name: 'Edge TTS (免费)', url: '',
+    models: [],
+    voices: ['en-US-AriaNeural', 'en-US-JennyNeural', 'en-US-GuyNeural', 'en-US-ChristopherNeural', 'en-US-EricNeural', 'en-US-AnaNeural', 'en-US-MichelleNeural', 'en-US-RogerNeural', 'en-US-SteffanNeural', 'en-GB-SoniaNeural', 'en-GB-RyanNeural', 'en-GB-LibbyNeural', 'en-GB-MaisieNeural'],
+    keyHint: 'Edge TTS 完全免费，无需 API Key。语音由微软提供，质量优秀。',
+    ttsType: 'edge'
   }
 };
 
@@ -2365,8 +2373,21 @@ function onProviderChange() {
 function onTtsProviderChange() {
   const provider = $('ttsProviderSelect').value;
   const cfg = TTS_PROVIDERS[provider];
-  if (provider === 'none') {
-    ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup', 'ttsAppIdGroup'].forEach(id => $(id).style.display = 'none');
+  if (provider === 'none' || provider === 'edge') {
+    ['ttsUrlGroup', 'ttsModelGroup', 'ttsKeyGroup', 'ttsAppIdGroup'].forEach(id => $(id).style.display = 'none');
+    if (provider === 'edge') {
+      // Edge: show voice selector, hide everything else
+      $('ttsVoiceGroup').style.display = '';
+      const vsel = $('ttsVoiceSelect');
+      vsel.innerHTML = '';
+      cfg.voices.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = v; vsel.appendChild(opt);
+      });
+      $('ttsKeyHint').innerHTML = cfg.keyHint;
+    } else {
+      $('ttsVoiceGroup').style.display = 'none';
+    }
     return;
   }
   ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup'].forEach(id => $(id).style.display = '');
@@ -2470,7 +2491,7 @@ async function testTtsConnection() {
   const url = ($('ttsUrlInput').value.trim() || TTS_PROVIDERS[provider].url).replace(/\/$/, '');
   const cfg = TTS_PROVIDERS[provider];
 
-  if (!key) {
+  if (provider !== 'edge' && !key) {
     result.textContent = '请先填写 TTS API Key';
     result.style.color = '#e74c3c';
     btn.disabled = false;
@@ -2550,6 +2571,21 @@ async function testTtsConnection() {
       } else {
         const err = await resp.text().catch(() => '');
         result.textContent = '连接失败: HTTP ' + resp.status + (err ? ' — ' + err.substring(0, 200) : '');
+        result.style.color = '#e74c3c';
+      }
+    } else if (cfg.ttsType === 'edge') {
+      try {
+        const voice = $('ttsVoiceSelect').value || cfg.voices[0];
+        const blob = await edgeTTSSynthesize('Hello, this is a test.', voice, 1.0);
+        if (blob.size > 0) {
+          result.textContent = 'TTS 连接成功！(Edge TTS 免费)';
+          result.style.color = '#27ae60';
+        } else {
+          result.textContent = '连接失败: Edge TTS 返回空音频';
+          result.style.color = '#e74c3c';
+        }
+      } catch (e) {
+        result.textContent = '连接失败: ' + (e.message || 'Edge TTS 不可用');
         result.style.color = '#e74c3c';
       }
     }
@@ -3382,6 +3418,90 @@ function handleCardClick() {
   flipCard();
 }
 
+// Edge TTS (free Microsoft speech service via WebSocket)
+const EDGE_TTS_URL = 'wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=6A5AA1D4EAFF4E9FB37E23D68491D6F4';
+
+async function edgeTTSSynthesize(text, voice, speed) {
+  return new Promise((resolve, reject) => {
+    try {
+      const ws = new WebSocket(EDGE_TTS_URL);
+      const audioChunks = [];
+      let timer;
+
+      ws.onopen = () => {
+        // Config message
+        const configMsg = 'X-RequestId:' + (crypto.randomUUID ? crypto.randomUUID() : 'edge-' + Date.now()) + '\r\n' +
+          'Content-Type:application/json\r\n' +
+          'Path:speech.config\r\n\r\n' +
+          JSON.stringify({
+            context: { synthesis: { audio: { metadataoptions: { sentenceBoundaryEnabled: false, wordBoundaryEnabled: false }, outputFormat: 'audio-24khz-48kbitrate-mono-mp3' } } }
+          });
+        ws.send(configMsg);
+
+        // SSML message
+        const ssml = '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="en-US">' +
+          '<voice name="' + voice + '"><prosody rate="' + speed.toFixed(2) + '" pitch="+0Hz">' +
+          text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') +
+          '</prosody></voice></speak>';
+
+        const reqId = crypto.randomUUID ? crypto.randomUUID() : 'edge-ssml-' + Date.now();
+        const headers = 'X-RequestId:' + reqId + '\r\n' +
+          'Content-Type:application/ssml+xml\r\n' +
+          'X-Timestamp:' + new Date().toISOString() + '\r\n' +
+          'Path:ssml\r\n\r\n';
+        const headerBytes = new TextEncoder().encode(headers);
+        const ssmlBytes = new TextEncoder().encode(ssml);
+        const msg = new Uint8Array(2 + headerBytes.length + ssmlBytes.length);
+        // Pack header length as uint16 big-endian
+        msg[0] = (headerBytes.length >> 8) & 0xFF;
+        msg[1] = headerBytes.length & 0xFF;
+        msg.set(headerBytes, 2);
+        msg.set(ssmlBytes, 2 + headerBytes.length);
+        ws.send(msg.buffer);
+
+        // Timeout: 30s for short text, 60s for long
+        timer = setTimeout(() => {
+          ws.close();
+          if (audioChunks.length > 0) {
+            resolve(new Blob(audioChunks, { type: 'audio/mp3' }));
+          } else {
+            reject(new Error('Edge TTS timeout'));
+          }
+        }, text.length > 500 ? 60000 : 30000);
+      };
+
+      ws.onmessage = (event) => {
+        if (typeof event.data === 'string') {
+          // Text frames: path:turn.start / turn.end etc – ignore
+          if (event.data.includes('Path:turn.end')) {
+            ws.close(1000);
+          }
+          return;
+        }
+        // Binary frame: first 2 bytes = header length, then audio data
+        const view = new DataView(event.data);
+        const headerLen = (view.getUint8(0) << 8) | view.getUint8(1);
+        const audioData = new Uint8Array(event.data, 2 + headerLen);
+        if (audioData.length > 0) {
+          audioChunks.push(audioData);
+        }
+      };
+
+      ws.onerror = () => { clearTimeout(timer); reject(new Error('Edge TTS WebSocket error')); };
+      ws.onclose = (e) => {
+        clearTimeout(timer);
+        if (audioChunks.length > 0) {
+          resolve(new Blob(audioChunks, { type: 'audio/mp3' }));
+        } else if (e.code !== 1000) {
+          reject(new Error('Edge TTS connection closed with code ' + e.code));
+        }
+      };
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
 // Helper: create Audio from blob with automatic URL revoke on end/error
 function playTTSBlob(blob, onDone) {
   const url = URL.createObjectURL(blob);
@@ -3558,6 +3678,21 @@ async function speakWord(e) {
   
   if (!played && ttsError) {
     showToast('TTS 失败: ' + ttsError + ' — 已降级为浏览器发音', 5000);
+  }
+  
+  // Edge TTS (free, no API key needed)
+  if (!played && ttsProvider === 'edge' && ttsCfg) {
+    try {
+      const ttsVoice = appData.ttsVoice || ttsCfg.voices[0];
+      const blob = await edgeTTSSynthesize(speakText, ttsVoice, 0.85);
+      if (blob.size > 0) {
+        const audio = playTTSBlob(blob, removeSpeaking);
+        await audio.play();
+        played = true;
+      }
+    } catch (e) {
+      console.error('Edge TTS error:', e);
+    }
   }
 
   // Fallback: Web Speech API
@@ -4077,7 +4212,12 @@ function updateArticleEstimate() {
   const ttsProvider = appData.ttsProvider || 'none';
   const ttsModel = appData.ttsModel || 'speech-2.8-hd';
   let pricePer10k, modelLabel;
-  if (ttsProvider === 'volcano') {
+  if (ttsProvider === 'edge') {
+    $('estChars').textContent = charCount.toLocaleString();
+    $('estCost').textContent = '免费';
+    $('estPriceLabel').textContent = '(Edge TTS: 免费)';
+    return;
+  } else if (ttsProvider === 'volcano') {
     pricePer10k = TTS_PRICING_VOLCANO;
     modelLabel = '火山引擎大模型';
   } else {
@@ -4097,7 +4237,11 @@ function updateArticleEstimate() {
 async function callMiniMaxTTS(text, speed = 1.0) {
   const ttsProvider = appData.ttsProvider || 'none';
   const ttsCfg = TTS_PROVIDERS[ttsProvider];
-  if (ttsProvider === 'none' || !appData.ttsKey || !ttsCfg) {
+  if (ttsProvider === 'none' || !ttsCfg) {
+    return { blob: null, error: 'TTS 未配置' };
+  }
+  // Edge TTS does not need API key
+  if (ttsProvider !== 'edge' && !appData.ttsKey) {
     return { blob: null, error: 'TTS 未配置' };
   }
   const ttsUrl = (appData.ttsUrl || ttsCfg.url).replace(/\/$/, '');
@@ -4105,7 +4249,14 @@ async function callMiniMaxTTS(text, speed = 1.0) {
   const ttsModel = appData.ttsModel || ttsCfg.models[0];
   const ttsVoice = appData.ttsVoice || ttsCfg.voices[0];
 
-  if (ttsCfg.ttsType === 'minimax') {
+  if (ttsCfg.ttsType === 'edge') {
+    try {
+      const blob = await edgeTTSSynthesize(text, ttsVoice, speed);
+      return blob.size > 0 ? { blob, error: null } : { blob: null, error: 'Edge TTS 返回空音频' };
+    } catch (e) {
+      return { blob: null, error: 'Edge TTS: ' + (e.message || 'unknown error') };
+    }
+  } else if (ttsCfg.ttsType === 'minimax') {
     const resp = await fetch(ttsUrl + '/v1/t2a_v2', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
@@ -4231,7 +4382,7 @@ async function startArticleRead() {
 
   const ttsProvider = appData.ttsProvider || 'none';
   const ttsCfg = TTS_PROVIDERS[ttsProvider];
-  const hasTTS = ttsProvider !== 'none' && appData.ttsKey && ttsCfg;
+  const hasTTS = ttsProvider !== 'none' && (ttsProvider === 'edge' || appData.ttsKey) && ttsCfg;
 
   // Reset state
   stopArticleRead();
@@ -4553,6 +4704,20 @@ async function speakExample(e) {
   if (!played && ttsError) {
     showToast('例句朗读失败: ' + ttsError + ' — 已降级浏览器发音', 5000);
   }
+  // Edge TTS (free, no API key needed)
+  if (!played && ttsProvider === 'edge' && ttsCfg) {
+    try {
+      const ttsVoice = appData.ttsVoice || ttsCfg.voices[0];
+      const blob = await edgeTTSSynthesize(speakText, ttsVoice, 0.85);
+      if (blob.size > 0) {
+        const audio = playTTSBlob(blob, removeSpeaking);
+        await audio.play();
+        played = true;
+      }
+    } catch (e) {
+      console.error('Edge TTS example error:', e);
+    }
+  }
   if (!played) {
     // Fallback: Web Speech
     if ('speechSynthesis' in window) {
@@ -4871,6 +5036,20 @@ async function speakText(text, onDone) {
         }
       }
     } catch (e) { /* fallback */ }
+  }
+  // Edge TTS (free, no API key needed)
+  if (!played && ttsProvider === 'edge' && ttsCfg) {
+    try {
+      const ttsVoice = appData.ttsVoice || ttsCfg.voices[0];
+      const blob = await edgeTTSSynthesize(text, ttsVoice, 0.85);
+      if (blob.size > 0) {
+        const audio = playTTSBlob(blob, onDone);
+        await audio.play();
+        played = true;
+      }
+    } catch (e) {
+      console.error('Edge TTS speakText error:', e);
+    }
   }
   if (!played) {
     if ('speechSynthesis' in window) {
