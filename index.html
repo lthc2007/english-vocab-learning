@@ -1651,10 +1651,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     <div class="modal-title">☁️ 云同步</div>
     <!-- 未登录视图 -->
     <div id="cloudLoginView">
-      <div class="login-tabs">
-        <button class="login-tab active" onclick="switchLoginTab('login')" id="tabLogin">登录</button>
-        <button class="login-tab" onclick="switchLoginTab('register')" id="tabRegister">注册</button>
-      </div>
+      <div class="login-tabs" style="text-align:center;font-size:0.9rem;color:var(--muted);margin-bottom:4px;">登录 / 注册</div>
       <div id="loginForm">
         <div class="form-group">
           <label class="form-label">邮箱</label>
@@ -1667,32 +1664,24 @@ tr:hover td { background: rgba(201,169,110,0.06); }
             <button type="button" class="pwd-toggle" onclick="togglePassword('cloudPassword', this)" title="显示密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;">👁️</button>
           </div>
         </div>
-        <div class="form-group" id="confirmPasswordGroup" style="display:none;">
+        <div class="form-group" id="confirmPasswordGroup">
           <label class="form-label">确认密码</label>
           <div style="position:relative;">
             <input class="form-input" id="cloudConfirmPassword" type="password" placeholder="再次输入密码" style="padding-right:40px;">
             <button type="button" class="pwd-toggle" onclick="togglePassword('cloudConfirmPassword', this)" title="显示密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;">👁️</button>
           </div>
         </div>
-        <div class="form-group" id="verificationGroup" style="display:none;">
-          <button class="btn btn-primary" id="btnSendCode" onclick="sendVerificationCode()" style="width:100%;">发送验证邮件</button>
-          <div id="verificationSentMsg" style="display:none;margin-top:8px;padding:10px 12px;background:var(--success-soft);border-radius:8px;border:1px solid var(--success);">
-            <div style="font-size:0.9rem;color:var(--success);font-weight:600;">✅ 验证邮件已发送</div>
-            <div style="font-size:0.82rem;color:var(--ink);margin-top:4px;">请查看邮箱，<strong>点击邮件中的链接</strong>即可完成注册。如未收到，请检查垃圾邮件箱。</div>
-          </div>
-          <div id="verificationCountdown" style="font-size:0.78rem;color:var(--muted);margin-top:4px;display:none;"></div>
-        </div>
         <div id="cloudError" style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;"></div>
         <div style="display:flex;gap:12px;">
-          <button class="btn btn-primary" id="btnCloudSubmit" onclick="cloudSubmit()" style="flex:1;">登录</button>
+          <button class="btn btn-primary" id="btnCloudLogin" onclick="cloudSubmit('login')" style="flex:1;">登录</button>
+          <button class="btn btn-accent" id="btnCloudRegister" onclick="cloudSubmit('register')" style="flex:1;background:var(--success);">注册</button>
           <button class="btn btn-secondary" onclick="closeCloudPanel()">取消</button>
         </div>
         <div style="text-align:right;margin-top:8px;">
           <a href="javascript:void(0)" onclick="forgotPassword()" style="font-size:0.82rem;color:var(--muted);text-decoration:underline;">忘记密码？</a>
         </div>
-        <div class="cloud-info" id="cloudInfoRegister" style="margin-top:16px;">
-          <strong>🔐 注册说明：</strong>输入邮箱和密码，点击"发送验证邮件"，然后前往邮箱<strong>点击链接</strong>即可完成注册。<br>
-          <span style="font-size:0.75rem;color:var(--muted);">数据通过 Supabase 加密存储，仅你自己可见。</span>
+        <div class="cloud-info" id="cloudInfoHint" style="margin-top:16px;font-size:0.82rem;color:var(--muted);">
+          输入邮箱和密码即可完成注册，无需邮箱验证。<br>数据通过 Supabase 加密存储，仅你自己可见。
         </div>
         </div>
       </div>
@@ -1842,10 +1831,7 @@ function persist() { saveData(appData); }
 // Cloud Sync (Supabase)
 // ═══════════════════════════════════════
 let sbClient = null;
-let cloudLoginMode = 'login';
 let cloudUserEmail = null;
-let verificationTimer = null;
-let verificationCodeSent = false;
 
 // Hardcoded Supabase credentials (already configured)
 const SUPABASE_URL = 'https://mmdhtyuyirukvtmfzeby.supabase.co';
@@ -1890,25 +1876,16 @@ async function handleAuthSignIn(session) {
   if (!session?.user?.email) return;
   updateCloudUI(true, session.user.email);
 
-  const pendingEmail = localStorage.getItem('pendingRegEmail');
-  const pendingMagicLogin = localStorage.getItem('pendingMagicLogin');
-
   // 清除 URL 中的 hash
   if (window.location.hash && window.location.hash.includes('access_token')) {
     window.history.replaceState(null, '', window.location.pathname);
   }
 
+  // 检查是否有待处理的注册确认（signUp 后邮箱确认链接跳转回来）
+  const pendingEmail = localStorage.getItem('pendingRegEmail');
   if (pendingEmail && pendingEmail === session.user.email) {
-    // 注册流程：邮箱确认后自动登录
     localStorage.removeItem('pendingRegEmail');
-    clearVerificationState();
     showToast('注册成功！邮箱验证完成 ✓');
-  } else if (pendingMagicLogin) {
-    // 魔法链接登录流程
-    localStorage.removeItem('pendingMagicLogin');
-    showToast('登录成功！');
-    closeCloudPanel();
-    setTimeout(() => cloudDownload(), 500);
   }
 }
 
@@ -1985,27 +1962,12 @@ function openCloudPanel() {
   } else {
     $('cloudLoginView').style.display = '';
     $('cloudProfileView').style.display = 'none';
-    switchLoginTab('login');
     clearCloudForm();
   }
 }
 
 function closeCloudPanel() {
   $('modalCloud').classList.remove('show');
-  clearVerificationState();
-}
-
-function switchLoginTab(tab) {
-  cloudLoginMode = tab;
-  $('tabLogin').classList.toggle('active', tab === 'login');
-  $('tabRegister').classList.toggle('active', tab === 'register');
-  $('confirmPasswordGroup').style.display = tab === 'register' ? '' : 'none';
-  $('verificationGroup').style.display = tab === 'register' ? '' : 'none';
-  $('verificationSentMsg').style.display = 'none';
-  $('cloudInfoRegister').style.display = tab === 'register' ? '' : 'none';
-  $('btnCloudSubmit').textContent = tab === 'login' ? '登录' : '注册';
-  $('cloudError').style.display = 'none';
-  clearVerificationState();
   clearCloudForm();
 }
 
@@ -2065,51 +2027,14 @@ async function forgotPassword() {
   }
 }
 
-function clearVerificationState() {
-  clearInterval(verificationTimer);
-  verificationTimer = null;
-  verificationCodeSent = false;
-  $('btnSendCode').disabled = false;
-  $('btnSendCode').textContent = '发送验证邮件';
-  $('verificationSentMsg').style.display = 'none';
-  $('verificationCountdown').style.display = 'none';
-  $('btnCloudSubmit').disabled = false;
-  $('cloudInfoRegister').style.display = '';
-}
-
-function startVerificationCountdown() {
-  let seconds = 60;
-  const btn = $('btnSendCode');
-  const countdown = $('verificationCountdown');
-  btn.disabled = true;
-  countdown.style.display = '';
-  countdown.textContent = seconds + '秒后可重新发送';
-
-  clearInterval(verificationTimer);
-  verificationTimer = setInterval(() => {
-    seconds--;
-    if (seconds <= 0) {
-      clearInterval(verificationTimer);
-      verificationTimer = null;
-      btn.disabled = false;
-      btn.textContent = '重新发送';
-      countdown.style.display = 'none';
-    } else {
-      countdown.textContent = seconds + '秒后可重新发送';
-    }
-  }, 1000);
-}
-
-async function sendVerificationCode() {
+async function cloudSubmit(mode) {
   const email = $('cloudEmail').value.trim();
   const password = $('cloudPassword').value.trim();
-  const confirm = $('cloudConfirmPassword').value.trim();
+  $('cloudError').style.display = 'none';
 
-  // Validate inputs
   if (!email || !password) { showToast('请填写邮箱和密码'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('请输入有效的邮箱地址'); return; }
   if (password.length < 6) { showToast('密码至少需要6位'); return; }
-  if (password !== confirm) { showToast('两次密码输入不一致'); return; }
 
   if (!initSupabase()) {
     $('cloudError').textContent = '服务暂不可用，请稍后重试';
@@ -2117,12 +2042,10 @@ async function sendVerificationCode() {
     return;
   }
 
-  const btn = $('btnSendCode');
-  btn.disabled = true;
-  btn.textContent = '发送中...';
-  $('cloudError').style.display = 'none';
+  if (mode === 'register') {
+    const confirm = $('cloudConfirmPassword').value.trim();
+    if (password !== confirm) { showToast('两次密码输入不一致'); return; }
 
-  try {
     // 注册前检查用户数量是否已达上限
     let userCount = null;
     try {
@@ -2140,22 +2063,15 @@ async function sendVerificationCode() {
     if (userCount === null) {
       $('cloudError').textContent = '无法验证注册名额，请稍后重试';
       $('cloudError').style.display = '';
-      btn.disabled = false;
-      btn.textContent = '发送验证邮件';
       return;
     }
     if (userCount >= 30) {
       $('cloudError').textContent = '注册人数已达上限（30人），暂时无法注册新账号';
       $('cloudError').style.display = '';
-      btn.disabled = false;
-      btn.textContent = '发送验证邮件';
       return;
     }
 
-    // 存储邮箱，供邮件确认后识别注册流程
-    localStorage.setItem('pendingRegEmail', email);
-
-    // 使用 signUp 创建用户（同时设置密码，避免 updateUser 不添加 email identity 的 bug）
+    // 直接使用 signUp 注册，无需邮箱验证
     const { data, error } = await sbClient.auth.signUp({
       email,
       password,
@@ -2168,18 +2084,14 @@ async function sendVerificationCode() {
       if (error.message && (error.message.includes('already') || error.message.includes('registered') || error.message.includes('exists') || error.message.includes('User already'))) {
         $('cloudError').textContent = '该邮箱已注册，请直接登录';
         $('cloudError').style.display = '';
-        switchLoginTab('login');
         $('cloudEmail').value = email;
-        localStorage.removeItem('pendingRegEmail');
         return;
       }
       throw error;
     }
 
-    // 如果 signUp 返回了 session，说明邮箱确认未开启，用户已直接登录
+    // 如果返回了 session，说明邮箱确认未开启，用户已直接登录
     if (data.session) {
-      localStorage.removeItem('pendingRegEmail');
-      clearVerificationState();
       updateCloudUI(true, data.user.email);
       showToast('注册成功！');
       closeCloudPanel();
@@ -2187,48 +2099,13 @@ async function sendVerificationCode() {
       return;
     }
 
-    // 邮箱确认已开启，确认邮件已发送
-    verificationCodeSent = true;
-    $('verificationSentMsg').style.display = '';
-    $('btnSendCode').textContent = '已发送';
-    $('btnCloudSubmit').textContent = '已发送验证邮件';
-    $('btnCloudSubmit').disabled = true;
-    $('cloudInfoRegister').style.display = 'none';
-    showToast('验证邮件已发送，请检查邮箱并点击确认链接');
-    startVerificationCountdown();
-  } catch (e) {
-    $('cloudError').textContent = '发送失败: ' + (e.message || '请稍后重试');
-    $('cloudError').style.display = '';
-    btn.disabled = false;
-    btn.textContent = '发送验证邮件';
-    localStorage.removeItem('pendingRegEmail');
-  }
-}
-
-async function cloudSubmit() {
-  const email = $('cloudEmail').value.trim();
-  const password = $('cloudPassword').value.trim();
-  $('cloudError').style.display = 'none';
-
-  if (!email || !password) { showToast('请填写邮箱和密码'); return; }
-  if (password.length < 6) { showToast('密码至少需要6位'); return; }
-
-  if (cloudLoginMode === 'register') {
-    const confirm = $('cloudConfirmPassword').value.trim();
-    if (password !== confirm) { showToast('两次密码输入不一致'); return; }
-
-    // 注册模式：直接发送验证邮件，用户点击邮件链接完成注册
-    sendVerificationCode();
+    // 邮箱确认已开启，需要确认邮件
+    localStorage.setItem('pendingRegEmail', email);
+    showToast('注册成功！请检查邮箱中的确认链接（如已开启邮箱验证）');
     return;
   }
 
   // 登录模式
-  if (!initSupabase()) {
-    $('cloudError').textContent = '服务暂不可用，请稍后重试';
-    $('cloudError').style.display = '';
-    return;
-  }
-
   try {
     const result = await sbClient.auth.signInWithPassword({ email, password });
     if (result.error) throw result.error;
@@ -2241,42 +2118,12 @@ async function cloudSubmit() {
   } catch (e) {
     console.error('Login error:', e);
     const errMsg = e.message || '';
-    // 登录失败：可能是密码错误、邮箱未验证，或 Supabase 平台 bug (identities 为空)
     if (errMsg.includes('Email not confirmed') || errMsg.includes('email_not_confirmed')) {
-      $('cloudError').innerHTML = '邮箱尚未验证，请检查邮箱中的确认链接。如未收到，可<a href="javascript:void(0)" onclick="resendConfirmation()" style="color:#4f46e5;text-decoration:underline;">重新发送</a>';
+      $('cloudError').innerHTML = '邮箱尚未验证，请检查邮箱中的确认链接';
       $('cloudError').style.display = '';
       return;
     }
-    // 密码登录失败，可能是 Supabase 平台 bug (identities 为空)
-    // 自动发送魔法链接作为回退登录方式
-    if (errMsg.includes('Invalid login credentials') || errMsg.includes('invalid_credentials')) {
-      $('cloudError').textContent = '正在发送邮箱登录链接...';
-      $('cloudError').style.display = '';
-      try {
-        const { error: otpErr } = await sbClient.auth.signInWithOtp({
-          email,
-          options: {
-            shouldCreateUser: false,
-            emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
-          }
-        });
-        if (otpErr) {
-          if (otpErr.message && otpErr.message.includes('User not found')) {
-            $('cloudError').textContent = '该账号不存在，请先注册';
-          } else {
-            $('cloudError').textContent = '登录失败: ' + (errMsg || '请检查邮箱和密码');
-          }
-        } else {
-          localStorage.setItem('pendingMagicLogin', 'true');
-          $('cloudError').innerHTML = '密码登录暂时不可用，已发送邮箱链接。<a href="javascript:void(0)" onclick="resendMagicLink()" style="color:#4f46e5;text-decoration:underline;">重新发送</a>或检查邮箱，点击链接即可登录';
-        }
-      } catch (e2) {
-        $('cloudError').textContent = '登录失败: ' + (errMsg || '请检查邮箱和密码');
-      }
-      $('cloudError').style.display = '';
-      return;
-    }
-    // 登录失败时，尝试区分"账号不存在"和"密码错误"
+    // 尝试区分"账号不存在"和"密码错误"
     let emailExists = null;
     try {
       const { data: exists, error: rpcErr } = await sbClient.rpc('check_email_exists', { target_email: email });
@@ -2301,67 +2148,6 @@ async function cloudLogout() {
   updateCloudUI(false);
   closeCloudPanel();
   showToast('已退出登录');
-}
-
-async function resendConfirmation() {
-  const email = ($('cloudError').dataset.pendingEmail || $('cloudEmail').value || '').trim();
-  if (!email) { showToast('请先输入邮箱地址'); return; }
-  if (!initSupabase()) {
-    showToast('服务暂不可用，请稍后重试');
-    return;
-  }
-  try {
-    // 使用 resend 重新发送注册确认邮件
-    const { error } = await sbClient.auth.resend({
-      type: 'signup',
-      email,
-      options: {
-        emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
-      }
-    });
-    if (error) throw error;
-    showToast('确认邮件已重新发送，请检查邮箱');
-  } catch (e) {
-    console.error('Resend confirmation error:', e);
-    // 如果 resend 不可用，回退到 signInWithOtp 魔法链接
-    try {
-      const { error: otpErr } = await sbClient.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: false,
-          emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
-        }
-      });
-      if (otpErr) throw otpErr;
-      showToast('已发送邮箱登录链接，请检查邮箱');
-    } catch (e2) {
-      showToast('发送失败: ' + (e2.message || '请稍后重试'));
-    }
-  }
-}
-
-async function resendMagicLink() {
-  const email = ($('cloudEmail').value || '').trim();
-  if (!email) { showToast('请先输入邮箱地址'); return; }
-  if (!initSupabase()) {
-    showToast('服务暂不可用，请稍后重试');
-    return;
-  }
-  try {
-    const { error } = await sbClient.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: false,
-        emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
-      }
-    });
-    if (error) throw error;
-    localStorage.setItem('pendingMagicLogin', 'true');
-    showToast('登录链接已发送，请检查邮箱');
-  } catch (e) {
-    console.error('Resend magic link error:', e);
-    showToast('发送失败: ' + (e.message || '请稍后重试'));
-  }
 }
 
 // Upload words to cloud
