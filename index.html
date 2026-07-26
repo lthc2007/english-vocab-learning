@@ -1675,8 +1675,8 @@ tr:hover td { background: rgba(201,169,110,0.06); }
             <button class="btn btn-primary" id="btnSendCode" onclick="sendVerificationCode()" style="white-space:nowrap;">发送验证码</button>
           </div>
           <div id="verificationSentMsg" style="display:none;margin-top:8px;padding:10px 12px;background:var(--success-soft);border-radius:8px;border:1px solid var(--success);">
-            <div style="font-size:0.9rem;color:var(--success);font-weight:600;">✅ 验证码已发送</div>
-            <div style="font-size:0.82rem;color:var(--ink);margin-top:4px;">请查看邮箱中的6位验证码。如未收到，请检查垃圾邮件箱。</div>
+            <div style="font-size:0.9rem;color:var(--success);font-weight:600;">✅ 验证邮件已发送</div>
+            <div style="font-size:0.82rem;color:var(--ink);margin-top:4px;">请查看邮箱，<strong>点击邮件中的链接</strong>即可完成注册。如未收到，请检查垃圾邮件箱。</div>
           </div>
           <div id="verificationCountdown" style="font-size:0.78rem;color:var(--muted);margin-top:4px;display:none;"></div>
         </div>
@@ -1690,8 +1690,8 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           <span style="font-size:0.75rem;color:var(--muted);">数据通过 Supabase 加密存储，仅你自己可见。</span>
         </div>
         <div class="cloud-info" id="cloudInfoVerification" style="display:none;margin-top:16px;background:var(--gold-soft);border-radius:8px;padding:12px;">
-          <strong>📧 验证说明：</strong>点击"发送验证码"后，系统会向你的邮箱发送一封包含6位数字验证码的邮件。<br>
-          <span style="font-size:0.75rem;color:var(--muted);">如未收到，请检查垃圾邮件箱。</span>
+          <strong>📧 验证说明：</strong>点击"发送验证码"后，系统会向你的邮箱发送一封验证邮件。<br>
+          <span style="font-size:0.75rem;color:var(--muted);">点击邮件中的链接即可完成注册。也可以在下方输入邮件中的6位验证码进行验证。如未收到，请检查垃圾邮件箱。</span>
         </div>
       </div>
     </div>
@@ -1873,6 +1873,28 @@ async function checkCloudSession() {
     if (error) throw error;
     if (session) {
       updateCloudUI(true, session.user.email);
+      // 处理邮件链接跳转后的注册：如果 localStorage 中有待注册的密码，设置密码
+      const pendingEmail = localStorage.getItem('pendingRegEmail');
+      const pendingPassword = localStorage.getItem('pendingRegPassword');
+      if (pendingEmail && pendingPassword && pendingEmail === session.user.email) {
+        try {
+          const { error: pwdError } = await sbClient.auth.updateUser({ password: pendingPassword });
+          if (pwdError) {
+            console.error('Password update after redirect error:', pwdError);
+          } else {
+            showToast('注册成功！邮箱已验证 ✓');
+          }
+        } catch (pwdE) {
+          console.error('Password update after redirect error:', pwdE);
+        }
+        localStorage.removeItem('pendingRegEmail');
+        localStorage.removeItem('pendingRegPassword');
+        clearVerificationState();
+        // 清除 URL 中的 hash 参数（Supabase 认证回调残留）
+        if (window.location.hash && window.location.hash.includes('access_token')) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+      }
     } else {
       updateCloudUI(false);
     }
@@ -2039,8 +2061,8 @@ async function sendVerificationCode() {
     }
 
     // 存储邮箱和密码，供验证码验证后使用
-    sessionStorage.setItem('pendingRegEmail', email);
-    sessionStorage.setItem('pendingRegPassword', password);
+    localStorage.setItem('pendingRegEmail', email);
+    localStorage.setItem('pendingRegPassword', password);
 
     const { error } = await sbClient.auth.signInWithOtp({
       email,
@@ -2056,8 +2078,8 @@ async function sendVerificationCode() {
         $('cloudError').style.display = '';
         switchLoginTab('login');
         $('cloudEmail').value = email;
-        sessionStorage.removeItem('pendingRegEmail');
-        sessionStorage.removeItem('pendingRegPassword');
+        localStorage.removeItem('pendingRegEmail');
+        localStorage.removeItem('pendingRegPassword');
         return;
       }
       throw error;
@@ -2071,15 +2093,15 @@ async function sendVerificationCode() {
     $('cloudVerificationCode').focus();
     $('cloudInfoRegister').style.display = 'none';
     $('cloudInfoVerification').style.display = '';
-    showToast('验证码已发送，请检查邮箱');
+    showToast('验证邮件已发送，请检查邮箱');
     startVerificationCountdown();
   } catch (e) {
     $('cloudError').textContent = '发送失败: ' + (e.message || '请稍后重试');
     $('cloudError').style.display = '';
     btn.disabled = false;
     btn.textContent = '发送验证码';
-    sessionStorage.removeItem('pendingRegEmail');
-    sessionStorage.removeItem('pendingRegPassword');
+    localStorage.removeItem('pendingRegEmail');
+    localStorage.removeItem('pendingRegPassword');
   }
 }
 
@@ -2118,7 +2140,7 @@ async function cloudSubmit() {
       const { data: verifyData, error: verifyError } = await sbClient.auth.verifyOtp({
         email,
         token: code,
-        type: 'email'
+        type: 'signup'
       });
 
       if (verifyError) {
@@ -2146,8 +2168,8 @@ async function cloudSubmit() {
           console.error('Password update error:', pwdE);
         }
 
-        sessionStorage.removeItem('pendingRegEmail');
-        sessionStorage.removeItem('pendingRegPassword');
+        localStorage.removeItem('pendingRegEmail');
+        localStorage.removeItem('pendingRegPassword');
         clearVerificationState();
         updateCloudUI(true, verifyData.user.email);
         showToast('注册成功！邮箱已验证 ✓');
