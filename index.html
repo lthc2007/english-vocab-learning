@@ -1891,31 +1891,24 @@ async function handleAuthSignIn(session) {
   updateCloudUI(true, session.user.email);
 
   const pendingEmail = localStorage.getItem('pendingRegEmail');
-  const pendingPassword = localStorage.getItem('pendingRegPassword');
+  const pendingMagicLogin = localStorage.getItem('pendingMagicLogin');
 
-  if (pendingEmail && pendingEmail === session.user.email && pendingPassword) {
-    // 注册流程：魔法链接登录成功，现在设置密码
-    console.log('检测到待设置密码，调用 updateUser...');
-    try {
-      const { error: updateErr } = await sbClient.auth.updateUser({ password: pendingPassword });
-      if (updateErr) {
-        console.error('设置密码失败:', updateErr);
-        showToast('注册成功！但密码设置失败，请用"忘记密码"重置');
-      } else {
-        console.log('密码设置成功！');
-        showToast('注册成功！密码已设置，后续可用密码登录 ✓');
-      }
-    } catch (e) {
-      console.error('设置密码异常:', e);
-      showToast('注册成功！但密码设置失败，请用"忘记密码"重置');
-    }
+  // 清除 URL 中的 hash
+  if (window.location.hash && window.location.hash.includes('access_token')) {
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+
+  if (pendingEmail && pendingEmail === session.user.email) {
+    // 注册流程：邮箱确认后自动登录
     localStorage.removeItem('pendingRegEmail');
-    localStorage.removeItem('pendingRegPassword');
     clearVerificationState();
-    // 清除 URL 中的 hash
-    if (window.location.hash && window.location.hash.includes('access_token')) {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
+    showToast('注册成功！邮箱验证完成 ✓');
+  } else if (pendingMagicLogin) {
+    // 魔法链接登录流程
+    localStorage.removeItem('pendingMagicLogin');
+    showToast('登录成功！');
+    closeCloudPanel();
+    setTimeout(() => cloudDownload(), 500);
   }
 }
 
@@ -2131,7 +2124,6 @@ async function sendVerificationCode() {
 
   try {
     // 注册前检查用户数量是否已达上限
-    // 注意：此为客户端检查，不保证安全性。攻击者可以绕过此检查。
     let userCount = null;
     try {
       const { data: rpcCount, error: rpcErr } = await sbClient.rpc('count_user_words');
@@ -2160,38 +2152,33 @@ async function sendVerificationCode() {
       return;
     }
 
-    // 存储邮箱和密码，供邮件链接跳转后使用
+    // 存储邮箱，供邮件确认后识别注册流程
     localStorage.setItem('pendingRegEmail', email);
-    localStorage.setItem('pendingRegPassword', password);
 
-    // 使用 signInWithOtp 代替 signUp 来创建用户
-    // 原因：signUp 在 2026年7月存在 Supabase 平台 bug，创建的 auth.identities 为空，
-    // 导致 signInWithPassword 永远返回 invalid_credentials
-    const { data, error } = await sbClient.auth.signInWithOtp({
+    // 使用 signUp 创建用户（同时设置密码，避免 updateUser 不添加 email identity 的 bug）
+    const { data, error } = await sbClient.auth.signUp({
       email,
+      password,
       options: {
-        shouldCreateUser: true,
         emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
       }
     });
 
     if (error) {
-      if (error.message && (error.message.includes('already') || error.message.includes('registered') || error.message.includes('exists'))) {
+      if (error.message && (error.message.includes('already') || error.message.includes('registered') || error.message.includes('exists') || error.message.includes('User already'))) {
         $('cloudError').textContent = '该邮箱已注册，请直接登录';
         $('cloudError').style.display = '';
         switchLoginTab('login');
         $('cloudEmail').value = email;
         localStorage.removeItem('pendingRegEmail');
-        localStorage.removeItem('pendingRegPassword');
         return;
       }
       throw error;
     }
 
-    // 如果 signUp 返回了 session，说明 Confirm email 未开启，用户已直接登录
+    // 如果 signUp 返回了 session，说明邮箱确认未开启，用户已直接登录
     if (data.session) {
       localStorage.removeItem('pendingRegEmail');
-      localStorage.removeItem('pendingRegPassword');
       clearVerificationState();
       updateCloudUI(true, data.user.email);
       showToast('注册成功！');
@@ -2200,14 +2187,14 @@ async function sendVerificationCode() {
       return;
     }
 
-    // Confirm email 已开启，确认邮件已发送
+    // 邮箱确认已开启，确认邮件已发送
     verificationCodeSent = true;
     $('verificationSentMsg').style.display = '';
     $('btnSendCode').textContent = '已发送';
     $('btnCloudSubmit').textContent = '已发送验证邮件';
     $('btnCloudSubmit').disabled = true;
     $('cloudInfoRegister').style.display = 'none';
-    showToast('验证邮件已发送，请检查邮箱');
+    showToast('验证邮件已发送，请检查邮箱并点击确认链接');
     startVerificationCountdown();
   } catch (e) {
     $('cloudError').textContent = '发送失败: ' + (e.message || '请稍后重试');
@@ -2215,7 +2202,6 @@ async function sendVerificationCode() {
     btn.disabled = false;
     btn.textContent = '发送验证邮件';
     localStorage.removeItem('pendingRegEmail');
-    localStorage.removeItem('pendingRegPassword');
   }
 }
 
@@ -2255,9 +2241,38 @@ async function cloudSubmit() {
   } catch (e) {
     console.error('Login error:', e);
     const errMsg = e.message || '';
-    // 登录失败：可能是密码错误，也可能是账号未设置密码（注册流程未完成）
+    // 登录失败：可能是密码错误、邮箱未验证，或 Supabase 平台 bug (identities 为空)
     if (errMsg.includes('Email not confirmed') || errMsg.includes('email_not_confirmed')) {
-      $('cloudError').innerHTML = '该账号未设置密码，或注册流程未完成。请<a href="javascript:void(0)" onclick="forgotPassword()" style="color:#4f46e5;text-decoration:underline;">重置密码</a>后登录';
+      $('cloudError').innerHTML = '邮箱尚未验证，请检查邮箱中的确认链接。如未收到，可<a href="javascript:void(0)" onclick="resendConfirmation()" style="color:#4f46e5;text-decoration:underline;">重新发送</a>';
+      $('cloudError').style.display = '';
+      return;
+    }
+    // 密码登录失败，可能是 Supabase 平台 bug (identities 为空)
+    // 自动发送魔法链接作为回退登录方式
+    if (errMsg.includes('Invalid login credentials') || errMsg.includes('invalid_credentials')) {
+      $('cloudError').textContent = '正在发送邮箱登录链接...';
+      $('cloudError').style.display = '';
+      try {
+        const { error: otpErr } = await sbClient.auth.signInWithOtp({
+          email,
+          options: {
+            shouldCreateUser: false,
+            emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
+          }
+        });
+        if (otpErr) {
+          if (otpErr.message && otpErr.message.includes('User not found')) {
+            $('cloudError').textContent = '该账号不存在，请先注册';
+          } else {
+            $('cloudError').textContent = '登录失败: ' + (errMsg || '请检查邮箱和密码');
+          }
+        } else {
+          localStorage.setItem('pendingMagicLogin', 'true');
+          $('cloudError').innerHTML = '密码登录暂时不可用，已发送邮箱链接。<a href="javascript:void(0)" onclick="resendMagicLink()" style="color:#4f46e5;text-decoration:underline;">重新发送</a>或检查邮箱，点击链接即可登录';
+        }
+      } catch (e2) {
+        $('cloudError').textContent = '登录失败: ' + (errMsg || '请检查邮箱和密码');
+      }
       $('cloudError').style.display = '';
       return;
     }
@@ -2296,10 +2311,11 @@ async function resendConfirmation() {
     return;
   }
   try {
-    const { error } = await sbClient.auth.signInWithOtp({
+    // 使用 resend 重新发送注册确认邮件
+    const { error } = await sbClient.auth.resend({
+      type: 'signup',
       email,
       options: {
-        shouldCreateUser: true,
         emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
       }
     });
@@ -2307,6 +2323,43 @@ async function resendConfirmation() {
     showToast('确认邮件已重新发送，请检查邮箱');
   } catch (e) {
     console.error('Resend confirmation error:', e);
+    // 如果 resend 不可用，回退到 signInWithOtp 魔法链接
+    try {
+      const { error: otpErr } = await sbClient.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
+        }
+      });
+      if (otpErr) throw otpErr;
+      showToast('已发送邮箱登录链接，请检查邮箱');
+    } catch (e2) {
+      showToast('发送失败: ' + (e2.message || '请稍后重试'));
+    }
+  }
+}
+
+async function resendMagicLink() {
+  const email = ($('cloudEmail').value || '').trim();
+  if (!email) { showToast('请先输入邮箱地址'); return; }
+  if (!initSupabase()) {
+    showToast('服务暂不可用，请稍后重试');
+    return;
+  }
+  try {
+    const { error } = await sbClient.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
+      }
+    });
+    if (error) throw error;
+    localStorage.setItem('pendingMagicLogin', 'true');
+    showToast('登录链接已发送，请检查邮箱');
+  } catch (e) {
+    console.error('Resend magic link error:', e);
     showToast('发送失败: ' + (e.message || '请稍后重试'));
   }
 }
