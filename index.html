@@ -112,6 +112,22 @@ body {
   font-family: var(--font-body);
 }
 .cloud-btn:hover { border-color: var(--gold); color: var(--accent); background: var(--gold-soft); }
+.fullscreen-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all var(--transition);
+  font-family: var(--font-body);
+}
+.fullscreen-btn:hover { border-color: var(--gold); color: var(--accent); background: var(--gold-soft); }
+.fullscreen-btn svg { width: 16px; height: 16px; }
 .cloud-btn.logged-in { border-color: var(--success); color: var(--success); background: #f0fdf4; }
 .cloud-btn.logged-in:hover { border-color: var(--success); color: #fff; background: var(--success); }
 .cloud-status {
@@ -782,6 +798,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   .logo svg { width: 22px; height: 22px; }
   .cloud-btn { padding: 5px 10px; font-size: 0.78rem; }
   .settings-btn { padding: 5px 10px; font-size: 0.78rem; }
+  .fullscreen-btn { padding: 5px 8px; font-size: 0.78rem; }
   .main { padding: 12px; }
   .nav-tabs { top: 52px; }
   .nav-inner { padding: 0 4px; gap: 2px; }
@@ -984,6 +1001,9 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     <button class="cloud-btn" id="cloudBtn" onclick="openCloudPanel()" title="云同步">
       <span class="cloud-status local" id="cloudStatusDot"></span> <span id="cloudBtnText">未登录</span>
     </button>
+    <button class="fullscreen-btn" onclick="toggleFullscreen()" title="全屏显示">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+    </button>
     <button class="settings-btn" onclick="openSettings()" title="API 设置">
       <span class="api-status" id="apiStatusDot"></span> API 设置
     </button>
@@ -1154,7 +1174,6 @@ tr:hover td { background: rgba(201,169,110,0.06); }
             <button class="btn btn-secondary" id="btnNextCorrect" onclick="resetCorrection('translation')" style="display:none;margin-left:10px;">批改下一篇 ➤</button>
           </div>
           </div>
-        </div>
       </div>
     </div>
   </section>
@@ -1215,8 +1234,6 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           </div>
           </div>
         </div>
-      </div>
-    </div>
   </section>
 
   <!-- Tab: 批改记录 -->
@@ -1791,7 +1808,12 @@ const TTS_PROVIDERS = {
 };
 
 function saveData(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    showToast('本地存储空间不足，请清理部分数据后重试', 4000);
+    console.error('saveData error:', e);
+  }
 }
 
 let appData = loadData();
@@ -3360,6 +3382,16 @@ function handleCardClick() {
   flipCard();
 }
 
+// Helper: create Audio from blob with automatic URL revoke on end/error
+function playTTSBlob(blob, onDone) {
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  const cleanup = () => { URL.revokeObjectURL(url); if (onDone) onDone(); };
+  audio.onended = cleanup;
+  audio.onerror = cleanup;
+  return audio;
+}
+
 async function speakWord(e) {
   e.stopPropagation();
   const w = appData.words[learnIndex];
@@ -3408,8 +3440,7 @@ async function speakWord(e) {
               bytes[i / 2] = parseInt(audioHex.substring(i, i + 2), 16);
             }
             const blob = new Blob([bytes], { type: 'audio/mp3' });
-            const audio = new Audio(URL.createObjectURL(blob));
-            audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+            const audio = playTTSBlob(blob, removeSpeaking);
             await audio.play();
             played = true;
           } else {
@@ -3433,8 +3464,7 @@ async function speakWord(e) {
                     const bytes = new Uint8Array(audioHex2.length / 2);
                     for (let i = 0; i < audioHex2.length; i += 2) bytes[i / 2] = parseInt(audioHex2.substring(i, i + 2), 16);
                     const blob = new Blob([bytes], { type: 'audio/mp3' });
-                    const audio = new Audio(URL.createObjectURL(blob));
-                    audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+                    const audio = playTTSBlob(blob, removeSpeaking);
                     await audio.play(); played = true; ttsError = '';
                   }
                 }
@@ -3463,8 +3493,7 @@ async function speakWord(e) {
                   const bytes = new Uint8Array(audioHex2.length / 2);
                   for (let i = 0; i < audioHex2.length; i += 2) bytes[i / 2] = parseInt(audioHex2.substring(i, i + 2), 16);
                   const blob = new Blob([bytes], { type: 'audio/mp3' });
-                  const audio = new Audio(URL.createObjectURL(blob));
-                  audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+                  const audio = playTTSBlob(blob, removeSpeaking);
                   await audio.play(); played = true; ttsError = '';
                 }
               }
@@ -3480,8 +3509,7 @@ async function speakWord(e) {
         if (resp.ok) {
           const blob = await resp.blob();
           if (blob.size > 0) {
-            const audio = new Audio(URL.createObjectURL(blob));
-            audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+            const audio = playTTSBlob(blob, removeSpeaking);
             await audio.play();
             played = true;
           }
@@ -3511,8 +3539,7 @@ async function speakWord(e) {
             const bytes = new Uint8Array(byteChars.length);
             for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
             const blob = new Blob([bytes], { type: 'audio/mp3' });
-            const audio = new Audio(URL.createObjectURL(blob));
-            audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+            const audio = playTTSBlob(blob, removeSpeaking);
             await audio.play();
             played = true;
           } else {
@@ -3947,6 +3974,35 @@ function shuffleArray(arr) {
 }
 
 // ═══════════════════════════════════════
+// Fullscreen
+// ═══════════════════════════════════════
+function toggleFullscreen() {
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    const el = document.documentElement;
+    if (el.requestFullscreen) {
+      el.requestFullscreen();
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+    }
+  } else {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    }
+  }
+}
+
+function updateFullscreenIcon() {
+  const btn = document.querySelector('.fullscreen-btn');
+  if (!btn) return;
+  const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  btn.innerHTML = isFull
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+}
+
+// ═══════════════════════════════════════
 // Init
 // ═══════════════════════════════════════
 function init() {
@@ -3968,14 +4024,22 @@ $('modalDetail').addEventListener('click', function(e) {
 $('modalCloud').addEventListener('click', function(e) {
   if (e.target === this) closeCloudPanel();
 });
-// ESC to close modals
+// ESC to close modals — only close the topmost visible one
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
-    closeSettings();
-    $('modalDetail').classList.remove('show');
-    closeCloudPanel();
+    if ($('modalCloud').classList.contains('show')) {
+      closeCloudPanel();
+    } else if ($('modalDetail').classList.contains('show')) {
+      $('modalDetail').classList.remove('show');
+    } else if ($('modalSettings').classList.contains('show')) {
+      closeSettings();
+    }
   }
 });
+
+// Sync fullscreen button icon on state change
+document.addEventListener('fullscreenchange', updateFullscreenIcon);
+document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
 
 // ═══════════════════════════════════════
 // Article Reading
@@ -4424,8 +4488,7 @@ async function speakExample(e) {
             const bytes = new Uint8Array(audioHex.length / 2);
             for (let i = 0; i < audioHex.length; i += 2) bytes[i / 2] = parseInt(audioHex.substring(i, i + 2), 16);
             const blob = new Blob([bytes], { type: 'audio/mp3' });
-            const audio = new Audio(URL.createObjectURL(blob));
-            audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+            const audio = playTTSBlob(blob, removeSpeaking);
             await audio.play(); played = true;
           } else {
             ttsError = 'MiniMax 返回空音频';
@@ -4472,8 +4535,7 @@ async function speakExample(e) {
             const bytes = new Uint8Array(byteChars.length);
             for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
             const blob = new Blob([bytes], { type: 'audio/mp3' });
-            const audio = new Audio(URL.createObjectURL(blob));
-            audio.onended = removeSpeaking; audio.onerror = removeSpeaking;
+            const audio = playTTSBlob(blob, removeSpeaking);
             await audio.play(); played = true;
           } else {
             ttsError = '火山引擎返回空音频 (code=' + (data.code || '?') + ')';
@@ -4560,7 +4622,7 @@ async function doLookup() {
       const difficulty = parseSection(result, '难度') || '';
 
       // Parse definition: remove numbering, bold 【常用】 marks
-      const defHtml = definition
+      const defHtml = escapeHtml(definition)
         .replace(/^\d+\.\s*/gm, '')
         .replace(/【常用】/g, '<strong style="color:#e67e22;">●常用 </strong>')
         .replace(/\n/g, '<br>');
