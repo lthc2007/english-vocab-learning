@@ -1671,7 +1671,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
         <div class="form-group" id="verificationGroup" style="display:none;">
           <label class="form-label">邮箱验证码</label>
           <div style="display:flex;gap:8px;">
-            <input class="form-input" id="cloudVerificationCode" type="text" placeholder="输入6位验证码" maxlength="6" autocomplete="one-time-code" style="flex:1;letter-spacing:4px;font-size:1.1rem;font-family:monospace;text-align:center;">
+            <input class="form-input" id="cloudVerificationCode" type="text" placeholder="输入8位验证码" maxlength="8" autocomplete="one-time-code" style="flex:1;letter-spacing:4px;font-size:1.1rem;font-family:monospace;text-align:center;">
             <button class="btn btn-secondary" id="btnSendCode" onclick="sendVerificationCode()" style="white-space:nowrap;">发送验证码</button>
           </div>
           <div id="verificationCountdown" style="font-size:0.78rem;color:var(--muted);margin-top:4px;display:none;"></div>
@@ -2081,7 +2081,7 @@ async function cloudSubmit() {
     }
 
     const code = $('cloudVerificationCode').value.trim();
-    if (!code || code.length < 6) { showToast('请输入6位验证码'); return; }
+    if (!code || code.length < 8) { showToast('请输入8位验证码'); return; }
 
     if (!initSupabase()) {
       $('cloudError').textContent = '服务暂不可用，请稍后重试';
