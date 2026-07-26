@@ -582,7 +582,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
 .modal-overlay {
   display: none;
   position: fixed;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   background: rgba(58,56,53,0.4);
   z-index: 200;
   align-items: center;
@@ -1001,7 +1001,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     <button class="cloud-btn" id="cloudBtn" onclick="openCloudPanel()" title="云同步">
       <span class="cloud-status local" id="cloudStatusDot"></span> <span id="cloudBtnText">未登录</span>
     </button>
-    <button class="fullscreen-btn" onclick="toggleFullscreen()" title="全屏显示">
+    <button class="fullscreen-btn" onclick="toggleFullscreen()" title="全屏显示" aria-label="全屏显示">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
     </button>
     <button class="settings-btn" onclick="openSettings()" title="API 设置">
@@ -1045,7 +1045,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           <span style="font-size:1.5rem;font-weight:700;color:var(--accent);" id="luWord"></span>
           <span id="luDifficulty" style="display:none;"></span>
           <span style="font-size:1rem;color:var(--muted);" id="luPhonetic"></span>
-          <button class="btn-speak" id="luSpeak" onclick="lookupSpeak(event)" title="朗读单词" style="display:none;">🔊</button>
+          <button class="btn-speak" id="luSpeak" onclick="lookupSpeak(event)" title="朗读单词" aria-label="朗读单词" style="display:none;">🔊</button>
         </div>
         <!-- Definition -->
         <div style="margin-bottom:12px;">
@@ -1054,7 +1054,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
         </div>
         <!-- Examples -->
         <div style="margin-bottom:12px;" id="luExamplesArea">
-          <div class="ai-section-title">例句 <button class="btn-speak-example" id="luSpeakExample" onclick="lookupSpeakExample(event)" title="朗读例句" style="display:none;">📢</button></div>
+          <div class="ai-section-title">例句 <button class="btn-speak-example" id="luSpeakExample" onclick="lookupSpeakExample(event)" title="朗读例句" aria-label="朗读例句" style="display:none;">📢</button></div>
           <div class="ai-section-content" id="luExamples"></div>
         </div>
         <!-- Root & Affix -->
@@ -1393,13 +1393,13 @@ tr:hover td { background: rgba(201,169,110,0.06); }
       <div class="flashcard-container">
         <div class="flashcard" id="flashcard" onclick="handleCardClick()">
           <div class="word-front" id="fcFront">click</div>
-          <button class="btn-speak" id="btnSpeak" onclick="speakWord(event)" title="朗读">🔊</button>
+          <button class="btn-speak" id="btnSpeak" onclick="speakWord(event)" title="朗读" aria-label="朗读单词">🔊</button>
           <div id="fcExampleFront" style="font-size:0.95rem;color:var(--ink);margin-top:8px;line-height:1.6;text-align:center;display:none;"></div>
             <div class="word-meta" id="fcMeta" style="display:none;"></div>
           <div id="fcBack" style="display:none;">
             <div class="word-back" id="fcWordHeader"></div>
             <div class="ai-section" id="aiExample" style="display:none;">
-              <div class="ai-section-title">例句 <button class="btn-speak-example" id="btnSpeakExampleBack" onclick="speakExample(event)" title="朗读例句" style="display:none;">📢</button></div>
+              <div class="ai-section-title">例句 <button class="btn-speak-example" id="btnSpeakExampleBack" onclick="speakExample(event)" title="朗读例句" aria-label="朗读例句" style="display:none;">📢</button></div>
               <div class="ai-section-content" id="fcExampleBack"></div>
             </div>
             <div class="ai-section" id="aiSynonyms" style="display:none;">
@@ -1942,6 +1942,8 @@ async function cloudSubmit() {
   }
 
   // 注册前检查用户数量是否已达上限
+  // 注意：此为客户端检查，不保证安全性。攻击者可以绕过此检查。
+  // 建议在服务端添加严格限制：数据库 Row Level Security (RLS) + SECURITY DEFINER 函数 + 触发器限制。
   // 优先使用 RPC 函数（需在 Supabase SQL Editor 中创建 count_user_words 函数以绕过 RLS）
   // CREATE OR REPLACE FUNCTION count_user_words() RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT count(*)::integer FROM user_words; $$;
   if (cloudLoginMode === 'register') {
@@ -2005,6 +2007,8 @@ async function cloudSubmit() {
     }
   } catch (e) {
     // 登录失败时，尝试区分"账号不存在"和"密码错误"
+    // 安全提示：区分账号存在性会引入用户枚举风险（User Enumeration）。
+    // 攻击者可以通过错误信息差异判断邮箱是否已注册。生产环境建议统一返回"账号或密码错误"。
     if (cloudLoginMode === 'login') {
       // 三态：null=RPC不可用, true=邮箱存在, false=邮箱不存在
       let emailExists = null;
@@ -2621,6 +2625,8 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
 });
 
 function onTabSwitch(tab) {
+  // Clean up any running progress timers
+  Object.keys(progressTimers).forEach(k => stopProgress(k));
   if (tab === 'learn') renderLearn();
   if (tab === 'spell') initSpell();
   if (tab === 'quiz') initQuiz();
@@ -3187,6 +3193,7 @@ function parsePhoneticAndExample(w, text) {
 }
 
 async function generateAllContentBatch() {
+  try {
   if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
   const wordsToGen = appData.words.filter(w => !w.aiGenerated);
   if (wordsToGen.length === 0) { showToast('所有单词都已有 AI 学习内容'); return; }
@@ -3259,6 +3266,12 @@ ${missing.includes('对话') ? '对话: <A:... B:... 一个包含该单词的雅
   $('btnGenAll').disabled = appData.words.length === 0 || !appData.apiKey;
   $('btnGenAll').textContent = 'AI 批量生成全部内容';
   showToast(`批量生成完成: ${done}/${wordsToGen.length} 成功`);
+  } catch (e) {
+    showToast('操作失败: ' + (e.message || '未知错误'));
+    console.error(e);
+    $('btnGenAll').disabled = appData.words.length === 0 || !appData.apiKey;
+    $('btnGenAll').textContent = 'AI 批量生成全部内容';
+  }
 }
 
 // ═══════════════════════════════════════
@@ -3429,7 +3442,8 @@ async function speakWord(e) {
             output_format: 'hex',
             voice_setting: { voice_id: ttsVoice, speed: 0.85, vol: 1, pitch: 0 },
             audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
-          })
+          }),
+          signal: AbortSignal.timeout(15000)
         });
         if (resp.ok) {
           const data = await resp.json();
@@ -3456,7 +3470,8 @@ async function speakWord(e) {
                     model: ttsModel, text: speakText, stream: false, language_boost: 'English', output_format: 'hex',
                     voice_setting: { voice_id: ttsVoice, speed: 0.85, vol: 1, pitch: 0 },
                     audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
-                  })
+                  }),
+                  signal: AbortSignal.timeout(15000)
                 });
                 if (resp2.ok) {
                   const data2 = await resp2.json();
@@ -3485,7 +3500,8 @@ async function speakWord(e) {
                   model: ttsModel, text: speakText, stream: false, language_boost: 'English', output_format: 'hex',
                   voice_setting: { voice_id: ttsVoice, speed: 0.85, vol: 1, pitch: 0 },
                   audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
-                })
+                }),
+                signal: AbortSignal.timeout(15000)
               });
               if (resp2.ok) {
                 const data2 = await resp2.json();
@@ -3505,7 +3521,8 @@ async function speakWord(e) {
         const resp = await fetch(ttsUrl + '/audio/speech', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
-          body: JSON.stringify({ model: ttsModel, input: speakText, voice: ttsVoice, response_format: 'mp3', speed: 0.85 })
+          body: JSON.stringify({ model: ttsModel, input: speakText, voice: ttsVoice, response_format: 'mp3', speed: 0.85 }),
+          signal: AbortSignal.timeout(15000)
         });
         if (resp.ok) {
           const blob = await resp.blob();
@@ -3530,7 +3547,8 @@ async function speakWord(e) {
         const resp = await fetch(ttsUrl + '/api/v1/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
-          body: JSON.stringify(reqBody)
+          body: JSON.stringify(reqBody),
+          signal: AbortSignal.timeout(15000)
         });
         if (resp.ok) {
           const data = await resp.json();
@@ -4124,7 +4142,8 @@ async function callMiniMaxTTS(text, speed = 1.0) {
         model: ttsModel, text, stream: false, language_boost: 'English', output_format: 'hex',
         voice_setting: { voice_id: ttsVoice, speed: speed, vol: 1, pitch: 0 },
         audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
-      })
+      }),
+      signal: AbortSignal.timeout(15000)
     });
     if (resp.ok) {
       const data = await resp.json();
@@ -4146,7 +4165,8 @@ async function callMiniMaxTTS(text, speed = 1.0) {
             model: ttsModel, text, stream: false, language_boost: 'English', output_format: 'hex',
             voice_setting: { voice_id: ttsVoice, speed: speed, vol: 1, pitch: 0 },
             audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
-          })
+          }),
+          signal: AbortSignal.timeout(15000)
         });
         if (resp2.ok) {
           const data2 = await resp2.json();
@@ -4165,7 +4185,8 @@ async function callMiniMaxTTS(text, speed = 1.0) {
     const resp = await fetch(ttsUrl + '/audio/speech', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
-      body: JSON.stringify({ model: ttsModel, input: text, voice: ttsVoice, response_format: 'mp3', speed: speed })
+      body: JSON.stringify({ model: ttsModel, input: text, voice: ttsVoice, response_format: 'mp3', speed: speed }),
+      signal: AbortSignal.timeout(15000)
     });
     if (resp.ok) {
       const blob = await resp.blob();
@@ -4186,7 +4207,8 @@ async function callMiniMaxTTS(text, speed = 1.0) {
     const resp = await fetch(ttsUrl + '/api/v1/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
-      body: JSON.stringify(reqBody)
+      body: JSON.stringify(reqBody),
+      signal: AbortSignal.timeout(15000)
     });
     if (resp.ok) {
       const data = await resp.json();
@@ -4231,6 +4253,7 @@ function replayArticleBlob() {
 }
 
 async function startArticleRead() {
+  try {
   const text = $('articleText').value.trim();
   if (!text) { showToast('请先粘贴英文文章'); return; }
 
@@ -4330,6 +4353,18 @@ async function startArticleRead() {
   $('btnReadPause').style.display = '';
   $('btnReadDownload').style.display = 'none';
   doWebSpeechRead(text);
+  } catch (e) {
+    showToast('操作失败: ' + (e.message || '未知错误'));
+    console.error(e);
+    $('btnReadPlay').style.display = '';
+    $('btnReadStop').style.display = 'none';
+    $('btnReadPause').style.display = 'none';
+    $('btnReadResume').style.display = 'none';
+    $('btnReadDownload').style.display = 'none';
+    $('readStatus').textContent = '';
+    $('readProgressBar').style.display = 'none';
+    $('readProgressText').style.display = 'none';
+  }
 }
 
 function playArticleChunks(idx) {
@@ -4490,7 +4525,8 @@ async function speakExample(e) {
             model: ttsModel, text: speakText, stream: false, language_boost: 'English', output_format: 'hex',
             voice_setting: { voice_id: ttsVoice, speed: 0.85, vol: 1, pitch: 0 },
             audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
-          })
+          }),
+          signal: AbortSignal.timeout(15000)
         });
         if (resp.ok) {
           const data = await resp.json();
@@ -4511,7 +4547,8 @@ async function speakExample(e) {
         const resp = await fetch(ttsUrl + '/audio/speech', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
-          body: JSON.stringify({ model: ttsModel, input: speakText, voice: ttsVoice, response_format: 'mp3', speed: 0.85 })
+          body: JSON.stringify({ model: ttsModel, input: speakText, voice: ttsVoice, response_format: 'mp3', speed: 0.85 }),
+          signal: AbortSignal.timeout(15000)
         });
         if (resp.ok) {
           const blob = await resp.blob();
@@ -4535,7 +4572,8 @@ async function speakExample(e) {
         const resp = await fetch(ttsUrl + '/api/v1/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
-          body: JSON.stringify(reqBody)
+          body: JSON.stringify(reqBody),
+          signal: AbortSignal.timeout(15000)
         });
         if (resp.ok) {
           const data = await resp.json();
@@ -4781,6 +4819,7 @@ function addLookedUpWord() {
 }
 
 async function lookupSpeak(e) {
+  try {
   e.stopPropagation();
   const word = lookupData?.word;
   if (!word) return;
@@ -4788,9 +4827,15 @@ async function lookupSpeak(e) {
   btn.classList.add('speaking');
   const removeSpeaking = () => btn.classList.remove('speaking');
   await speakText(word, removeSpeaking);
+  } catch (e) {
+    showToast('操作失败: ' + (e.message || '未知错误'));
+    console.error(e);
+    $('luSpeak').classList.remove('speaking');
+  }
 }
 
 async function lookupSpeakExample(e) {
+  try {
   e.stopPropagation();
   if (!lookupData || !lookupData.examples) return;
   const btn = $('luSpeakExample');
@@ -4801,6 +4846,11 @@ async function lookupSpeakExample(e) {
   const text = firstLine.split('|')[0].trim();
   if (!text) { removeSpeaking(); return; }
   await speakText(text, removeSpeaking);
+  } catch (e) {
+    showToast('操作失败: ' + (e.message || '未知错误'));
+    console.error(e);
+    $('luSpeakExample').classList.remove('speaking');
+  }
 }
 
 // Shared speak helper: try MiniMax TTS, fallback to browser
@@ -4823,7 +4873,8 @@ async function speakText(text, onDone) {
             model: ttsModel, text, stream: false, language_boost: 'English', output_format: 'hex',
             voice_setting: { voice_id: ttsVoice, speed: 0.85, vol: 1, pitch: 0 },
             audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
-          })
+          }),
+          signal: AbortSignal.timeout(15000)
         });
         if (resp.ok) {
           const data = await resp.json();
@@ -4840,7 +4891,8 @@ async function speakText(text, onDone) {
         const resp = await fetch(ttsUrl + '/audio/speech', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
-          body: JSON.stringify({ model: ttsModel, input: text, voice: ttsVoice, response_format: 'mp3', speed: 0.85 })
+          body: JSON.stringify({ model: ttsModel, input: text, voice: ttsVoice, response_format: 'mp3', speed: 0.85 }),
+          signal: AbortSignal.timeout(15000)
         });
         if (resp.ok) {
           const blob = await resp.blob();
@@ -4862,7 +4914,8 @@ async function speakText(text, onDone) {
         const resp = await fetch(ttsUrl + '/api/v1/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
-          body: JSON.stringify(reqBody)
+          body: JSON.stringify(reqBody),
+          signal: AbortSignal.timeout(15000)
         });
         if (resp.ok) {
           const data = await resp.json();
@@ -4934,6 +4987,7 @@ function selectWritingDiff(diff, btn) {
 }
 
 async function generateTranslation() {
+  try {
   if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
   $('btnGenTrans').disabled = true;
   $('transGenLoading').style.display = '';
@@ -4957,9 +5011,17 @@ async function generateTranslation() {
   $('transReference').textContent = parseSection(result, '译文');
   $('transKeyPoints').textContent = parseSection(result, '重难点');
   $('transGenResult').style.display = '';
+  } catch (e) {
+    showToast('操作失败: ' + (e.message || '未知错误'));
+    console.error(e);
+    $('btnGenTrans').disabled = false;
+    stopProgress('transGenProgress');
+    $('transGenLoading').style.display = 'none';
+  }
 }
 
 async function correctTranslation() {
+  try {
   const original = $('correctOriginal').value.trim();
   const translation = $('correctTranslation').value.trim();
   if (!original || !translation) { showToast('请填写中文原文和你的译文'); return; }
@@ -5005,9 +5067,17 @@ AI范文: <AI根据中文原文翻译的英文范文>
   $('btnSaveCorrect').style.display = '';
   $('btnNextCorrect').style.display = '';
   $('correctSavedMsg').style.display = 'none';
+  } catch (e) {
+    showToast('操作失败: ' + (e.message || '未知错误'));
+    console.error(e);
+    $('btnCorrectTrans').disabled = false;
+    stopProgress('correctProgress');
+    $('correctLoading').style.display = 'none';
+  }
 }
 
 async function correctWriting() {
+  try {
   const topic = $('writingTopic').value.trim();
   const essay = $('writingEssay').value.trim();
   if (!topic || !essay) { showToast('请填写作文题目和你的作文'); return; }
@@ -5056,6 +5126,13 @@ AI范文: <AI根据题目写的英文范文>
   $('btnSaveWriting').style.display = '';
   $('btnNextWriting').style.display = '';
   $('writingSavedMsg').style.display = 'none';
+  } catch (e) {
+    showToast('操作失败: ' + (e.message || '未知错误'));
+    console.error(e);
+    $('btnWritingCorrect').disabled = false;
+    stopProgress('writingProgress');
+    $('writingLoading').style.display = 'none';
+  }
 }
 
 // ═══════════════════════════════════════
