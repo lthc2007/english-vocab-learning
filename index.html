@@ -1855,7 +1855,26 @@ function initSupabase() {
   if (sbClient) return true; // 单例：已初始化则直接返回
   if (window.supabase) {
     try {
-      sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: {
+          flowType: 'implicit',          // 显式声明 implicit 流程
+          detectSessionInUrl: true,      // 让 SDK 自动处理 #access_token 回调
+          persistSession: true
+        }
+      });
+
+      // ★ 关键：监听 auth 事件，可靠捕获魔法链接登录和密码重置
+      sbClient.auth.onAuthStateChange((event, session) => {
+        console.log('onAuthStateChange:', event, session?.user?.email);
+        if (event === 'SIGNED_IN' && session) {
+          handleAuthSignIn(session);
+        } else if (event === 'PASSWORD_RECOVERY') {
+          handlePasswordRecovery();
+        } else if (event === 'SIGNED_OUT') {
+          updateCloudUI(false);
+        }
+      });
+
       return true;
     } catch (e) {
       console.error('Supabase init error:', e);
@@ -1865,125 +1884,75 @@ function initSupabase() {
   return false;
 }
 
+// 在 onAuthStateChange 的 SIGNED_IN 事件里调用
+// 此时 session 一定有效，没有竞态
+async function handleAuthSignIn(session) {
+  if (!session?.user?.email) return;
+  updateCloudUI(true, session.user.email);
+
+  const pendingEmail = localStorage.getItem('pendingRegEmail');
+  const pendingPassword = localStorage.getItem('pendingRegPassword');
+
+  if (pendingEmail && pendingEmail === session.user.email && pendingPassword) {
+    // 注册流程：魔法链接登录成功，现在设置密码
+    console.log('检测到待设置密码，调用 updateUser...');
+    try {
+      const { error: updateErr } = await sbClient.auth.updateUser({ password: pendingPassword });
+      if (updateErr) {
+        console.error('设置密码失败:', updateErr);
+        showToast('注册成功！但密码设置失败，请用"忘记密码"重置');
+      } else {
+        console.log('密码设置成功！');
+        showToast('注册成功！密码已设置，后续可用密码登录 ✓');
+      }
+    } catch (e) {
+      console.error('设置密码异常:', e);
+      showToast('注册成功！但密码设置失败，请用"忘记密码"重置');
+    }
+    localStorage.removeItem('pendingRegEmail');
+    localStorage.removeItem('pendingRegPassword');
+    clearVerificationState();
+    // 清除 URL 中的 hash
+    if (window.location.hash && window.location.hash.includes('access_token')) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }
+}
+
+// 密码重置流程
+async function handlePasswordRecovery() {
+  const newPassword = prompt('请输入新密码（至少6位）：');
+  if (newPassword && newPassword.length >= 6) {
+    const { error } = await sbClient.auth.updateUser({ password: newPassword });
+    if (error) {
+      showToast('密码重置失败: ' + error.message);
+    } else {
+      showToast('密码已重置！请牢记新密码 ✓');
+    }
+  } else if (newPassword !== null) {
+    showToast('密码至少需要6位，重置已取消');
+  }
+}
+
 // Check if session exists and restore on page load
 async function checkCloudSession() {
   if (!initSupabase()) {
     updateCloudUI(false);
     return;
   }
-
   try {
-    // ===== 步骤1：处理 PKCE 邮件确认流程 =====
-    // 检查 URL 中是否有 token_hash 和 type 参数（PKCE 流程）
-    const urlParams = new URLSearchParams(window.location.search);
-    const tokenHash = urlParams.get('token_hash');
-    const verifyType = urlParams.get('type');
-
-    if (tokenHash && (verifyType === 'email' || verifyType === 'signup' || verifyType === 'magiclink' || verifyType === 'recovery')) {
-      const isRecovery = verifyType === 'recovery';
-      console.log('检测到验证参数，开始 verifyOtp...', { tokenHash: tokenHash.substring(0,10)+'...', type: verifyType, isRecovery });
-      try {
-        const { data: verifyData, error: verifyError } = await sbClient.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: verifyType === 'signup' ? 'email' : verifyType === 'magiclink' ? 'email' : verifyType
-        });
-        if (verifyError) {
-          console.error('verifyOtp 失败:', verifyError);
-        } else {
-          console.log('verifyOtp 成功', verifyData);
-          if (isRecovery) {
-            // 密码重置流程：用户已登录，提示设置新密码
-            const newPassword = prompt('请输入新密码（至少6位）：');
-            if (newPassword && newPassword.length >= 6) {
-              const { error: updateErr } = await sbClient.auth.updateUser({ password: newPassword });
-              if (updateErr) {
-                console.error('设置新密码失败:', updateErr);
-                showToast('密码重置失败: ' + updateErr.message);
-              } else {
-                showToast('密码已重置！请牢记新密码 ✓');
-              }
-            } else if (newPassword !== null) {
-              showToast('密码至少需要6位，重置已取消');
-            }
-          }
-        }
-        // 清除 URL 中的 PKCE 参数
-        window.history.replaceState(null, '', window.location.pathname);
-      } catch (verifyCatch) {
-        console.error('verifyOtp 异常:', verifyCatch);
-      }
-    }
-
-    // ===== 步骤2：检查是否有来自隐式流程的 hash 参数 =====
-    // Supabase 隐式流程会在 URL hash 中放置 access_token 和 refresh_token
-    if (window.location.hash && window.location.hash.includes('access_token')) {
-      console.log('检测到隐式流程 hash 参数，等待客户端处理...');
-      // supabase-js 客户端会自动处理 hash，但需要给一点时间
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
-
-    // ===== 步骤3：获取 session =====
-    const { data: { session }, error: sessionErr } = await sbClient.auth.getSession();
-    if (sessionErr) throw sessionErr;
-
-    if (!session) {
-      updateCloudUI(false);
-      return;
-    }
-
-    // ===== 步骤4：用 getUser() 获取服务器真实状态 =====
-    // getSession() 返回缓存，getUser() 强制请求服务器验证邮箱是否已确认
-    const { data: userData, error: userErr } = await sbClient.auth.getUser();
-    const user = userData?.user;
-    const emailConfirmed = user?.email_confirmed_at;
-
-    console.log('Session + User 状态:', {
-      email: session.user.email,
-      session_email_confirmed: session.user.email_confirmed_at,
-      server_email_confirmed: emailConfirmed,
-      id: user?.id || session.user.id
-    });
-
-    updateCloudUI(true, session.user.email);
-
-    // ===== 步骤5：处理注册后邮件链接跳转 =====
-    const pendingEmail = localStorage.getItem('pendingRegEmail');
-    const pendingPassword = localStorage.getItem('pendingRegPassword');
-    if (pendingEmail && pendingEmail === session.user.email) {
-      if (pendingPassword) {
-        // 注册流程：通过魔法链接登录后，设置密码
-        console.log('检测到待设置密码，调用 updateUser...');
-        try {
-          const { error: updateErr } = await sbClient.auth.updateUser({ password: pendingPassword });
-          if (updateErr) {
-            console.error('设置密码失败:', updateErr);
-            showToast('注册成功！但密码设置失败，请使用忘记密码功能');
-          } else {
-            console.log('密码设置成功！');
-            showToast('注册成功！密码已设置，后续可用密码登录 ✓');
-          }
-        } catch (updateCatch) {
-          console.error('设置密码异常:', updateCatch);
-          showToast('注册成功！但密码设置失败，请使用忘记密码功能');
-        }
-        localStorage.removeItem('pendingRegEmail');
-        localStorage.removeItem('pendingRegPassword');
-        clearVerificationState();
-      } else if (emailConfirmed) {
-        // 旧流程兼容：signUp 方式，邮箱已确认
-        localStorage.removeItem('pendingRegEmail');
-        localStorage.removeItem('pendingRegPassword');
-        clearVerificationState();
-        showToast('注册成功！邮箱已验证 ✓');
-      } else {
-        // 邮箱未确认
-        console.warn('⚠️ 邮箱尚未确认！email_confirmed_at 为 null');
-        showToast('注册成功，但邮箱尚未确认，请检查邮箱中的验证链接');
-      }
-      // 清除 URL 中的 hash 参数
+    // detectSessionInUrl 会自动处理 URL 中的 hash（如果有）
+    // 注册/密码重置等后续逻辑由 onAuthStateChange 处理
+    // 这里只需从 localStorage 恢复已有的 session
+    const { data: { session } } = await sbClient.auth.getSession();
+    if (session) {
+      updateCloudUI(true, session.user.email);
+      // 如果 URL 中还有 hash 残留，清理它
       if (window.location.hash && window.location.hash.includes('access_token')) {
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        window.history.replaceState(null, '', window.location.pathname);
       }
+    } else {
+      updateCloudUI(false);
     }
   } catch (e) {
     console.error('Session check error:', e);
@@ -2286,11 +2255,10 @@ async function cloudSubmit() {
   } catch (e) {
     console.error('Login error:', e);
     const errMsg = e.message || '';
-    // 检查是否为邮箱未确认错误
+    // 登录失败：可能是密码错误，也可能是账号未设置密码（注册流程未完成）
     if (errMsg.includes('Email not confirmed') || errMsg.includes('email_not_confirmed')) {
-      $('cloudError').innerHTML = '邮箱尚未验证，请检查邮箱中的验证链接。如未收到，可<a href="javascript:void(0)" onclick="resendConfirmation()" style="color:#4f46e5;text-decoration:underline;">重新发送</a>';
+      $('cloudError').innerHTML = '该账号未设置密码，或注册流程未完成。请<a href="javascript:void(0)" onclick="forgotPassword()" style="color:#4f46e5;text-decoration:underline;">重置密码</a>后登录';
       $('cloudError').style.display = '';
-      $('cloudError').dataset.pendingEmail = email;
       return;
     }
     // 登录失败时，尝试区分"账号不存在"和"密码错误"
@@ -2300,8 +2268,7 @@ async function cloudSubmit() {
       if (!rpcErr && typeof exists === 'boolean') emailExists = exists;
     } catch (rpcE) { /* RPC 不可用 */ }
     if (emailExists === true) {
-      $('cloudError').innerHTML = '密码错误，或邮箱尚未验证。请检查密码，或<a href="javascript:void(0)" onclick="resendConfirmation()" style="color:#4f46e5;text-decoration:underline;">重新发送验证邮件</a>';
-      $('cloudError').dataset.pendingEmail = email;
+      $('cloudError').innerHTML = '密码错误。如果忘记密码，可<a href="javascript:void(0)" onclick="forgotPassword()" style="color:#4f46e5;text-decoration:underline;">重置密码</a>';
     } else if (emailExists === false) {
       $('cloudError').textContent = '该账号不存在，请先注册';
     } else {
