@@ -2552,6 +2552,7 @@ async function testTtsConnection() {
         result.textContent = '连接失败: HTTP ' + resp.status + (err ? ' — ' + err.substring(0, 200) : '');
         result.style.color = '#e74c3c';
       }
+    }
   } catch (e) {
     result.textContent = '连接失败: ' + (e.name === 'TimeoutError' ? '请求超时' : e.message);
     result.style.color = '#e74c3c';
