@@ -1724,7 +1724,7 @@ function loadData() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch (e) { /* ignore */ }
-  return { apiKey: '', apiUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', provider: 'deepseek',
+  return { apiKey: '', apiUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-pro', provider: 'deepseek',
     ttsKey: '', ttsAppId: '', ttsProvider: 'minimax', ttsUrl: 'https://api.minimaxi.com', ttsModel: 'speech-2.8-hd', ttsVoice: 'English_Graceful_Lady',
     words: [] };
 }
@@ -1734,7 +1734,7 @@ const PROVIDERS = {
   deepseek: {
     name: 'DeepSeek',
     url: 'https://api.deepseek.com/v1',
-    models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'],
+    models: ['deepseek-v4-pro', 'deepseek-v4-flash'],
     keyHint: '获取 API Key: <a href="https://platform.deepseek.com/api_keys" target="_blank" style="color:var(--accent);">platform.deepseek.com</a>',
     tts: false
   },
@@ -3013,7 +3013,7 @@ async function callAI(prompt, maxTokens = 1500) {
         'Authorization': 'Bearer ' + appData.apiKey
       },
       body: JSON.stringify({
-        model: appData.model || 'deepseek-chat',
+        model: appData.model || 'deepseek-v4-pro',
         messages: [
           { role: 'system', content: '你是一个专业的英语学习助手。请严格按照用户要求的格式输出内容，不要添加额外说明。' },
           { role: 'user', content: prompt }
