@@ -3425,6 +3425,7 @@ async function edgeTTSSynthesize(text, voice, speed) {
   return new Promise((resolve, reject) => {
     try {
       const ws = new WebSocket(EDGE_TTS_URL);
+      ws.binaryType = 'arraybuffer';
       const audioChunks = [];
       let timer;
 
@@ -3494,6 +3495,8 @@ async function edgeTTSSynthesize(text, voice, speed) {
           resolve(new Blob(audioChunks, { type: 'audio/mp3' }));
         } else if (e.code !== 1000) {
           reject(new Error('Edge TTS connection closed with code ' + e.code));
+        } else {
+          reject(new Error('Edge TTS returned no audio'));
         }
       };
     } catch (e) {
