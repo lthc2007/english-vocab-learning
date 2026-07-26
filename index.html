@@ -1669,11 +1669,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           <input class="form-input" id="cloudConfirmPassword" type="password" placeholder="再次输入密码">
         </div>
         <div class="form-group" id="verificationGroup" style="display:none;">
-          <label class="form-label">邮箱验证</label>
-          <div style="display:flex;gap:8px;">
-            <input class="form-input" id="cloudVerificationCode" type="text" placeholder="输入6位验证码" maxlength="6" autocomplete="one-time-code" style="flex:1;">
-            <button class="btn btn-primary" id="btnSendCode" onclick="sendVerificationCode()" style="white-space:nowrap;">发送验证码</button>
-          </div>
+          <button class="btn btn-primary" id="btnSendCode" onclick="sendVerificationCode()" style="width:100%;">发送验证邮件</button>
           <div id="verificationSentMsg" style="display:none;margin-top:8px;padding:10px 12px;background:var(--success-soft);border-radius:8px;border:1px solid var(--success);">
             <div style="font-size:0.9rem;color:var(--success);font-weight:600;">✅ 验证邮件已发送</div>
             <div style="font-size:0.82rem;color:var(--ink);margin-top:4px;">请查看邮箱，<strong>点击邮件中的链接</strong>即可完成注册。如未收到，请检查垃圾邮件箱。</div>
@@ -1686,12 +1682,9 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           <button class="btn btn-secondary" onclick="closeCloudPanel()">取消</button>
         </div>
         <div class="cloud-info" id="cloudInfoRegister" style="margin-top:16px;">
-          <strong>🔐 注册即用：</strong>输入邮箱和密码即可创建账号，数据自动同步到云端。<br>
+          <strong>🔐 注册说明：</strong>输入邮箱和密码，点击"发送验证邮件"，然后前往邮箱<strong>点击链接</strong>即可完成注册。<br>
           <span style="font-size:0.75rem;color:var(--muted);">数据通过 Supabase 加密存储，仅你自己可见。</span>
         </div>
-        <div class="cloud-info" id="cloudInfoVerification" style="display:none;margin-top:16px;background:var(--gold-soft);border-radius:8px;padding:12px;">
-          <strong>📧 验证说明：</strong>点击"发送验证码"后，系统会向你的邮箱发送一封验证邮件。<br>
-          <span style="font-size:0.75rem;color:var(--muted);">点击邮件中的链接即可完成注册。也可以在下方输入邮件中的6位验证码进行验证。如未收到，请检查垃圾邮件箱。</span>
         </div>
       </div>
     </div>
@@ -1954,7 +1947,6 @@ function switchLoginTab(tab) {
   $('verificationGroup').style.display = tab === 'register' ? '' : 'none';
   $('verificationSentMsg').style.display = 'none';
   $('cloudInfoRegister').style.display = tab === 'register' ? '' : 'none';
-  $('cloudInfoVerification').style.display = 'none';
   $('btnCloudSubmit').textContent = tab === 'login' ? '登录' : '注册';
   $('cloudError').style.display = 'none';
   clearVerificationState();
@@ -1965,7 +1957,6 @@ function clearCloudForm() {
   $('cloudEmail').value = '';
   $('cloudPassword').value = '';
   $('cloudConfirmPassword').value = '';
-  $('cloudVerificationCode').value = '';
   $('cloudError').style.display = 'none';
 }
 
@@ -1974,14 +1965,12 @@ function clearVerificationState() {
   verificationTimer = null;
   verificationCodeSent = false;
   $('btnSendCode').disabled = false;
-  $('btnSendCode').textContent = '发送验证码';
+  $('btnSendCode').textContent = '发送验证邮件';
   $('verificationSentMsg').style.display = 'none';
   $('verificationCountdown').style.display = 'none';
   $('btnCloudSubmit').textContent = '注册';
   $('btnCloudSubmit').disabled = false;
-  $('cloudVerificationCode').value = '';
   $('cloudInfoRegister').style.display = '';
-  $('cloudInfoVerification').style.display = 'none';
 }
 
 function startVerificationCountdown() {
@@ -2049,14 +2038,14 @@ async function sendVerificationCode() {
       $('cloudError').textContent = '无法验证注册名额，请稍后重试';
       $('cloudError').style.display = '';
       btn.disabled = false;
-      btn.textContent = '发送验证码';
+      btn.textContent = '发送验证邮件';
       return;
     }
     if (userCount >= 30) {
       $('cloudError').textContent = '注册人数已达上限（30人），暂时无法注册新账号';
       $('cloudError').style.display = '';
       btn.disabled = false;
-      btn.textContent = '发送验证码';
+      btn.textContent = '发送验证邮件';
       return;
     }
 
@@ -2088,18 +2077,16 @@ async function sendVerificationCode() {
     verificationCodeSent = true;
     $('verificationSentMsg').style.display = '';
     $('btnSendCode').textContent = '已发送';
-    $('btnCloudSubmit').textContent = '验证并注册';
-    $('btnCloudSubmit').disabled = false;
-    $('cloudVerificationCode').focus();
+    $('btnCloudSubmit').textContent = '已发送验证邮件';
+    $('btnCloudSubmit').disabled = true;
     $('cloudInfoRegister').style.display = 'none';
-    $('cloudInfoVerification').style.display = '';
     showToast('验证邮件已发送，请检查邮箱');
     startVerificationCountdown();
   } catch (e) {
     $('cloudError').textContent = '发送失败: ' + (e.message || '请稍后重试');
     $('cloudError').style.display = '';
     btn.disabled = false;
-    btn.textContent = '发送验证码';
+    btn.textContent = '发送验证邮件';
     localStorage.removeItem('pendingRegEmail');
     localStorage.removeItem('pendingRegPassword');
   }
@@ -2117,76 +2104,8 @@ async function cloudSubmit() {
     const confirm = $('cloudConfirmPassword').value.trim();
     if (password !== confirm) { showToast('两次密码输入不一致'); return; }
 
-    // 注册模式：必须先发送验证码
-    if (!verificationCodeSent) {
-      showToast('请先点击"发送验证码"获取邮箱验证码');
-      return;
-    }
-
-    const code = $('cloudVerificationCode').value.trim();
-    if (!code || code.length < 6) { showToast('请输入6位验证码'); return; }
-
-    if (!initSupabase()) {
-      $('cloudError').textContent = '服务暂不可用，请稍后重试';
-      $('cloudError').style.display = '';
-      return;
-    }
-
-    $('btnCloudSubmit').disabled = true;
-    $('btnCloudSubmit').textContent = '验证中...';
-
-    try {
-      // Verify the OTP code
-      const { data: verifyData, error: verifyError } = await sbClient.auth.verifyOtp({
-        email,
-        token: code,
-        type: 'signup'
-      });
-
-      if (verifyError) {
-        if (verifyError.message && verifyError.message.includes('expired')) {
-          $('cloudError').textContent = '验证码已过期，请重新发送';
-        } else if (verifyError.message && verifyError.message.includes('Invalid')) {
-          $('cloudError').textContent = '验证码错误，请检查后重新输入';
-        } else {
-          throw verifyError;
-        }
-        $('cloudError').style.display = '';
-        $('btnCloudSubmit').disabled = false;
-        $('btnCloudSubmit').textContent = '验证并注册';
-        return;
-      }
-
-      if (verifyData.session) {
-        // OTP verified, user is logged in. Now set the password.
-        try {
-          const { error: pwdError } = await sbClient.auth.updateUser({ password });
-          if (pwdError) {
-            showToast('密码设置失败: ' + pwdError.message);
-          }
-        } catch (pwdE) {
-          console.error('Password update error:', pwdE);
-        }
-
-        localStorage.removeItem('pendingRegEmail');
-        localStorage.removeItem('pendingRegPassword');
-        clearVerificationState();
-        updateCloudUI(true, verifyData.user.email);
-        showToast('注册成功！邮箱已验证 ✓');
-        closeCloudPanel();
-        setTimeout(() => cloudDownload(), 500);
-      } else {
-        $('cloudError').textContent = '验证失败，请重试';
-        $('cloudError').style.display = '';
-        $('btnCloudSubmit').disabled = false;
-        $('btnCloudSubmit').textContent = '验证并注册';
-      }
-    } catch (e) {
-      $('cloudError').textContent = e.message || '验证失败，请重试';
-      $('cloudError').style.display = '';
-      $('btnCloudSubmit').disabled = false;
-      $('btnCloudSubmit').textContent = '验证并注册';
-    }
+    // 注册模式：直接发送验证邮件，用户点击邮件链接完成注册
+    sendVerificationCode();
     return;
   }
 
