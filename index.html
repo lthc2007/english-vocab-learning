@@ -1705,6 +1705,25 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   </div>
 </div>
 
+<!-- Password Reset Modal -->
+<div class="modal-overlay" id="modalResetPassword">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-title">🔑 设置新密码</div>
+    <div class="form-group">
+      <label class="form-label">新密码（至少6位）</label>
+      <div style="position:relative;">
+        <input class="form-input" id="resetNewPassword" type="text" placeholder="请输入新密码" style="padding-right:40px;">
+        <button type="button" class="pwd-toggle" onclick="togglePassword('resetNewPassword', this)" title="隐藏密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;">🙈</button>
+      </div>
+    </div>
+    <div id="resetPwdError" style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;"></div>
+    <div style="display:flex;gap:12px;">
+      <button class="btn btn-primary" id="btnResetPwdConfirm" onclick="confirmResetPassword()" style="flex:1;">确认重置</button>
+      <button class="btn btn-secondary" onclick="closeResetPassword()">取消</button>
+    </div>
+  </div>
+</div>
+
 <!-- Detail Modal -->
 <div class="modal-overlay" id="modalDetail">
   <div class="modal" style="max-width:640px;">
@@ -1889,19 +1908,46 @@ async function handleAuthSignIn(session) {
   }
 }
 
-// 密码重置流程
-async function handlePasswordRecovery() {
-  const newPassword = prompt('请输入新密码（至少6位）：');
-  if (newPassword && newPassword.length >= 6) {
+// 密码重置流程：打开模态弹窗输入新密码
+function handlePasswordRecovery() {
+  $('resetNewPassword').value = '';
+  $('resetPwdError').style.display = 'none';
+  $('modalResetPassword').classList.add('show');
+}
+
+function closeResetPassword() {
+  $('modalResetPassword').classList.remove('show');
+}
+
+async function confirmResetPassword() {
+  const newPassword = $('resetNewPassword').value.trim();
+  if (!newPassword) {
+    $('resetPwdError').textContent = '请输入新密码';
+    $('resetPwdError').style.display = '';
+    return;
+  }
+  if (newPassword.length < 6) {
+    $('resetPwdError').textContent = '密码至少需要6位';
+    $('resetPwdError').style.display = '';
+    return;
+  }
+  $('btnResetPwdConfirm').disabled = true;
+  $('btnResetPwdConfirm').textContent = '重置中...';
+  try {
     const { error } = await sbClient.auth.updateUser({ password: newPassword });
     if (error) {
-      showToast('密码重置失败: ' + error.message);
+      $('resetPwdError').textContent = '重置失败: ' + error.message;
+      $('resetPwdError').style.display = '';
     } else {
+      closeResetPassword();
       showToast('密码已重置！请牢记新密码 ✓');
     }
-  } else if (newPassword !== null) {
-    showToast('密码至少需要6位，重置已取消');
+  } catch (e) {
+    $('resetPwdError').textContent = '重置失败: ' + (e.message || '请稍后重试');
+    $('resetPwdError').style.display = '';
   }
+  $('btnResetPwdConfirm').disabled = false;
+  $('btnResetPwdConfirm').textContent = '确认重置';
 }
 
 // Check if session exists and restore on page load
@@ -4160,6 +4206,9 @@ $('modalDetail').addEventListener('click', function(e) {
 $('modalCloud').addEventListener('click', function(e) {
   if (e.target === this) closeCloudPanel();
 });
+$('modalResetPassword').addEventListener('click', function(e) {
+  if (e.target === this) closeResetPassword();
+});
 // ESC to close modals — only close the topmost visible one
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
@@ -4167,6 +4216,8 @@ document.addEventListener('keydown', function(e) {
       closeCloudPanel();
     } else if ($('modalDetail').classList.contains('show')) {
       $('modalDetail').classList.remove('show');
+    } else if ($('modalResetPassword').classList.contains('show')) {
+      closeResetPassword();
     } else if ($('modalSettings').classList.contains('show')) {
       closeSettings();
     }
