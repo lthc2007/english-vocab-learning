@@ -1843,6 +1843,7 @@ const SUPABASE_URL = 'https://mmdhtyuyirukvtmfzeby.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_rPnHnnwRKm-fi14h_zWE6w_SJVMO61c';
 
 function initSupabase() {
+  if (sbClient) return true; // 单例：已初始化则直接返回
   if (window.supabase) {
     try {
       sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -1861,27 +1862,84 @@ async function checkCloudSession() {
     updateCloudUI(false);
     return;
   }
+
   try {
-    const { data: { session }, error } = await sbClient.auth.getSession();
-    if (error) throw error;
-    if (session) {
-      console.log('Session user:', { email: session.user.email, email_confirmed_at: session.user.email_confirmed_at, id: session.user.id });
-      updateCloudUI(true, session.user.email);
-      // 处理邮件确认链接跳转后的注册
-      const pendingEmail = localStorage.getItem('pendingRegEmail');
-      if (pendingEmail && pendingEmail === session.user.email) {
-        // signUp 已设置密码，只需清理 pending 数据
+    // ===== 步骤1：处理 PKCE 邮件确认流程 =====
+    // 检查 URL 中是否有 token_hash 和 type 参数（PKCE 流程）
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenHash = urlParams.get('token_hash');
+    const verifyType = urlParams.get('type');
+
+    if (tokenHash && (verifyType === 'email' || verifyType === 'signup')) {
+      console.log('检测到 PKCE 确认参数，开始 verifyOtp...', { tokenHash: tokenHash.substring(0,10)+'...', type: verifyType });
+      try {
+        const { data: verifyData, error: verifyError } = await sbClient.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: verifyType === 'signup' ? 'email' : verifyType
+        });
+        if (verifyError) {
+          console.error('verifyOtp 失败:', verifyError);
+        } else {
+          console.log('verifyOtp 成功，邮箱已确认', verifyData);
+        }
+        // 清除 URL 中的 PKCE 参数
+        window.history.replaceState(null, '', window.location.pathname);
+      } catch (verifyCatch) {
+        console.error('verifyOtp 异常:', verifyCatch);
+      }
+    }
+
+    // ===== 步骤2：检查是否有来自隐式流程的 hash 参数 =====
+    // Supabase 隐式流程会在 URL hash 中放置 access_token 和 refresh_token
+    if (window.location.hash && window.location.hash.includes('access_token')) {
+      console.log('检测到隐式流程 hash 参数，等待客户端处理...');
+      // supabase-js 客户端会自动处理 hash，但需要给一点时间
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    // ===== 步骤3：获取 session =====
+    const { data: { session }, error: sessionErr } = await sbClient.auth.getSession();
+    if (sessionErr) throw sessionErr;
+
+    if (!session) {
+      updateCloudUI(false);
+      return;
+    }
+
+    // ===== 步骤4：用 getUser() 获取服务器真实状态 =====
+    // getSession() 返回缓存，getUser() 强制请求服务器验证邮箱是否已确认
+    const { data: userData, error: userErr } = await sbClient.auth.getUser();
+    const user = userData?.user;
+    const emailConfirmed = user?.email_confirmed_at;
+
+    console.log('Session + User 状态:', {
+      email: session.user.email,
+      session_email_confirmed: session.user.email_confirmed_at,
+      server_email_confirmed: emailConfirmed,
+      id: user?.id || session.user.id
+    });
+
+    updateCloudUI(true, session.user.email);
+
+    // ===== 步骤5：处理邮件确认链接跳转后的注册 =====
+    const pendingEmail = localStorage.getItem('pendingRegEmail');
+    if (pendingEmail && pendingEmail === session.user.email) {
+      if (emailConfirmed) {
+        // 邮箱已确认，注册成功
         localStorage.removeItem('pendingRegEmail');
         localStorage.removeItem('pendingRegPassword');
         clearVerificationState();
         showToast('注册成功！邮箱已验证 ✓');
-        // 清除 URL 中的 hash 参数（Supabase 认证回调残留）
-        if (window.location.hash && window.location.hash.includes('access_token')) {
-          window.history.replaceState(null, '', window.location.pathname + window.location.search);
-        }
+      } else {
+        // 邮箱未确认！可能是 Supabase 服务端确认有延迟或 trigger 报错
+        console.warn('⚠️ 邮箱尚未确认！email_confirmed_at 为 null');
+        showToast('注册成功，但邮箱尚未确认，请检查邮箱中的验证链接');
+        // 保留 pending 数据，以便后续重试
       }
-    } else {
-      updateCloudUI(false);
+      // 清除 URL 中的 hash 参数
+      if (window.location.hash && window.location.hash.includes('access_token')) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
     }
   } catch (e) {
     console.error('Session check error:', e);
