@@ -583,12 +583,12 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   display: none;
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
-  background: rgba(58,56,53,0.4);
+  background: rgba(58,56,53,0.55);
   z-index: 200;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .modal-overlay.show { display: flex; }
 .modal {
@@ -1651,7 +1651,11 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     <div class="modal-title">☁️ 云同步</div>
     <!-- 未登录视图 -->
     <div id="cloudLoginView">
-      <div class="login-tabs" style="text-align:center;font-size:0.9rem;color:var(--muted);margin-bottom:4px;">登录 / 注册</div>
+      <div class="login-tabs">
+        <button class="login-tab active" id="tabLogin" onclick="switchLoginTab('login')">登录</button>
+        <button class="login-tab" id="tabRegister" onclick="switchLoginTab('register')">注册</button>
+      </div>
+      <!-- 登录表单 -->
       <div id="loginForm">
         <div class="form-group">
           <label class="form-label">邮箱</label>
@@ -1664,26 +1668,43 @@ tr:hover td { background: rgba(201,169,110,0.06); }
             <button type="button" class="pwd-toggle" onclick="togglePassword('cloudPassword', this)" title="显示密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;">👁️</button>
           </div>
         </div>
-        <div class="form-group" id="confirmPasswordGroup">
-          <label class="form-label">确认密码</label>
-          <div style="position:relative;">
-            <input class="form-input" id="cloudConfirmPassword" type="password" placeholder="再次输入密码" style="padding-right:40px;">
-            <button type="button" class="pwd-toggle" onclick="togglePassword('cloudConfirmPassword', this)" title="显示密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;">👁️</button>
-          </div>
-        </div>
         <div id="cloudError" style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;"></div>
         <div style="display:flex;gap:12px;">
           <button class="btn btn-primary" id="btnCloudLogin" onclick="cloudSubmit('login')" style="flex:1;">登录</button>
-          <button class="btn btn-accent" id="btnCloudRegister" onclick="cloudSubmit('register')" style="flex:1;background:var(--success);">注册</button>
           <button class="btn btn-secondary" onclick="closeCloudPanel()">取消</button>
         </div>
         <div style="text-align:right;margin-top:8px;">
           <a href="javascript:void(0)" onclick="forgotPassword()" style="font-size:0.82rem;color:var(--muted);text-decoration:underline;">忘记密码？</a>
         </div>
-        <div class="cloud-info" id="cloudInfoHint" style="margin-top:16px;font-size:0.82rem;color:var(--muted);">
-          输入邮箱和密码即可完成注册，无需邮箱验证。<br>数据通过 Supabase 加密存储，仅你自己可见。
+      </div>
+      <!-- 注册表单 -->
+      <div id="registerForm" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">邮箱</label>
+          <input class="form-input" id="regCloudEmail" type="email" placeholder="your@email.com" autocomplete="email">
         </div>
+        <div class="form-group">
+          <label class="form-label">密码</label>
+          <div style="position:relative;">
+            <input class="form-input" id="regCloudPassword" type="password" placeholder="至少6位" autocomplete="new-password" style="padding-right:40px;">
+            <button type="button" class="pwd-toggle" onclick="togglePassword('regCloudPassword', this)" title="显示密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;">👁️</button>
+          </div>
         </div>
+        <div class="form-group">
+          <label class="form-label">确认密码</label>
+          <div style="position:relative;">
+            <input class="form-input" id="regCloudConfirmPassword" type="password" placeholder="再次输入密码" autocomplete="new-password" style="padding-right:40px;">
+            <button type="button" class="pwd-toggle" onclick="togglePassword('regCloudConfirmPassword', this)" title="显示密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;">👁️</button>
+          </div>
+        </div>
+        <div id="regCloudError" style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;"></div>
+        <div style="display:flex;gap:12px;">
+          <button class="btn btn-accent" id="btnCloudRegister" onclick="cloudSubmit('register')" style="flex:1;background:var(--success);">注册</button>
+          <button class="btn btn-secondary" onclick="closeCloudPanel()">取消</button>
+        </div>
+      </div>
+      <div class="cloud-info" id="cloudInfoHint" style="margin-top:16px;font-size:0.82rem;color:var(--muted);">
+        输入邮箱和密码即可完成注册，无需邮箱验证。<br>数据通过 Supabase 加密存储，仅你自己可见。
       </div>
     </div>
     <!-- 已登录视图 -->
@@ -2020,8 +2041,29 @@ function closeCloudPanel() {
 function clearCloudForm() {
   $('cloudEmail').value = '';
   $('cloudPassword').value = '';
-  $('cloudConfirmPassword').value = '';
+  $('regCloudEmail').value = '';
+  $('regCloudPassword').value = '';
+  $('regCloudConfirmPassword').value = '';
   $('cloudError').style.display = 'none';
+  if ($('regCloudError')) $('regCloudError').style.display = 'none';
+  // 重置到登录 tab
+  switchLoginTab('login');
+}
+
+function switchLoginTab(tab) {
+  if (tab === 'login') {
+    $('tabLogin').classList.add('active');
+    $('tabRegister').classList.remove('active');
+    $('loginForm').style.display = '';
+    $('registerForm').style.display = 'none';
+  } else {
+    $('tabRegister').classList.add('active');
+    $('tabLogin').classList.remove('active');
+    $('loginForm').style.display = 'none';
+    $('registerForm').style.display = '';
+  }
+  $('cloudError').style.display = 'none';
+  if ($('regCloudError')) $('regCloudError').style.display = 'none';
 }
 
 function togglePassword(inputId, btn) {
@@ -2074,22 +2116,27 @@ async function forgotPassword() {
 }
 
 async function cloudSubmit(mode) {
-  const email = $('cloudEmail').value.trim();
-  const password = $('cloudPassword').value.trim();
-  $('cloudError').style.display = 'none';
+  // 根据模式选择不同的表单字段
+  const emailId = mode === 'register' ? 'regCloudEmail' : 'cloudEmail';
+  const passwordId = mode === 'register' ? 'regCloudPassword' : 'cloudPassword';
+  const errorId = mode === 'register' ? 'regCloudError' : 'cloudError';
+
+  const email = $(emailId).value.trim();
+  const password = $(passwordId).value.trim();
+  $(errorId).style.display = 'none';
 
   if (!email || !password) { showToast('请填写邮箱和密码'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('请输入有效的邮箱地址'); return; }
   if (password.length < 6) { showToast('密码至少需要6位'); return; }
 
   if (!initSupabase()) {
-    $('cloudError').textContent = '服务暂不可用，请稍后重试';
-    $('cloudError').style.display = '';
+    $(errorId).textContent = '服务暂不可用，请稍后重试';
+    $(errorId).style.display = '';
     return;
   }
 
   if (mode === 'register') {
-    const confirm = $('cloudConfirmPassword').value.trim();
+    const confirm = $('regCloudConfirmPassword').value.trim();
     if (password !== confirm) { showToast('两次密码输入不一致'); return; }
 
     // 注册前检查用户数量是否已达上限
@@ -2107,13 +2154,13 @@ async function cloudSubmit(mode) {
       } catch (e) { /* 计数查询失败则不阻止注册 */ }
     }
     if (userCount === null) {
-      $('cloudError').textContent = '无法验证注册名额，请稍后重试';
-      $('cloudError').style.display = '';
+      $(errorId).textContent = '无法验证注册名额，请稍后重试';
+      $(errorId).style.display = '';
       return;
     }
     if (userCount >= 30) {
-      $('cloudError').textContent = '注册人数已达上限（30人），暂时无法注册新账号';
-      $('cloudError').style.display = '';
+      $(errorId).textContent = '注册人数已达上限（30人），暂时无法注册新账号';
+      $(errorId).style.display = '';
       return;
     }
 
@@ -2128,9 +2175,8 @@ async function cloudSubmit(mode) {
 
     if (error) {
       if (error.message && (error.message.includes('already') || error.message.includes('registered') || error.message.includes('exists') || error.message.includes('User already'))) {
-        $('cloudError').textContent = '该邮箱已注册，请直接登录';
-        $('cloudError').style.display = '';
-        $('cloudEmail').value = email;
+        $(errorId).textContent = '该邮箱已注册，请直接登录';
+        $(errorId).style.display = '';
         return;
       }
       throw error;
@@ -2165,8 +2211,8 @@ async function cloudSubmit(mode) {
     console.error('Login error:', e);
     const errMsg = e.message || '';
     if (errMsg.includes('Email not confirmed') || errMsg.includes('email_not_confirmed')) {
-      $('cloudError').innerHTML = '邮箱尚未验证，请检查邮箱中的确认链接';
-      $('cloudError').style.display = '';
+      $(errorId).innerHTML = '邮箱尚未验证，请检查邮箱中的确认链接';
+      $(errorId).style.display = '';
       return;
     }
     // 尝试区分"账号不存在"和"密码错误"
@@ -2176,23 +2222,24 @@ async function cloudSubmit(mode) {
       if (!rpcErr && typeof exists === 'boolean') emailExists = exists;
     } catch (rpcE) { /* RPC 不可用 */ }
     if (emailExists === true) {
-      $('cloudError').innerHTML = '密码错误。如果忘记密码，可<a href="javascript:void(0)" onclick="forgotPassword()" style="color:#4f46e5;text-decoration:underline;">重置密码</a>';
+      $(errorId).innerHTML = '密码错误。如果忘记密码，可<a href="javascript:void(0)" onclick="forgotPassword()" style="color:#4f46e5;text-decoration:underline;">重置密码</a>';
     } else if (emailExists === false) {
-      $('cloudError').textContent = '该账号不存在，请先注册';
+      $(errorId).textContent = '该账号不存在，请先注册';
     } else {
-      $('cloudError').textContent = '登录失败: ' + (errMsg || '请检查邮箱和密码');
+      $(errorId).textContent = '登录失败: ' + (errMsg || '请检查邮箱和密码');
     }
-    $('cloudError').style.display = '';
+    $(errorId).style.display = '';
   }
 }
 
 async function cloudLogout() {
   if (!confirm('确定要退出登录吗？本地数据不会丢失。')) return;
+  // 先关闭面板，避免 UI 闪烁
+  closeCloudPanel();
+  updateCloudUI(false);
   if (sbClient) {
     try { await sbClient.auth.signOut(); } catch (e) { /* ignore */ }
   }
-  updateCloudUI(false);
-  closeCloudPanel();
   showToast('已退出登录');
 }
 
