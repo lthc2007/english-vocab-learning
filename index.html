@@ -1662,11 +1662,17 @@ tr:hover td { background: rgba(201,169,110,0.06); }
         </div>
         <div class="form-group">
           <label class="form-label">密码</label>
-          <input class="form-input" id="cloudPassword" type="password" placeholder="至少6位" autocomplete="current-password">
+          <div style="position:relative;">
+            <input class="form-input" id="cloudPassword" type="password" placeholder="至少6位" autocomplete="current-password" style="padding-right:40px;">
+            <button type="button" class="pwd-toggle" onclick="togglePassword('cloudPassword', this)" title="显示密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;">👁️</button>
+          </div>
         </div>
         <div class="form-group" id="confirmPasswordGroup" style="display:none;">
           <label class="form-label">确认密码</label>
-          <input class="form-input" id="cloudConfirmPassword" type="password" placeholder="再次输入密码">
+          <div style="position:relative;">
+            <input class="form-input" id="cloudConfirmPassword" type="password" placeholder="再次输入密码" style="padding-right:40px;">
+            <button type="button" class="pwd-toggle" onclick="togglePassword('cloudConfirmPassword', this)" title="显示密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;">👁️</button>
+          </div>
         </div>
         <div class="form-group" id="verificationGroup" style="display:none;">
           <button class="btn btn-primary" id="btnSendCode" onclick="sendVerificationCode()" style="width:100%;">发送验证邮件</button>
@@ -1680,6 +1686,9 @@ tr:hover td { background: rgba(201,169,110,0.06); }
         <div style="display:flex;gap:12px;">
           <button class="btn btn-primary" id="btnCloudSubmit" onclick="cloudSubmit()" style="flex:1;">登录</button>
           <button class="btn btn-secondary" onclick="closeCloudPanel()">取消</button>
+        </div>
+        <div style="text-align:right;margin-top:8px;">
+          <a href="javascript:void(0)" onclick="forgotPassword()" style="font-size:0.82rem;color:var(--muted);text-decoration:underline;">忘记密码？</a>
         </div>
         <div class="cloud-info" id="cloudInfoRegister" style="margin-top:16px;">
           <strong>🔐 注册说明：</strong>输入邮箱和密码，点击"发送验证邮件"，然后前往邮箱<strong>点击链接</strong>即可完成注册。<br>
@@ -1870,17 +1879,33 @@ async function checkCloudSession() {
     const tokenHash = urlParams.get('token_hash');
     const verifyType = urlParams.get('type');
 
-    if (tokenHash && (verifyType === 'email' || verifyType === 'signup')) {
-      console.log('检测到 PKCE 确认参数，开始 verifyOtp...', { tokenHash: tokenHash.substring(0,10)+'...', type: verifyType });
+    if (tokenHash && (verifyType === 'email' || verifyType === 'signup' || verifyType === 'magiclink' || verifyType === 'recovery')) {
+      const isRecovery = verifyType === 'recovery';
+      console.log('检测到验证参数，开始 verifyOtp...', { tokenHash: tokenHash.substring(0,10)+'...', type: verifyType, isRecovery });
       try {
         const { data: verifyData, error: verifyError } = await sbClient.auth.verifyOtp({
           token_hash: tokenHash,
-          type: verifyType === 'signup' ? 'email' : verifyType
+          type: verifyType === 'signup' ? 'email' : verifyType === 'magiclink' ? 'email' : verifyType
         });
         if (verifyError) {
           console.error('verifyOtp 失败:', verifyError);
         } else {
-          console.log('verifyOtp 成功，邮箱已确认', verifyData);
+          console.log('verifyOtp 成功', verifyData);
+          if (isRecovery) {
+            // 密码重置流程：用户已登录，提示设置新密码
+            const newPassword = prompt('请输入新密码（至少6位）：');
+            if (newPassword && newPassword.length >= 6) {
+              const { error: updateErr } = await sbClient.auth.updateUser({ password: newPassword });
+              if (updateErr) {
+                console.error('设置新密码失败:', updateErr);
+                showToast('密码重置失败: ' + updateErr.message);
+              } else {
+                showToast('密码已重置！请牢记新密码 ✓');
+              }
+            } else if (newPassword !== null) {
+              showToast('密码至少需要6位，重置已取消');
+            }
+          }
         }
         // 清除 URL 中的 PKCE 参数
         window.history.replaceState(null, '', window.location.pathname);
@@ -1921,20 +1946,39 @@ async function checkCloudSession() {
 
     updateCloudUI(true, session.user.email);
 
-    // ===== 步骤5：处理邮件确认链接跳转后的注册 =====
+    // ===== 步骤5：处理注册后邮件链接跳转 =====
     const pendingEmail = localStorage.getItem('pendingRegEmail');
+    const pendingPassword = localStorage.getItem('pendingRegPassword');
     if (pendingEmail && pendingEmail === session.user.email) {
-      if (emailConfirmed) {
-        // 邮箱已确认，注册成功
+      if (pendingPassword) {
+        // 注册流程：通过魔法链接登录后，设置密码
+        console.log('检测到待设置密码，调用 updateUser...');
+        try {
+          const { error: updateErr } = await sbClient.auth.updateUser({ password: pendingPassword });
+          if (updateErr) {
+            console.error('设置密码失败:', updateErr);
+            showToast('注册成功！但密码设置失败，请使用忘记密码功能');
+          } else {
+            console.log('密码设置成功！');
+            showToast('注册成功！密码已设置，后续可用密码登录 ✓');
+          }
+        } catch (updateCatch) {
+          console.error('设置密码异常:', updateCatch);
+          showToast('注册成功！但密码设置失败，请使用忘记密码功能');
+        }
+        localStorage.removeItem('pendingRegEmail');
+        localStorage.removeItem('pendingRegPassword');
+        clearVerificationState();
+      } else if (emailConfirmed) {
+        // 旧流程兼容：signUp 方式，邮箱已确认
         localStorage.removeItem('pendingRegEmail');
         localStorage.removeItem('pendingRegPassword');
         clearVerificationState();
         showToast('注册成功！邮箱已验证 ✓');
       } else {
-        // 邮箱未确认！可能是 Supabase 服务端确认有延迟或 trigger 报错
+        // 邮箱未确认
         console.warn('⚠️ 邮箱尚未确认！email_confirmed_at 为 null');
         showToast('注册成功，但邮箱尚未确认，请检查邮箱中的验证链接');
-        // 保留 pending 数据，以便后续重试
       }
       // 清除 URL 中的 hash 参数
       if (window.location.hash && window.location.hash.includes('access_token')) {
@@ -2008,6 +2052,55 @@ function clearCloudForm() {
   $('cloudPassword').value = '';
   $('cloudConfirmPassword').value = '';
   $('cloudError').style.display = 'none';
+}
+
+function togglePassword(inputId, btn) {
+  const input = $(inputId);
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = '🙈';
+    btn.title = '隐藏密码';
+  } else {
+    input.type = 'password';
+    btn.textContent = '👁️';
+    btn.title = '显示密码';
+  }
+}
+
+async function forgotPassword() {
+  const email = $('cloudEmail').value.trim();
+  if (!email) {
+    $('cloudError').textContent = '请先输入邮箱地址再点击忘记密码';
+    $('cloudError').style.display = '';
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    $('cloudError').textContent = '请输入有效的邮箱地址';
+    $('cloudError').style.display = '';
+    return;
+  }
+  if (!initSupabase()) {
+    $('cloudError').textContent = '服务暂不可用，请稍后重试';
+    $('cloudError').style.display = '';
+    return;
+  }
+  try {
+    const { error } = await sbClient.auth.resetPasswordForEmail(email, {
+      redirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
+    });
+    if (error) throw error;
+    $('cloudError').style.display = 'none';
+    showToast('密码重置链接已发送到邮箱，请点击邮件中的链接设置新密码');
+  } catch (e) {
+    console.error('Forgot password error:', e);
+    const errMsg = e.message || '';
+    if (errMsg.includes('not found') || errMsg.includes('not exist')) {
+      $('cloudError').textContent = '该邮箱未注册，请先注册账号';
+    } else {
+      $('cloudError').textContent = '发送失败: ' + (errMsg || '请稍后重试');
+    }
+    $('cloudError').style.display = '';
+  }
 }
 
 function clearVerificationState() {
@@ -2102,10 +2195,13 @@ async function sendVerificationCode() {
     localStorage.setItem('pendingRegEmail', email);
     localStorage.setItem('pendingRegPassword', password);
 
-    const { data, error } = await sbClient.auth.signUp({
+    // 使用 signInWithOtp 代替 signUp 来创建用户
+    // 原因：signUp 在 2026年7月存在 Supabase 平台 bug，创建的 auth.identities 为空，
+    // 导致 signInWithPassword 永远返回 invalid_credentials
+    const { data, error } = await sbClient.auth.signInWithOtp({
       email,
-      password,
       options: {
+        shouldCreateUser: true,
         emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
       }
     });
@@ -2233,10 +2329,10 @@ async function resendConfirmation() {
     return;
   }
   try {
-    const { error } = await sbClient.auth.resend({
-      type: 'signup',
-      email: email,
+    const { error } = await sbClient.auth.signInWithOtp({
+      email,
       options: {
+        shouldCreateUser: true,
         emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
       }
     });
