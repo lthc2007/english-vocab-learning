@@ -1668,14 +1668,26 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           <label class="form-label">确认密码</label>
           <input class="form-input" id="cloudConfirmPassword" type="password" placeholder="再次输入密码">
         </div>
+        <div class="form-group" id="verificationGroup" style="display:none;">
+          <label class="form-label">邮箱验证码</label>
+          <div style="display:flex;gap:8px;">
+            <input class="form-input" id="cloudVerificationCode" type="text" placeholder="输入6位验证码" maxlength="6" autocomplete="one-time-code" style="flex:1;letter-spacing:4px;font-size:1.1rem;font-family:monospace;text-align:center;">
+            <button class="btn btn-secondary" id="btnSendCode" onclick="sendVerificationCode()" style="white-space:nowrap;">发送验证码</button>
+          </div>
+          <div id="verificationCountdown" style="font-size:0.78rem;color:var(--muted);margin-top:4px;display:none;"></div>
+        </div>
         <div id="cloudError" style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;"></div>
         <div style="display:flex;gap:12px;">
           <button class="btn btn-primary" id="btnCloudSubmit" onclick="cloudSubmit()" style="flex:1;">登录</button>
           <button class="btn btn-secondary" onclick="closeCloudPanel()">取消</button>
         </div>
-        <div class="cloud-info" style="margin-top:16px;">
+        <div class="cloud-info" id="cloudInfoRegister" style="margin-top:16px;">
           <strong>🔐 注册即用：</strong>输入邮箱和密码即可创建账号，数据自动同步到云端。<br>
           <span style="font-size:0.75rem;color:var(--muted);">数据通过 Supabase 加密存储，仅你自己可见。</span>
+        </div>
+        <div class="cloud-info" id="cloudInfoVerification" style="display:none;margin-top:16px;background:var(--gold-soft);border-radius:8px;padding:12px;">
+          <strong>📧 验证说明：</strong>点击"发送验证码"后，系统会向你的邮箱发送一封包含6位数字验证码的邮件。<br>
+          <span style="font-size:0.75rem;color:var(--muted);">如未收到，请检查垃圾邮件箱。</span>
         </div>
       </div>
     </div>
@@ -1826,6 +1838,8 @@ function persist() { saveData(appData); }
 let sbClient = null;
 let cloudLoginMode = 'login';
 let cloudUserEmail = null;
+let verificationTimer = null;
+let verificationCodeSent = false;
 
 // Hardcoded Supabase credentials (already configured)
 const SUPABASE_URL = 'https://mmdhtyuyirukvtmfzeby.supabase.co';
@@ -1903,6 +1917,7 @@ function openCloudPanel() {
 
 function closeCloudPanel() {
   $('modalCloud').classList.remove('show');
+  clearVerificationState();
 }
 
 function switchLoginTab(tab) {
@@ -1910,8 +1925,12 @@ function switchLoginTab(tab) {
   $('tabLogin').classList.toggle('active', tab === 'login');
   $('tabRegister').classList.toggle('active', tab === 'register');
   $('confirmPasswordGroup').style.display = tab === 'register' ? '' : 'none';
+  $('verificationGroup').style.display = 'none';
+  $('cloudInfoRegister').style.display = tab === 'register' ? '' : 'none';
+  $('cloudInfoVerification').style.display = 'none';
   $('btnCloudSubmit').textContent = tab === 'login' ? '登录' : '注册';
   $('cloudError').style.display = 'none';
+  clearVerificationState();
   clearCloudForm();
 }
 
@@ -1919,7 +1938,128 @@ function clearCloudForm() {
   $('cloudEmail').value = '';
   $('cloudPassword').value = '';
   $('cloudConfirmPassword').value = '';
+  $('cloudVerificationCode').value = '';
   $('cloudError').style.display = 'none';
+}
+
+function clearVerificationState() {
+  clearInterval(verificationTimer);
+  verificationTimer = null;
+  verificationCodeSent = false;
+  $('btnSendCode').disabled = false;
+  $('btnSendCode').textContent = '发送验证码';
+  $('verificationCountdown').style.display = 'none';
+}
+
+function startVerificationCountdown() {
+  let seconds = 60;
+  const btn = $('btnSendCode');
+  const countdown = $('verificationCountdown');
+  btn.disabled = true;
+  countdown.style.display = '';
+  countdown.textContent = seconds + '秒后可重新发送';
+
+  clearInterval(verificationTimer);
+  verificationTimer = setInterval(() => {
+    seconds--;
+    if (seconds <= 0) {
+      clearInterval(verificationTimer);
+      verificationTimer = null;
+      btn.disabled = false;
+      btn.textContent = '重新发送';
+      countdown.style.display = 'none';
+    } else {
+      countdown.textContent = seconds + '秒后可重新发送';
+    }
+  }, 1000);
+}
+
+async function sendVerificationCode() {
+  const email = $('cloudEmail').value.trim();
+  const password = $('cloudPassword').value.trim();
+  const confirm = $('cloudConfirmPassword').value.trim();
+
+  // Validate inputs
+  if (!email || !password) { showToast('请填写邮箱和密码'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('请输入有效的邮箱地址'); return; }
+  if (password.length < 6) { showToast('密码至少需要6位'); return; }
+  if (password !== confirm) { showToast('两次密码输入不一致'); return; }
+
+  if (!initSupabase()) {
+    $('cloudError').textContent = '服务暂不可用，请稍后重试';
+    $('cloudError').style.display = '';
+    return;
+  }
+
+  const btn = $('btnSendCode');
+  btn.disabled = true;
+  btn.textContent = '发送中...';
+  $('cloudError').style.display = 'none';
+
+  try {
+    // 注册前检查用户数量是否已达上限
+    // 注意：此为客户端检查，不保证安全性。攻击者可以绕过此检查。
+    let userCount = null;
+    try {
+      const { data: rpcCount, error: rpcErr } = await sbClient.rpc('count_user_words');
+      if (!rpcErr && typeof rpcCount === 'number') userCount = rpcCount;
+    } catch (e) { /* RPC 不可用 */ }
+    if (userCount === null) {
+      try {
+        const { count, error: countErr } = await sbClient
+          .from('user_words')
+          .select('*', { count: 'exact', head: true });
+        if (!countErr && count !== null) userCount = count;
+      } catch (e) { /* 计数查询失败则不阻止注册 */ }
+    }
+    if (userCount === null) {
+      $('cloudError').textContent = '无法验证注册名额，请稍后重试';
+      $('cloudError').style.display = '';
+      btn.disabled = false;
+      btn.textContent = '发送验证码';
+      return;
+    }
+    if (userCount >= 30) {
+      $('cloudError').textContent = '注册人数已达上限（30人），暂时无法注册新账号';
+      $('cloudError').style.display = '';
+      btn.disabled = false;
+      btn.textContent = '发送验证码';
+      return;
+    }
+
+    const { error } = await sbClient.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+        data: { email_confirm: true }
+      }
+    });
+
+    if (error) {
+      if (error.message && error.message.includes('email')) {
+        $('cloudError').textContent = '该邮箱已注册，请直接登录';
+        $('cloudError').style.display = '';
+        switchLoginTab('login');
+        $('cloudEmail').value = email;
+        return;
+      }
+      throw error;
+    }
+
+    verificationCodeSent = true;
+    $('verificationGroup').style.display = '';
+    $('cloudVerificationCode').focus();
+    $('cloudInfoRegister').style.display = 'none';
+    $('cloudInfoVerification').style.display = '';
+    $('btnCloudSubmit').textContent = '验证并注册';
+    showToast('验证码已发送，请检查邮箱');
+    startVerificationCountdown();
+  } catch (e) {
+    $('cloudError').textContent = '发送失败: ' + (e.message || '请稍后重试');
+    $('cloudError').style.display = '';
+    btn.disabled = false;
+    btn.textContent = '发送验证码';
+  }
 }
 
 async function cloudSubmit() {
@@ -1933,101 +2073,108 @@ async function cloudSubmit() {
   if (cloudLoginMode === 'register') {
     const confirm = $('cloudConfirmPassword').value.trim();
     if (password !== confirm) { showToast('两次密码输入不一致'); return; }
+
+    // 注册模式：必须先发送验证码
+    if (!verificationCodeSent) {
+      showToast('请先点击"发送验证码"获取邮箱验证码');
+      return;
+    }
+
+    const code = $('cloudVerificationCode').value.trim();
+    if (!code || code.length < 6) { showToast('请输入6位验证码'); return; }
+
+    if (!initSupabase()) {
+      $('cloudError').textContent = '服务暂不可用，请稍后重试';
+      $('cloudError').style.display = '';
+      return;
+    }
+
+    $('btnCloudSubmit').disabled = true;
+    $('btnCloudSubmit').textContent = '验证中...';
+
+    try {
+      // Verify the OTP code
+      const { data: verifyData, error: verifyError } = await sbClient.auth.verifyOtp({
+        email,
+        token: code,
+        type: 'email'
+      });
+
+      if (verifyError) {
+        if (verifyError.message && verifyError.message.includes('expired')) {
+          $('cloudError').textContent = '验证码已过期，请重新发送';
+        } else if (verifyError.message && verifyError.message.includes('Invalid')) {
+          $('cloudError').textContent = '验证码错误，请检查后重新输入';
+        } else {
+          throw verifyError;
+        }
+        $('cloudError').style.display = '';
+        $('btnCloudSubmit').disabled = false;
+        $('btnCloudSubmit').textContent = '验证并注册';
+        return;
+      }
+
+      if (verifyData.session) {
+        // OTP verified, user is logged in. Now set the password.
+        try {
+          const { error: pwdError } = await sbClient.auth.updateUser({ password });
+          if (pwdError) {
+            showToast('密码设置失败: ' + pwdError.message);
+            // User is still logged in with verified email, proceed
+          }
+        } catch (pwdE) {
+          console.error('Password update error:', pwdE);
+        }
+
+        clearVerificationState();
+        updateCloudUI(true, verifyData.user.email);
+        showToast('注册成功！邮箱已验证 ✓');
+        closeCloudPanel();
+        setTimeout(() => cloudDownload(), 500);
+      } else {
+        $('cloudError').textContent = '验证失败，请重试';
+        $('cloudError').style.display = '';
+        $('btnCloudSubmit').disabled = false;
+        $('btnCloudSubmit').textContent = '验证并注册';
+      }
+    } catch (e) {
+      $('cloudError').textContent = e.message || '验证失败，请重试';
+      $('cloudError').style.display = '';
+      $('btnCloudSubmit').disabled = false;
+      $('btnCloudSubmit').textContent = '验证并注册';
+    }
+    return;
   }
 
+  // 登录模式
   if (!initSupabase()) {
     $('cloudError').textContent = '服务暂不可用，请稍后重试';
     $('cloudError').style.display = '';
     return;
   }
 
-  // 注册前检查用户数量是否已达上限
-  // 注意：此为客户端检查，不保证安全性。攻击者可以绕过此检查。
-  // 建议在服务端添加严格限制：数据库 Row Level Security (RLS) + SECURITY DEFINER 函数 + 触发器限制。
-  // 优先使用 RPC 函数（需在 Supabase SQL Editor 中创建 count_user_words 函数以绕过 RLS）
-  // CREATE OR REPLACE FUNCTION count_user_words() RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT count(*)::integer FROM user_words; $$;
-  if (cloudLoginMode === 'register') {
-    let userCount = null;
-    try {
-      // 尝试 RPC 调用（绕过 RLS）
-      const { data: rpcCount, error: rpcErr } = await sbClient.rpc('count_user_words');
-      if (!rpcErr && typeof rpcCount === 'number') userCount = rpcCount;
-    } catch (e) { /* RPC 不可用 */ }
-    if (userCount === null) {
-      try {
-        const { count, error: countErr } = await sbClient
-          .from('user_words')
-          .select('*', { count: 'exact', head: true });
-        if (!countErr && count !== null) userCount = count;
-      } catch (e) { /* 计数查询失败则不阻止注册 */ }
-    }
-    // RPC 和直接查询均失败时，保守阻止注册
-    if (userCount === null) {
-      $('cloudError').textContent = '无法验证注册名额，请稍后重试';
-      $('cloudError').style.display = '';
-      return;
-    }
-    if (userCount !== null && userCount >= 30) {
-      $('cloudError').textContent = '注册人数已达上限（30人），暂时无法注册新账号';
-      $('cloudError').style.display = '';
-      return;
-    }
-  }
-
   try {
-    let result;
-    if (cloudLoginMode === 'login') {
-      result = await sbClient.auth.signInWithPassword({ email, password });
-    } else if (cloudLoginMode === 'register') {
-      result = await sbClient.auth.signUp({ email, password });
-      if (result.error) throw result.error;
-      if (result.data.user && result.data.user.identities && result.data.user.identities.length === 0) {
-        $('cloudError').textContent = '该邮箱已注册，请直接登录';
-        $('cloudError').style.display = '';
-        switchLoginTab('login');
-        return;
-      }
-      if (result.data.user && !result.data.session) {
-        showToast('注册成功！请检查邮箱中的确认链接后再登录。');
-        switchLoginTab('login');
-        return;
-      }
-    } else {
-      $('cloudError').textContent = '未知操作，请刷新页面重试';
-      $('cloudError').style.display = '';
-      return;
-    }
+    const result = await sbClient.auth.signInWithPassword({ email, password });
     if (result.error) throw result.error;
     if (result.data.session) {
       updateCloudUI(true, result.data.user.email);
       showToast('登录成功！');
       closeCloudPanel();
-      // Auto download from cloud
       setTimeout(() => cloudDownload(), 500);
     }
   } catch (e) {
     // 登录失败时，尝试区分"账号不存在"和"密码错误"
-    // 安全提示：区分账号存在性会引入用户枚举风险（User Enumeration）。
-    // 攻击者可以通过错误信息差异判断邮箱是否已注册。生产环境建议统一返回"账号或密码错误"。
-    if (cloudLoginMode === 'login') {
-      // 三态：null=RPC不可用, true=邮箱存在, false=邮箱不存在
-      let emailExists = null;
-      try {
-        const { data: exists, error: rpcErr } = await sbClient.rpc('check_email_exists', { target_email: email });
-        if (!rpcErr && typeof exists === 'boolean') emailExists = exists;
-      } catch (rpcE) { /* RPC 不可用 */ }
-      if (emailExists === true) {
-        // 邮箱存在但密码错误
-        $('cloudError').textContent = '账号或密码错误';
-      } else if (emailExists === false) {
-        // RPC 确认邮箱不存在
-        $('cloudError').textContent = '该账号不存在，请先注册';
-      } else {
-        // RPC 不可用，使用通用提示
-        $('cloudError').textContent = '账号或密码错误';
-      }
+    let emailExists = null;
+    try {
+      const { data: exists, error: rpcErr } = await sbClient.rpc('check_email_exists', { target_email: email });
+      if (!rpcErr && typeof exists === 'boolean') emailExists = exists;
+    } catch (rpcE) { /* RPC 不可用 */ }
+    if (emailExists === true) {
+      $('cloudError').textContent = '账号或密码错误';
+    } else if (emailExists === false) {
+      $('cloudError').textContent = '该账号不存在，请先注册';
     } else {
-      $('cloudError').textContent = e.message || '操作失败，请重试';
+      $('cloudError').textContent = '账号或密码错误';
     }
     $('cloudError').style.display = '';
   }
