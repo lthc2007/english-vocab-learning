@@ -5422,7 +5422,12 @@ function loadHistory() {
 }
 
 function saveHistory(records) {
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(records));
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(records));
+  } catch (e) {
+    showToast('存储空间不足，批改记录未能保存，建议清理旧记录', 4000);
+    console.error('saveHistory error:', e);
+  }
 }
 
 function saveCorrection(type) {
