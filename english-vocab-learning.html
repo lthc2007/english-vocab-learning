@@ -1607,7 +1607,6 @@ tr:hover td { background: rgba(201,169,110,0.06); }
           <option value="minimax">MiniMax TTS</option>
           <option value="openai">OpenAI TTS</option>
           <option value="volcano">火山引擎 TTS</option>
-          <option value="edge">Google TTS (免费)</option>
         </select>
       </div>
       <div class="form-group" id="ttsUrlGroup">
@@ -1805,13 +1804,6 @@ const TTS_PROVIDERS = {
     voices: ['zh_female_cancan_mars_bigtts', 'zh_male_M392_conversation_wvae_bigtts', 'zh_female_shuangkuaisisi_moon_bigtts', 'zh_male_wennuanahu_moon_bigtts'],
     keyHint: '获取 App ID & Access Token: <a href="https://console.volcengine.com/ark/region:ark+cn-beijing/tts" target="_blank" style="color:var(--accent);">console.volcengine.com</a>',
     ttsType: 'volcano'
-  },
-  edge: {
-    name: 'Google TTS (免费)', url: '',
-    models: [],
-    voices: ['en-US', 'en-GB'],
-    keyHint: 'Google 翻译 TTS 完全免费，无需 API Key。语音质量优秀，适用于任意浏览器。注意：单次文本不宜过长（约 200 字符以内），朗读文章时会自动分段。',
-    ttsType: 'edge'
   }
 };
 
@@ -2373,21 +2365,8 @@ function onProviderChange() {
 function onTtsProviderChange() {
   const provider = $('ttsProviderSelect').value;
   const cfg = TTS_PROVIDERS[provider];
-  if (provider === 'none' || provider === 'edge') {
-    ['ttsUrlGroup', 'ttsModelGroup', 'ttsKeyGroup', 'ttsAppIdGroup'].forEach(id => $(id).style.display = 'none');
-    if (provider === 'edge') {
-      // Edge: show voice selector, hide everything else
-      $('ttsVoiceGroup').style.display = '';
-      const vsel = $('ttsVoiceSelect');
-      vsel.innerHTML = '';
-      cfg.voices.forEach(v => {
-        const opt = document.createElement('option');
-        opt.value = v; opt.textContent = v; vsel.appendChild(opt);
-      });
-      $('ttsKeyHint').innerHTML = cfg.keyHint;
-    } else {
-      $('ttsVoiceGroup').style.display = 'none';
-    }
+  if (provider === 'none') {
+    ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup', 'ttsAppIdGroup'].forEach(id => $(id).style.display = 'none');
     return;
   }
   ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup'].forEach(id => $(id).style.display = '');
@@ -2491,7 +2470,7 @@ async function testTtsConnection() {
   const url = ($('ttsUrlInput').value.trim() || TTS_PROVIDERS[provider].url).replace(/\/$/, '');
   const cfg = TTS_PROVIDERS[provider];
 
-  if (provider !== 'edge' && !key) {
+  if (!key) {
     result.textContent = '请先填写 TTS API Key';
     result.style.color = '#e74c3c';
     btn.disabled = false;
@@ -2573,22 +2552,6 @@ async function testTtsConnection() {
         result.textContent = '连接失败: HTTP ' + resp.status + (err ? ' — ' + err.substring(0, 200) : '');
         result.style.color = '#e74c3c';
       }
-    } else if (cfg.ttsType === 'edge') {
-      try {
-        const voice = $('ttsVoiceSelect').value || cfg.voices[0];
-        const blob = await edgeTTSSynthesize('Hello, this is a test.', voice, 1.0);
-        if (blob.size > 0) {
-          result.textContent = 'TTS 连接成功！(Google TTS 免费)';
-          result.style.color = '#27ae60';
-        } else {
-          result.textContent = '连接失败: Google TTS 返回空音频';
-          result.style.color = '#e74c3c';
-        }
-      } catch (e) {
-        result.textContent = '连接失败: ' + (e.message || 'Google TTS 不可用');
-        result.style.color = '#e74c3c';
-      }
-    }
   } catch (e) {
     result.textContent = '连接失败: ' + (e.name === 'TimeoutError' ? '请求超时' : e.message);
     result.style.color = '#e74c3c';
@@ -3418,50 +3381,6 @@ function handleCardClick() {
   flipCard();
 }
 
-// Google Translate TTS (free, works from any browser via HTTP GET)
-const GOOGLE_TTS_MAX_LEN = 200;
-
-async function googleTTSSynthesize(text, lang) {
-  // Split long text into chunks
-  if (text.length <= GOOGLE_TTS_MAX_LEN) {
-    return await googleTTSFetch(text, lang);
-  }
-  // Split at sentence boundaries
-  const chunks = [];
-  let remaining = text;
-  while (remaining.length > 0) {
-    if (remaining.length <= GOOGLE_TTS_MAX_LEN) {
-      chunks.push(remaining);
-      break;
-    }
-    let cut = GOOGLE_TTS_MAX_LEN;
-    // Try to cut at sentence end
-    const searchEnd = Math.min(GOOGLE_TTS_MAX_LEN, remaining.length);
-    const sentenceMatch = remaining.substring(0, searchEnd).match(/[.!?]\s/g);
-    if (sentenceMatch) {
-      const lastIdx = remaining.lastIndexOf(sentenceMatch[sentenceMatch.length - 1], searchEnd) + 1;
-      if (lastIdx > GOOGLE_TTS_MAX_LEN * 0.4) cut = lastIdx;
-    }
-    chunks.push(remaining.substring(0, cut));
-    remaining = remaining.substring(cut).trim();
-  }
-  // Fetch all chunks
-  const blobs = await Promise.all(chunks.map(c => googleTTSFetch(c, lang)));
-  return new Blob(blobs, { type: 'audio/mp3' });
-}
-
-async function googleTTSFetch(text, lang) {
-  const url = 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=' + lang + '&q=' + encodeURIComponent(text);
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error('Google TTS HTTP ' + resp.status);
-  return resp.blob();
-}
-
-async function edgeTTSSynthesize(text, voice, speed) {
-  const lang = voice || 'en-US';
-  return await googleTTSSynthesize(text, lang);
-}
-
 // Helper: create Audio from blob with automatic URL revoke on end/error
 function playTTSBlob(blob, onDone) {
   const url = URL.createObjectURL(blob);
@@ -3638,21 +3557,6 @@ async function speakWord(e) {
   
   if (!played && ttsError) {
     showToast('TTS 失败: ' + ttsError + ' — 已降级为浏览器发音', 5000);
-  }
-  
-  // Google TTS (free, no API key needed)
-  if (!played && ttsProvider === 'edge' && ttsCfg) {
-    try {
-      const ttsVoice = appData.ttsVoice || ttsCfg.voices[0];
-      const blob = await edgeTTSSynthesize(speakText, ttsVoice, 0.85);
-      if (blob.size > 0) {
-        const audio = playTTSBlob(blob, removeSpeaking);
-        await audio.play();
-        played = true;
-      }
-    } catch (e) {
-      console.error('Google TTS error:', e);
-    }
   }
   
   // Fallback: Web Speech API
@@ -4172,12 +4076,7 @@ function updateArticleEstimate() {
   const ttsProvider = appData.ttsProvider || 'none';
   const ttsModel = appData.ttsModel || 'speech-2.8-hd';
   let pricePer10k, modelLabel;
-  if (ttsProvider === 'edge') {
-    $('estChars').textContent = charCount.toLocaleString();
-    $('estCost').textContent = '免费';
-    $('estPriceLabel').textContent = '(Google TTS: 免费)';
-    return;
-  } else if (ttsProvider === 'volcano') {
+  if (ttsProvider === 'volcano') {
     pricePer10k = TTS_PRICING_VOLCANO;
     modelLabel = '火山引擎大模型';
   } else {
@@ -4197,11 +4096,7 @@ function updateArticleEstimate() {
 async function callMiniMaxTTS(text, speed = 1.0) {
   const ttsProvider = appData.ttsProvider || 'none';
   const ttsCfg = TTS_PROVIDERS[ttsProvider];
-  if (ttsProvider === 'none' || !ttsCfg) {
-    return { blob: null, error: 'TTS 未配置' };
-  }
-  // Edge TTS does not need API key
-  if (ttsProvider !== 'edge' && !appData.ttsKey) {
+  if (ttsProvider === 'none' || !appData.ttsKey || !ttsCfg) {
     return { blob: null, error: 'TTS 未配置' };
   }
   const ttsUrl = (appData.ttsUrl || ttsCfg.url).replace(/\/$/, '');
@@ -4209,14 +4104,7 @@ async function callMiniMaxTTS(text, speed = 1.0) {
   const ttsModel = appData.ttsModel || ttsCfg.models[0];
   const ttsVoice = appData.ttsVoice || ttsCfg.voices[0];
 
-  if (ttsCfg.ttsType === 'edge') {
-    try {
-      const blob = await edgeTTSSynthesize(text, ttsVoice, speed);
-      return blob.size > 0 ? { blob, error: null } : { blob: null, error: 'Google TTS 返回空音频' };
-    } catch (e) {
-      return { blob: null, error: 'Edge TTS: ' + (e.message || 'unknown error') };
-    }
-  } else if (ttsCfg.ttsType === 'minimax') {
+  if (ttsCfg.ttsType === 'minimax') {
     const resp = await fetch(ttsUrl + '/v1/t2a_v2', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
@@ -4342,7 +4230,7 @@ async function startArticleRead() {
 
   const ttsProvider = appData.ttsProvider || 'none';
   const ttsCfg = TTS_PROVIDERS[ttsProvider];
-  const hasTTS = ttsProvider !== 'none' && (ttsProvider === 'edge' || appData.ttsKey) && ttsCfg;
+  const hasTTS = ttsProvider !== 'none' && appData.ttsKey && ttsCfg;
 
   // Reset state
   stopArticleRead();
@@ -4664,20 +4552,6 @@ async function speakExample(e) {
   if (!played && ttsError) {
     showToast('例句朗读失败: ' + ttsError + ' — 已降级浏览器发音', 5000);
   }
-  // Edge TTS (free, no API key needed)
-  if (!played && ttsProvider === 'edge' && ttsCfg) {
-    try {
-      const ttsVoice = appData.ttsVoice || ttsCfg.voices[0];
-      const blob = await edgeTTSSynthesize(speakText, ttsVoice, 0.85);
-      if (blob.size > 0) {
-        const audio = playTTSBlob(blob, removeSpeaking);
-        await audio.play();
-        played = true;
-      }
-    } catch (e) {
-      console.error('Edge TTS example error:', e);
-    }
-  }
   if (!played) {
     // Fallback: Web Speech
     if ('speechSynthesis' in window) {
@@ -4996,20 +4870,6 @@ async function speakText(text, onDone) {
         }
       }
     } catch (e) { /* fallback */ }
-  }
-  // Edge TTS (free, no API key needed)
-  if (!played && ttsProvider === 'edge' && ttsCfg) {
-    try {
-      const ttsVoice = appData.ttsVoice || ttsCfg.voices[0];
-      const blob = await edgeTTSSynthesize(text, ttsVoice, 0.85);
-      if (blob.size > 0) {
-        const audio = playTTSBlob(blob, onDone);
-        await audio.play();
-        played = true;
-      }
-    } catch (e) {
-      console.error('Edge TTS speakText error:', e);
-    }
   }
   if (!played) {
     if ('speechSynthesis' in window) {
