@@ -1869,6 +1869,24 @@ async function checkCloudSession() {
     if (error) throw error;
     if (session) {
       updateCloudUI(true, session.user.email);
+      // 魔法链接回调：检查是否有待设置的密码
+      const pendingEmail = sessionStorage.getItem('pendingRegEmail');
+      const pendingPassword = sessionStorage.getItem('pendingRegPassword');
+      if (pendingEmail && pendingPassword && pendingEmail === session.user.email) {
+        try {
+          await sbClient.auth.updateUser({ password: pendingPassword });
+          showToast('注册成功！密码已设置，邮箱已验证 ✓');
+        } catch (pwdE) {
+          console.error('Password update error:', pwdE);
+          showToast('注册成功！但密码设置失败，请使用"忘记密码"重置');
+        }
+        sessionStorage.removeItem('pendingRegEmail');
+        sessionStorage.removeItem('pendingRegPassword');
+        // 清除 URL 中的 token 参数
+        if (window.history.replaceState) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }
     } else {
       updateCloudUI(false);
     }
@@ -2027,11 +2045,15 @@ async function sendVerificationCode() {
       return;
     }
 
+    // 存储邮箱和密码，供魔法链接回调时使用
+    sessionStorage.setItem('pendingRegEmail', email);
+    sessionStorage.setItem('pendingRegPassword', password);
+
     const { error } = await sbClient.auth.signInWithOtp({
       email,
       options: {
         shouldCreateUser: true,
-        data: { email_confirm: true }
+        emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
       }
     });
 
@@ -2041,24 +2063,29 @@ async function sendVerificationCode() {
         $('cloudError').style.display = '';
         switchLoginTab('login');
         $('cloudEmail').value = email;
+        sessionStorage.removeItem('pendingRegEmail');
+        sessionStorage.removeItem('pendingRegPassword');
         return;
       }
       throw error;
     }
 
     verificationCodeSent = true;
-    $('verificationGroup').style.display = '';
-    $('cloudVerificationCode').focus();
+    $('verificationSentMsg').style.display = '';
+    $('btnSendCode').textContent = '已发送';
+    $('btnCloudSubmit').textContent = '已发送验证邮件，请检查邮箱';
+    $('btnCloudSubmit').disabled = true;
     $('cloudInfoRegister').style.display = 'none';
     $('cloudInfoVerification').style.display = '';
-    $('btnCloudSubmit').textContent = '验证并注册';
-    showToast('验证码已发送，请检查邮箱');
+    showToast('验证邮件已发送，请点击邮件中的链接');
     startVerificationCountdown();
   } catch (e) {
     $('cloudError').textContent = '发送失败: ' + (e.message || '请稍后重试');
     $('cloudError').style.display = '';
     btn.disabled = false;
-    btn.textContent = '发送验证码';
+    btn.textContent = '发送验证邮件';
+    sessionStorage.removeItem('pendingRegEmail');
+    sessionStorage.removeItem('pendingRegPassword');
   }
 }
 
@@ -2074,75 +2101,14 @@ async function cloudSubmit() {
     const confirm = $('cloudConfirmPassword').value.trim();
     if (password !== confirm) { showToast('两次密码输入不一致'); return; }
 
-    // 注册模式：必须先发送验证码
+    // 注册模式：必须先发送验证邮件
     if (!verificationCodeSent) {
-      showToast('请先点击"发送验证码"获取邮箱验证码');
+      showToast('请先点击"发送验证邮件"');
       return;
     }
 
-    const code = $('cloudVerificationCode').value.trim();
-    if (!code || code.length < 8) { showToast('请输入8位验证码'); return; }
-
-    if (!initSupabase()) {
-      $('cloudError').textContent = '服务暂不可用，请稍后重试';
-      $('cloudError').style.display = '';
-      return;
-    }
-
-    $('btnCloudSubmit').disabled = true;
-    $('btnCloudSubmit').textContent = '验证中...';
-
-    try {
-      // Verify the OTP code
-      const { data: verifyData, error: verifyError } = await sbClient.auth.verifyOtp({
-        email,
-        token: code,
-        type: 'email'
-      });
-
-      if (verifyError) {
-        if (verifyError.message && verifyError.message.includes('expired')) {
-          $('cloudError').textContent = '验证码已过期，请重新发送';
-        } else if (verifyError.message && verifyError.message.includes('Invalid')) {
-          $('cloudError').textContent = '验证码错误，请检查后重新输入';
-        } else {
-          throw verifyError;
-        }
-        $('cloudError').style.display = '';
-        $('btnCloudSubmit').disabled = false;
-        $('btnCloudSubmit').textContent = '验证并注册';
-        return;
-      }
-
-      if (verifyData.session) {
-        // OTP verified, user is logged in. Now set the password.
-        try {
-          const { error: pwdError } = await sbClient.auth.updateUser({ password });
-          if (pwdError) {
-            showToast('密码设置失败: ' + pwdError.message);
-            // User is still logged in with verified email, proceed
-          }
-        } catch (pwdE) {
-          console.error('Password update error:', pwdE);
-        }
-
-        clearVerificationState();
-        updateCloudUI(true, verifyData.user.email);
-        showToast('注册成功！邮箱已验证 ✓');
-        closeCloudPanel();
-        setTimeout(() => cloudDownload(), 500);
-      } else {
-        $('cloudError').textContent = '验证失败，请重试';
-        $('cloudError').style.display = '';
-        $('btnCloudSubmit').disabled = false;
-        $('btnCloudSubmit').textContent = '验证并注册';
-      }
-    } catch (e) {
-      $('cloudError').textContent = e.message || '验证失败，请重试';
-      $('cloudError').style.display = '';
-      $('btnCloudSubmit').disabled = false;
-      $('btnCloudSubmit').textContent = '验证并注册';
-    }
+    // 验证邮件已发送，提醒用户检查邮箱
+    showToast('验证邮件已发送，请点击邮件中的链接完成注册');
     return;
   }
 
