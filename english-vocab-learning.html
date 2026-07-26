@@ -1865,24 +1865,16 @@ async function checkCloudSession() {
     const { data: { session }, error } = await sbClient.auth.getSession();
     if (error) throw error;
     if (session) {
+      console.log('Session user:', { email: session.user.email, email_confirmed_at: session.user.email_confirmed_at, id: session.user.id });
       updateCloudUI(true, session.user.email);
-      // 处理邮件链接跳转后的注册：如果 localStorage 中有待注册的密码，设置密码
+      // 处理邮件确认链接跳转后的注册
       const pendingEmail = localStorage.getItem('pendingRegEmail');
-      const pendingPassword = localStorage.getItem('pendingRegPassword');
-      if (pendingEmail && pendingPassword && pendingEmail === session.user.email) {
-        try {
-          const { error: pwdError } = await sbClient.auth.updateUser({ password: pendingPassword });
-          if (pwdError) {
-            console.error('Password update after redirect error:', pwdError);
-          } else {
-            showToast('注册成功！邮箱已验证 ✓');
-          }
-        } catch (pwdE) {
-          console.error('Password update after redirect error:', pwdE);
-        }
+      if (pendingEmail && pendingEmail === session.user.email) {
+        // signUp 已设置密码，只需清理 pending 数据
         localStorage.removeItem('pendingRegEmail');
         localStorage.removeItem('pendingRegPassword');
         clearVerificationState();
+        showToast('注册成功！邮箱已验证 ✓');
         // 清除 URL 中的 hash 参数（Supabase 认证回调残留）
         if (window.location.hash && window.location.hash.includes('access_token')) {
           window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -2047,20 +2039,20 @@ async function sendVerificationCode() {
       return;
     }
 
-    // 存储邮箱和密码，供验证码验证或邮件链接跳转后使用
+    // 存储邮箱和密码，供邮件链接跳转后使用
     localStorage.setItem('pendingRegEmail', email);
     localStorage.setItem('pendingRegPassword', password);
 
-    const { error } = await sbClient.auth.signInWithOtp({
+    const { data, error } = await sbClient.auth.signUp({
       email,
+      password,
       options: {
-        shouldCreateUser: true,
         emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
       }
     });
 
     if (error) {
-      if (error.message && error.message.includes('email')) {
+      if (error.message && (error.message.includes('already') || error.message.includes('registered') || error.message.includes('exists'))) {
         $('cloudError').textContent = '该邮箱已注册，请直接登录';
         $('cloudError').style.display = '';
         switchLoginTab('login');
@@ -2072,6 +2064,19 @@ async function sendVerificationCode() {
       throw error;
     }
 
+    // 如果 signUp 返回了 session，说明 Confirm email 未开启，用户已直接登录
+    if (data.session) {
+      localStorage.removeItem('pendingRegEmail');
+      localStorage.removeItem('pendingRegPassword');
+      clearVerificationState();
+      updateCloudUI(true, data.user.email);
+      showToast('注册成功！');
+      closeCloudPanel();
+      setTimeout(() => cloudDownload(), 500);
+      return;
+    }
+
+    // Confirm email 已开启，确认邮件已发送
     verificationCodeSent = true;
     $('verificationSentMsg').style.display = '';
     $('btnSendCode').textContent = '已发送';
@@ -2124,6 +2129,15 @@ async function cloudSubmit() {
       setTimeout(() => cloudDownload(), 500);
     }
   } catch (e) {
+    console.error('Login error:', e);
+    const errMsg = e.message || '';
+    // 检查是否为邮箱未确认错误
+    if (errMsg.includes('Email not confirmed') || errMsg.includes('email_not_confirmed')) {
+      $('cloudError').innerHTML = '邮箱尚未验证，请检查邮箱中的验证链接。如未收到，可<a href="javascript:void(0)" onclick="resendConfirmation()" style="color:#4f46e5;text-decoration:underline;">重新发送</a>';
+      $('cloudError').style.display = '';
+      $('cloudError').dataset.pendingEmail = email;
+      return;
+    }
     // 登录失败时，尝试区分"账号不存在"和"密码错误"
     let emailExists = null;
     try {
@@ -2131,11 +2145,12 @@ async function cloudSubmit() {
       if (!rpcErr && typeof exists === 'boolean') emailExists = exists;
     } catch (rpcE) { /* RPC 不可用 */ }
     if (emailExists === true) {
-      $('cloudError').textContent = '账号或密码错误';
+      $('cloudError').innerHTML = '密码错误，或邮箱尚未验证。请检查密码，或<a href="javascript:void(0)" onclick="resendConfirmation()" style="color:#4f46e5;text-decoration:underline;">重新发送验证邮件</a>';
+      $('cloudError').dataset.pendingEmail = email;
     } else if (emailExists === false) {
       $('cloudError').textContent = '该账号不存在，请先注册';
     } else {
-      $('cloudError').textContent = '账号或密码错误';
+      $('cloudError').textContent = '登录失败: ' + (errMsg || '请检查邮箱和密码');
     }
     $('cloudError').style.display = '';
   }
@@ -2149,6 +2164,29 @@ async function cloudLogout() {
   updateCloudUI(false);
   closeCloudPanel();
   showToast('已退出登录');
+}
+
+async function resendConfirmation() {
+  const email = ($('cloudError').dataset.pendingEmail || $('cloudEmail').value || '').trim();
+  if (!email) { showToast('请先输入邮箱地址'); return; }
+  if (!initSupabase()) {
+    showToast('服务暂不可用，请稍后重试');
+    return;
+  }
+  try {
+    const { error } = await sbClient.auth.resend({
+      type: 'signup',
+      email: email,
+      options: {
+        emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
+      }
+    });
+    if (error) throw error;
+    showToast('确认邮件已重新发送，请检查邮箱');
+  } catch (e) {
+    console.error('Resend confirmation error:', e);
+    showToast('发送失败: ' + (e.message || '请稍后重试'));
+  }
 }
 
 // Upload words to cloud
