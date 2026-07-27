@@ -1764,6 +1764,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
       <div class="form-group">
         <label class="form-label">服务商</label>
         <select class="form-input" id="providerSelect" onchange="onProviderChange()">
+          <option value="zhipu_free">智谱免费（GLM）✨ 无需配置</option>
           <option value="deepseek">DeepSeek</option>
           <option value="openai">OpenAI</option>
           <option value="moonshot">Moonshot (月之暗面)</option>
@@ -1974,8 +1975,21 @@ function loadData() {
     words: [], sentences: [] };
 }
 
+// ── 内置免费模型（智谱AI）──
+// API Key 存储在 Supabase Edge Function Secrets 中，前端不可见
+const BUILTIN_ZHIPU_PROXY = 'https://mmdhtyuyirukvtmfzeby.supabase.co/functions/v1/zhipu-proxy';
+const BUILTIN_ZHIPU_MODEL = 'glm-4.7-flash';
+
 // Provider presets
 const PROVIDERS = {
+  zhipu_free: {
+    name: '智谱免费（GLM）',
+    url: BUILTIN_ZHIPU_PROXY,
+    models: ['glm-4.7-flash', 'glm-4-flash'],
+    keyHint: '使用内置免费模型，无需配置 API Key。如需使用自己的 Key，请选择「智谱 AI」并填入。',
+    tts: false,
+    builtin: true
+  },
   deepseek: {
     name: 'DeepSeek',
     url: 'https://api.deepseek.com/v1',
@@ -2006,7 +2020,7 @@ const PROVIDERS = {
   zhipu: {
     name: '智谱 AI',
     url: 'https://open.bigmodel.cn/api/paas/v4',
-    models: ['glm-4-flash', 'glm-4-plus', 'glm-4-air'],
+    models: ['glm-4.7-flash', 'glm-4-flash', 'glm-4-plus', 'glm-4-air'],
     keyHint: '获取 API Key: <a href="https://open.bigmodel.cn/usercenter/apikeys" target="_blank" style="color:var(--accent);">open.bigmodel.cn</a>',
     tts: false
   },
@@ -2709,7 +2723,8 @@ function importData(event) {
 // ═══════════════════════════════════════
 function updateApiStatus() {
   const dot = $('apiStatusDot');
-  if (appData.apiKey) {
+  // 与 hasValidApiConfig 保持一致：zhipu_free 走 Supabase 代理，无需前端 Key
+  if (hasValidApiConfig()) {
     dot.className = 'api-status ok';
   } else {
     dot.className = 'api-status no';
@@ -2775,6 +2790,16 @@ function onProviderChange() {
   sel.onchange = function() {
     $('modelCustomInput').style.display = sel.value === '__custom__' ? '' : 'none';
   };
+  // 内置模型：隐藏 Key 输入框
+  const keyRow = $('apiKeyInput').parentElement;
+  const keyBtns = keyRow.querySelector('.input-btns');
+  if (cfg.builtin) {
+    $('apiKeyInput').style.display = 'none';
+    if (keyBtns) keyBtns.style.display = 'none';
+  } else {
+    $('apiKeyInput').style.display = '';
+    if (keyBtns) keyBtns.style.display = '';
+  }
 }
 
 function onTtsProviderChange() {
@@ -2819,11 +2844,13 @@ async function testAiConnection() {
   result.textContent = '';
   result.style.color = '';
 
+  const provider = $('providerSelect').value;
+  const isProxy = provider === 'zhipu_free';
   const key = $('apiKeyInput').value.trim();
-  const url = ($('apiUrlInput').value.trim() || 'https://api.deepseek.com/v1').replace(/\/$/, '');
   const model = getModalModel();
 
-  if (!key) {
+  // zhipu_free 走 Supabase 代理，无需前端 Key；其它 provider 需要用户填写的 Key
+  if (!isProxy && !key) {
     result.textContent = '请先填写 API Key';
     result.style.color = '#e74c3c';
     btn.disabled = false;
@@ -2831,23 +2858,29 @@ async function testAiConnection() {
     return;
   }
 
+  // 代理模式：直接 POST 到代理地址，不带 Authorization；
+  // 直连模式：POST apiUrl + /chat/completions，带 Bearer Key
+  const reqUrl = isProxy
+    ? BUILTIN_ZHIPU_PROXY
+    : ($('apiUrlInput').value.trim() || 'https://api.deepseek.com/v1').replace(/\/$/, '') + '/chat/completions';
+  const reqModel = isProxy ? (model || BUILTIN_ZHIPU_MODEL) : model;
+  const reqHeaders = { 'Content-Type': 'application/json' };
+  if (!isProxy) reqHeaders['Authorization'] = 'Bearer ' + key;
+
   try {
-    const resp = await fetch(url + '/chat/completions', {
+    const resp = await fetch(reqUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + key
-      },
+      headers: reqHeaders,
       body: JSON.stringify({
-        model: model,
+        model: reqModel,
         messages: [{ role: 'user', content: 'Hello' }],
         max_tokens: 5,
-        ...(appData.provider === 'deepseek' ? { thinking: { type: 'disabled' } } : {})
+        ...(provider === 'deepseek' ? { thinking: { type: 'disabled' } } : {})
       }),
       signal: AbortSignal.timeout(15000)
     });
     if (resp.ok) {
-      result.textContent = 'AI 连接成功！模型: ' + model;
+      result.textContent = 'AI 连接成功！模型: ' + reqModel;
       result.style.color = '#27ae60';
     } else {
       const err = await resp.text().catch(() => '');
@@ -3353,7 +3386,7 @@ function renderWordTable() {
   const area = $('wordTableArea');
   const count = appData.words.length;
   $('wordCount').textContent = count;
-  $('btnGenAll').disabled = count === 0 || !appData.apiKey;
+  $('btnGenAll').disabled = count === 0 || !hasValidApiConfig();
 
   if (count === 0) {
     area.innerHTML = `<div class="empty-state">
@@ -3378,7 +3411,7 @@ function renderWordTable() {
       <td>${exampleHtml}</td>
       <td>${aiBadge}</td>
       <td class="word-actions">
-        <button class="btn btn-primary btn-sm" onclick="generateAllContent('${w.id}')" ${appData.apiKey ? '' : 'disabled'}>AI 生成内容</button>
+        <button class="btn btn-primary btn-sm" onclick="generateAllContent('${w.id}')" ${hasValidApiConfig() ? '' : 'disabled'}>AI 生成内容</button>
         <button class="btn btn-danger btn-sm" onclick="deleteWord('${w.id}')">删除</button>
       </td></tr>`;
   });
@@ -3417,41 +3450,90 @@ function posLabel(word) {
 // ═══════════════════════════════════════
 // AI API (multi-provider)
 // ═══════════════════════════════════════
+function hasValidApiConfig() {
+  // zhipu_free 通过 Supabase 代理，无需前端 Key
+  if (appData.provider === 'zhipu_free') return true;
+  return !!appData.apiKey;
+}
+
 async function callAI(prompt, maxTokens = 1500) {
-  if (!appData.apiKey) {
+  const isProxy = appData.provider === 'zhipu_free';
+  let useKey = appData.apiKey;
+  let useUrl = appData.apiUrl;
+  let useModel = appData.model;
+  
+  if (isProxy) {
+    useUrl = BUILTIN_ZHIPU_PROXY;
+    useModel = useModel || BUILTIN_ZHIPU_MODEL;
+  }
+  
+  if (!isProxy && !useKey) {
     showToast('请先在 API 设置中配置 API Key');
     return null;
   }
-  const apiUrl = (appData.apiUrl || 'https://api.deepseek.com/v1').replace(/\/$/, '');
-  try {
-    const resp = await fetch(apiUrl + '/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + appData.apiKey
-      },
-      body: JSON.stringify({
-        model: appData.model || 'deepseek-v4-pro',
+
+  // 智谱免费模型列表：按优先级降级尝试
+  const fallbackModels = isProxy
+    ? (PROVIDERS.zhipu_free.models.filter(m => m !== useModel).concat([useModel]).reverse())
+    : [useModel];
+
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const tryModel = attempt < fallbackModels.length ? fallbackModels[attempt] : fallbackModels[fallbackModels.length - 1];
+    try {
+      // 代理模式：直接 POST 代理地址，不带 Authorization
+      // 直连模式：POST apiUrl + /chat/completions，带 Bearer Key
+      const reqUrl = isProxy ? useUrl : (useUrl || 'https://api.deepseek.com/v1').replace(/\/$/, '') + '/chat/completions';
+      const reqHeaders = { 'Content-Type': 'application/json' };
+      if (!isProxy) reqHeaders['Authorization'] = 'Bearer ' + useKey;
+
+      const reqBody = {
+        model: tryModel || 'deepseek-v4-pro',
         messages: [
           { role: 'system', content: '你是一个专业的英语学习助手。请严格按照用户要求的格式输出内容，不要添加额外说明。' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
         max_tokens: maxTokens,
-        ...(appData.provider === 'deepseek' ? { thinking: { type: 'disabled' } } : {})
-      }),
-      signal: AbortSignal.timeout(30000)
-    });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error?.message || `HTTP ${resp.status}`);
+      };
+      if (appData.provider === 'deepseek') reqBody.thinking = { type: 'disabled' };
+
+      const resp = await fetch(reqUrl, {
+        method: 'POST',
+        headers: reqHeaders,
+        body: JSON.stringify(reqBody),
+        signal: AbortSignal.timeout(30000)
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        const errMsg = err.error?.message || `HTTP ${resp.status}`;
+        // 429 或访问量过大 — 重试
+        if (resp.status === 429 || resp.status === 503 || errMsg.includes('访问量过大') || errMsg.includes('rate')) {
+          lastError = errMsg;
+          if (attempt < 2) {
+            await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+            continue;
+          }
+        }
+        throw new Error(errMsg);
+      }
+      const data = await resp.json();
+      return data.choices[0].message.content.trim();
+    } catch (err) {
+      lastError = err.message;
+      if (err.name !== 'TimeoutError' && err.name !== 'AbortError' && attempt < 2 && !err.message.startsWith('HTTP')) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+      if (attempt < 2 && (err.message.includes('访问量过大') || err.message.includes('rate') || err.message.includes('429') || err.message.includes('503'))) {
+        await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+        continue;
+      }
+      if (attempt < 2) continue;
     }
-    const data = await resp.json();
-    return data.choices[0].message.content.trim();
-  } catch (err) {
-    showToast('API 调用失败: ' + err.message);
-    return null;
   }
+  showToast('API 调用失败: ' + (lastError || '未知错误'));
+  return null;
 }
 
 function parseSection(text, label) {
@@ -3476,7 +3558,7 @@ async function generateAllContent(wordId) {
     word = appData.words[learnIndex];
   }
   if (!word) return;
-  if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
 
   showToast('AI 正在生成全部学习内容，请稍候...');
   $('btnGenOne').disabled = true;
@@ -3551,7 +3633,7 @@ ${missing.includes('对话') ? '对话: <A:... B:... 一个包含该单词的雅
 async function generatePhoneticAndExample() {
   const w = appData.words[learnIndex];
   if (!w) return;
-  if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
   $('btnGenPhonetic').disabled = true;
   $('btnGenPhonetic').textContent = '生成中...';
   let successMsg = '';
@@ -3606,7 +3688,7 @@ function parsePhoneticAndExample(w, text) {
 
 async function generateAllContentBatch() {
   try {
-  if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
   const wordsToGen = appData.words.filter(w => !w.aiGenerated);
   if (wordsToGen.length === 0) { showToast('所有单词都已有 AI 学习内容'); return; }
   if (!confirm(`将为 ${wordsToGen.length} 个单词生成全部学习内容，每个约需3-5秒，确认继续？`)) return;
@@ -3675,13 +3757,13 @@ ${missing.includes('对话') ? '对话: <A:... B:... 一个包含该单词的雅
     }
     await new Promise(r => setTimeout(r, 800));
   }
-  $('btnGenAll').disabled = appData.words.length === 0 || !appData.apiKey;
+  $('btnGenAll').disabled = appData.words.length === 0 || !hasValidApiConfig();
   $('btnGenAll').textContent = 'AI 批量生成全部内容';
   showToast(`批量生成完成: ${done}/${wordsToGen.length} 成功`);
   } catch (e) {
     showToast('操作失败: ' + (e.message || '未知错误'));
     console.error(e);
-    $('btnGenAll').disabled = appData.words.length === 0 || !appData.apiKey;
+    $('btnGenAll').disabled = appData.words.length === 0 || !hasValidApiConfig();
     $('btnGenAll').textContent = 'AI 批量生成全部内容';
   }
 }
@@ -5059,7 +5141,7 @@ let lookupData = null; // { word, phonetic, definition, examples, derived }
 async function doLookup() {
   const word = $('lookupWord').value.trim();
   if (!word) { showToast('请输入单词'); return; }
-  if (!appData.apiKey) { showToast('请先在 API 设置中配置 AI API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先在 API 设置中配置 AI API Key'); return; }
 
   $('lookupResult').style.display = 'none';
   $('lookupError').style.display = 'none';
@@ -5405,7 +5487,7 @@ function selectWritingDiff(diff, btn) {
 
 async function generateTranslation() {
   try {
-  if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
   $('btnGenTrans').disabled = true;
   $('transGenLoading').style.display = '';
   startProgress('transGenProgress');
@@ -5442,7 +5524,7 @@ async function correctTranslation() {
   const original = $('correctOriginal').value.trim();
   const translation = $('correctTranslation').value.trim();
   if (!original || !translation) { showToast('请填写中文原文和你的译文'); return; }
-  if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
 
   $('btnCorrectTrans').disabled = true;
   $('correctLoading').style.display = '';
@@ -5498,7 +5580,7 @@ async function correctWriting() {
   const topic = $('writingTopic').value.trim();
   const essay = $('writingEssay').value.trim();
   if (!topic || !essay) { showToast('请填写作文题目和你的作文'); return; }
-  if (!appData.apiKey) { showToast('请先配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
 
   $('btnWritingCorrect').disabled = true;
   $('writingLoading').style.display = '';
@@ -5658,7 +5740,7 @@ function reciteClearForm() {
 async function reciteAiTranslate() {
   const english = $('reciteEnglish').value.trim();
   if (!english) { showToast('请先输入英文句子'); return; }
-  if (!appData.apiKey) { showToast('请先在 API 设置中配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先在 API 设置中配置 API Key'); return; }
 
   const btn = $('btnReciteTranslate');
   btn.disabled = true;
@@ -5899,7 +5981,7 @@ async function reciteCheckAnswer() {
   $('reciteUserAnswer').disabled = true;
 
   if (reciteCheckMode === 'ai') {
-    if (!appData.apiKey) {
+    if (!hasValidApiConfig()) {
       showToast('请先在 API 设置中配置 API Key 以使用 AI 核对');
       $('reciteAiFeedback').style.display = '';
       $('reciteAiFeedback').innerHTML = '<div class="ai-section-title">⚠️ 提示</div><div class="ai-section-content">未配置 API Key，无法进行 AI 核对。请切换为手动核对或配置 API。</div>';
