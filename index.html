@@ -1970,7 +1970,7 @@ function loadData() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch (e) { /* ignore */ }
-  return { apiKey: '', apiUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-pro', provider: 'deepseek',
+  return { apiKey: '', apiUrl: BUILTIN_ZHIPU_PROXY, model: 'glm-4.7-flash', provider: 'zhipu_free',
     ttsKey: '', ttsAppId: '', ttsProvider: 'minimax', ttsUrl: 'https://api.minimaxi.com', ttsModel: 'speech-2.8-hd', ttsVoice: 'English_Graceful_Lady',
     words: [], sentences: [] };
 }
@@ -2735,7 +2735,7 @@ function updateApiStatus() {
 // Settings Modal
 // ═══════════════════════════════════════
 function openSettings() {
-  $('providerSelect').value = appData.provider || 'deepseek';
+  $('providerSelect').value = appData.provider || 'zhipu_free';
   onProviderChange();
   $('apiUrlInput').value = appData.apiUrl || '';
   $('apiKeyInput').value = appData.apiKey || '';
