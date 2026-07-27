@@ -904,6 +904,8 @@ tr:hover td { background: rgba(201,169,110,0.06); }
 }
 .recite-select-item:hover { background: var(--accent-soft); }
 .recite-select-item input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
+.recite-list-checkbox-wrap { display: none; }
+.recite-list-checkbox-wrap.export-mode { display: flex; }
 .diff-selector { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .diff-btn {
   padding: 8px 22px;
@@ -1043,6 +1045,10 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   .export-section-title { font-size: 0.78rem; font-weight: 600; color: #2d5a5a; text-transform: uppercase; margin-bottom: 6px; }
   .export-section-content { font-size: 0.85rem; line-height: 1.7; white-space: pre-wrap; }
   .export-section-content .error-highlight { color: #dc2626; font-weight: 700; }
+  .export-sentence { margin-bottom: 20px; page-break-inside: avoid; }
+  .export-sentence .es-en { font-size: 1rem; font-style: italic; color: #3a3835; margin-bottom: 6px; line-height: 1.7; }
+  .export-sentence .es-cn { font-size: 0.9rem; color: #5a5550; margin-bottom: 4px; line-height: 1.6; }
+  .export-sentence .es-meta { font-size: 0.72rem; color: #9a958f; padding-top: 4px; border-top: 1px dashed #e4ddd5; }
 }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1360,7 +1366,17 @@ tr:hover td { background: rgba(201,169,110,0.06); }
       <div class="card">
         <div class="card-header">
           <span>我的句子</span>
-          <span style="font-size:0.75rem;color:var(--muted);" id="reciteCount">共 0 句</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span style="font-size:0.75rem;color:var(--muted);" id="reciteCount">共 0 句</span>
+            <button class="btn btn-accent btn-sm" id="btnReciteExport" onclick="reciteEnterExportMode()" style="background:var(--gold);">📄 导出</button>
+          </div>
+        </div>
+        <div id="reciteListToolbar" style="display:none;margin-bottom:12px;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="reciteToggleSelectAll()">☐ 全选 / 取消全选</button>
+          <span style="font-size:0.75rem;color:var(--muted);" id="reciteSelectedCount">已选 0 句</span>
+          <button class="btn btn-accent btn-sm" id="btnReciteExportPdf" onclick="reciteExportPdf()" style="background:var(--gold);">📄 导出 PDF</button>
+          <button class="btn btn-secondary btn-sm" onclick="reciteCancelExportMode()">取消</button>
+        </div>
         </div>
         <div id="reciteListEmpty" class="empty-state">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -5709,21 +5725,33 @@ function reciteEditSentence(id) {
 function renderReciteList() {
   const list = $('reciteList');
   const empty = $('reciteListEmpty');
+  const toolbar = $('reciteListToolbar');
   const count = $('reciteCount');
+  const exportBtn = $('btnReciteExport');
   const sentences = appData.sentences || [];
 
   count.textContent = '共 ' + sentences.length + ' 句';
 
   if (sentences.length === 0) {
     list.style.display = 'none';
+    toolbar.style.display = 'none';
+    if (exportBtn) exportBtn.style.display = 'none';
     empty.style.display = '';
     return;
   }
 
   empty.style.display = 'none';
+  if (exportBtn) exportBtn.style.display = '';
+  toolbar.style.display = 'none';
+  // Reset export mode
+  _reciteSelectAll = false;
   list.style.display = '';
   list.innerHTML = sentences.map(s => `
     <div class="recite-sentence-item">
+      <label class="recite-select-item recite-list-checkbox-wrap" style="margin-bottom:8px;padding:0;">
+        <input type="checkbox" class="recite-list-checkbox" value="${s.id}" onchange="reciteUpdateSelectedCount()">
+        <span style="font-size:0.8rem;color:var(--muted);">选择</span>
+      </label>
       <div class="recite-sentence-en">${escapeHtml(s.english)}</div>
       <div class="recite-sentence-cn">${escapeHtml(s.chinese)}</div>
       <div class="recite-sentence-meta">
@@ -5737,6 +5765,62 @@ function renderReciteList() {
       </div>
     </div>
   `).join('');
+}
+
+function reciteEnterExportMode() {
+  // Show checkboxes and toolbar
+  document.querySelectorAll('.recite-list-checkbox-wrap').forEach(el => el.classList.add('export-mode'));
+  document.querySelectorAll('.recite-list-checkbox').forEach(cb => { cb.checked = false; });
+  $('reciteListToolbar').style.display = 'flex';
+  $('btnReciteExport').style.display = 'none';
+  $('reciteSelectedCount').textContent = '已选 0 句';
+}
+
+function reciteCancelExportMode() {
+  // Hide checkboxes and toolbar
+  document.querySelectorAll('.recite-list-checkbox-wrap').forEach(el => el.classList.remove('export-mode'));
+  $('reciteListToolbar').style.display = 'none';
+  $('btnReciteExport').style.display = '';
+}
+
+function reciteUpdateSelectedCount() {
+  const checkboxes = document.querySelectorAll('.recite-list-checkbox:checked');
+  if ($('reciteSelectedCount')) $('reciteSelectedCount').textContent = '已选 ' + checkboxes.length + ' 句';
+}
+
+let _reciteSelectAll = false;
+function reciteToggleSelectAll() {
+  _reciteSelectAll = !_reciteSelectAll;
+  document.querySelectorAll('.recite-list-checkbox').forEach(cb => { cb.checked = _reciteSelectAll; });
+  reciteUpdateSelectedCount();
+}
+
+function reciteExportPdf() {
+  const checkboxes = document.querySelectorAll('.recite-list-checkbox:checked');
+  const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+  if (selectedIds.length === 0) { showToast('请先勾选要导出的句子'); return; }
+
+  const selected = appData.sentences.filter(s => selectedIds.includes(s.id));
+  const date = new Date().toLocaleString('zh-CN');
+
+  let html = '';
+  html += `<div class="export-header"><h1>好句积累</h1><p>导出日期：${date}　｜　共 ${selected.length} 句</p></div>`;
+
+  selected.forEach((s, i) => {
+    html += `<div class="export-sentence">`;
+    html += `<div style="font-size:0.78rem;font-weight:600;color:#2d5a5a;margin-bottom:6px;">#${i + 1}</div>`;
+    html += `<div class="es-en">${escapeHtml(s.english)}</div>`;
+    html += `<div class="es-cn">${escapeHtml(s.chinese)}</div>`;
+    html += `<div class="es-meta">${s.source ? '来源：' + escapeHtml(s.source) + '　' : ''}添加日期：${new Date(s.createdAt).toLocaleDateString('zh-CN')}${s.practiceCount > 0 ? '　练习 ' + s.practiceCount + ' 次' : ''}</div>`;
+    html += `</div>`;
+  });
+
+  $('printArea').innerHTML = html;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      window.print();
+    });
+  });
 }
 
 function renderReciteSelectList() {
