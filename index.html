@@ -842,6 +842,68 @@ tr:hover td { background: rgba(201,169,110,0.06); }
   font-weight: 500;
 }
 .translate-subtab.active { color: #fff; background: var(--accent); }
+/* ── Recite (好句背诵) ── */
+.recite-subtab {
+  padding: 8px 20px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--muted);
+  border-radius: 18px;
+  transition: all var(--transition);
+  font-family: var(--font-body);
+  font-weight: 500;
+}
+.recite-subtab.active { color: #fff; background: var(--accent); box-shadow: 0 2px 8px rgba(45,90,90,0.2); }
+.recite-subtab:hover:not(.active) { color: var(--accent); background: var(--accent-soft); }
+.recite-sentence-item {
+  padding: 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  margin-bottom: 10px;
+  transition: all var(--transition);
+}
+.recite-sentence-item:hover { border-color: var(--gold); box-shadow: var(--shadow-card); }
+.recite-sentence-en {
+  font-size: 0.95rem;
+  color: var(--ink);
+  line-height: 1.7;
+  margin-bottom: 6px;
+  font-style: italic;
+}
+.recite-sentence-cn {
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+.recite-sentence-meta {
+  font-size: 0.75rem;
+  color: var(--muted);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.recite-sentence-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.recite-check-mode.active { border-color: var(--accent) !important; color: var(--accent) !important; background: var(--accent-soft) !important; }
+.recite-select-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background var(--transition);
+}
+.recite-select-item:hover { background: var(--accent-soft); }
+.recite-select-item input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
 .diff-selector { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .diff-btn {
   padding: 8px 22px;
@@ -1022,6 +1084,7 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     <button class="nav-tab" data-tab="translate">翻译练习</button>
     <button class="nav-tab" data-tab="writing">作文练习</button>
     <button class="nav-tab" data-tab="history">批改记录</button>
+    <button class="nav-tab" data-tab="recite">好句背诵</button>
   </div>
 </nav>
 
@@ -1251,7 +1314,126 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     </div>
   </section>
 
-<!-- Tab: 单词管理 -->
+  <!-- Tab: 好句背诵 -->
+  <section class="tab-panel" id="panel-recite">
+    <!-- 子功能切换 -->
+    <div class="card" style="text-align:center;padding:12px;">
+      <div style="display:inline-flex;gap:0;background:var(--bg);border-radius:20px;padding:3px;border:1px solid var(--rule);">
+        <button class="recite-subtab active" data-sub="add" onclick="switchReciteTab('add')">添加句子</button>
+        <button class="recite-subtab" data-sub="list" onclick="switchReciteTab('list')">我的句子</button>
+        <button class="recite-subtab" data-sub="practice" onclick="switchReciteTab('practice')">开始背诵</button>
+      </div>
+    </div>
+
+    <!-- 子面板：添加句子 -->
+    <div id="reciteAddPanel">
+      <div class="card">
+        <div class="card-header">
+          <span>添加好句</span>
+          <span style="font-size:0.75rem;color:var(--muted);">将阅读中遇到的精彩句子保存下来</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">英文句子 <span style="color:var(--muted);font-weight:400;">*</span></label>
+          <textarea class="form-textarea" id="reciteEnglish" placeholder="粘贴你读到的英文好句..." style="min-height:100px;"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">中文翻译</label>
+          <div style="display:flex;gap:8px;align-items:flex-end;">
+            <textarea class="form-textarea" id="reciteChinese" placeholder="手动输入翻译，或点击 AI 翻译自动生成" style="min-height:80px;flex:1;"></textarea>
+            <button class="btn btn-accent btn-sm" id="btnReciteTranslate" onclick="reciteAiTranslate()" style="flex-shrink:0;margin-bottom:2px;">🤖 AI 翻译</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">来源（可选）</label>
+          <input class="form-input" id="reciteSource" placeholder="例如：《经济学人》2024.03 期">
+        </div>
+        <div id="reciteAddError" style="color:var(--danger);font-size:0.82rem;margin-bottom:8px;display:none;"></div>
+        <div style="display:flex;gap:12px;">
+          <button class="btn btn-primary" onclick="reciteAddSentence()">✅ 保存句子</button>
+          <button class="btn btn-secondary" onclick="reciteClearForm()">清空</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 子面板：我的句子 -->
+    <div id="reciteListPanel" style="display:none;">
+      <div class="card">
+        <div class="card-header">
+          <span>我的句子</span>
+          <span style="font-size:0.75rem;color:var(--muted);" id="reciteCount">共 0 句</span>
+        </div>
+        <div id="reciteListEmpty" class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          <p>还没有保存的句子，去添加一些吧</p>
+        </div>
+        <div id="reciteList" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- 子面板：开始背诵 -->
+    <div id="recitePracticePanel" style="display:none;">
+      <!-- 选择模式 -->
+      <div class="card" id="recitePracticeSetup">
+        <div class="card-header">
+          <span>背诵设置</span>
+        </div>
+        <div style="margin-bottom:16px;">
+          <label class="form-label">选择要背诵的句子</label>
+          <div id="reciteSelectList" style="max-height:240px;overflow-y:auto;border:1px solid var(--rule);border-radius:var(--radius-sm);padding:8px;">
+            <p style="color:var(--muted);text-align:center;padding:16px;">还没有句子，请先添加</p>
+          </div>
+        </div>
+        <div style="margin-bottom:16px;">
+          <label class="form-label">核对方式</label>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary btn-sm recite-check-mode active" data-mode="manual" onclick="reciteSetCheckMode('manual')">👁️ 手动核对</button>
+            <button class="btn btn-secondary btn-sm recite-check-mode" data-mode="ai" onclick="reciteSetCheckMode('ai')">🤖 AI 核对</button>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-lg" onclick="reciteStartPractice()" style="width:100%;">🎯 开始背诵</button>
+      </div>
+
+      <!-- 背诵中 -->
+      <div class="card" id="recitePracticeActive" style="display:none;">
+        <div style="text-align:center;margin-bottom:20px;">
+          <span style="font-size:0.85rem;color:var(--muted);" id="reciteProgress">第 1/5 句</span>
+        </div>
+        <div id="reciteChineseDisplay" style="font-family:var(--font-display);font-size:1.3rem;text-align:center;padding:24px;background:var(--bg);border-radius:var(--radius-sm);margin-bottom:20px;color:var(--ink);line-height:1.8;min-height:80px;display:flex;align-items:center;justify-content:center;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">请写出英文原文</label>
+          <textarea class="form-textarea" id="reciteUserAnswer" placeholder="根据中文翻译写出英文原句..." style="min-height:100px;font-size:1rem;"></textarea>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:16px;">
+          <button class="btn btn-primary" id="btnReciteCheck" onclick="reciteCheckAnswer()" style="flex:1;">✅ 核对答案</button>
+          <button class="btn btn-secondary" onclick="reciteSkipSentence()">跳过 ➤</button>
+        </div>
+
+        <!-- 核对结果 -->
+        <div id="reciteResult" style="display:none;padding-top:16px;border-top:1px solid var(--rule);">
+          <div class="ai-section-title">📝 原文</div>
+          <div id="reciteOriginalDisplay" style="background:var(--bg);padding:12px;border-radius:var(--radius-sm);margin-bottom:12px;font-size:0.95rem;line-height:1.7;"></div>
+          <div class="ai-section-title">✏️ 你的答案</div>
+          <div id="reciteUserAnswerDisplay" style="background:var(--bg);padding:12px;border-radius:var(--radius-sm);margin-bottom:12px;font-size:0.95rem;line-height:1.7;"></div>
+          <div id="reciteAiFeedback" style="display:none;"></div>
+          <div style="display:flex;gap:12px;margin-top:12px;">
+            <button class="btn btn-primary" id="btnReciteNext" onclick="reciteNextSentence()" style="flex:1;">下一句 ➤</button>
+            <button class="btn btn-accent" onclick="reciteRetryAnswer()">🔄 重试</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 背诵完成 -->
+      <div class="card" id="recitePracticeDone" style="display:none;text-align:center;">
+        <div style="font-size:3rem;margin-bottom:12px;">🎉</div>
+        <div style="font-family:var(--font-display);font-size:1.3rem;font-weight:600;color:var(--accent);margin-bottom:8px;">背诵完成！</div>
+        <div style="color:var(--muted);margin-bottom:16px;">本次共背诵 <span id="reciteDoneCount" style="font-weight:600;color:var(--ink);">5</span> 句</div>
+        <button class="btn btn-primary" onclick="switchReciteTab('practice')">再来一次</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tab: 单词管理 -->
   <section class="tab-panel" id="panel-manage">
     <div class="card">
       <div class="card-header">
@@ -1773,7 +1955,7 @@ function loadData() {
   } catch (e) { /* ignore */ }
   return { apiKey: '', apiUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-pro', provider: 'deepseek',
     ttsKey: '', ttsAppId: '', ttsProvider: 'minimax', ttsUrl: 'https://api.minimaxi.com', ttsModel: 'speech-2.8-hd', ttsVoice: 'English_Graceful_Lady',
-    words: [] };
+    words: [], sentences: [] };
 }
 
 // Provider presets
@@ -1864,6 +2046,8 @@ function saveData(data) {
 }
 
 let appData = loadData();
+// Ensure sentences array exists for users upgrading from older versions
+if (!appData.sentences) appData.sentences = [];
 
 function persist() { saveData(appData); }
 
@@ -2261,7 +2445,7 @@ async function cloudUpload() {
       .from('user_words')
       .upsert({
         user_id: userId,
-        words: appData.words,
+        words: { words: appData.words, sentences: appData.sentences || [] },
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id' });
 
@@ -2303,20 +2487,31 @@ async function cloudDownload() {
       return;
     }
 
-    // Merge strategy: cloud data wins, but keep local if cloud is empty
-    if (data.words && data.words.length > 0) {
-      // 真正的合并：按 english 去重，云端数据优先
+    let mergedCount = 0;
+    // Parse cloud data: support both old format (array) and new format ({words, sentences})
+    const cloudWords = Array.isArray(data.words) ? data.words : (data.words.words || []);
+    const cloudSentences = Array.isArray(data.words) ? [] : (data.words.sentences || []);
+
+    // Merge words
+    if (cloudWords.length > 0) {
       const merged = new Map();
       appData.words.forEach(w => merged.set(w.english.toLowerCase(), w));
-      data.words.forEach(w => merged.set(w.english.toLowerCase(), w));
+      cloudWords.forEach(w => merged.set(w.english.toLowerCase(), w));
       appData.words = Array.from(merged.values());
-      persist();
-      renderWordTable();
-      $('cloudSyncTime').textContent = '云端时间: ' + new Date(data.updated_at).toLocaleString('zh-CN');
-      showToast('从云端合并了 ' + data.words.length + ' 个单词（云端优先）');
-    } else {
-      showToast('云端暂无单词数据');
+      mergedCount += cloudWords.length;
     }
+    // Merge sentences
+    if (cloudSentences.length > 0) {
+      const mergedSent = new Map();
+      (appData.sentences || []).forEach(s => mergedSent.set(s.id, s));
+      cloudSentences.forEach(s => mergedSent.set(s.id, s));
+      appData.sentences = Array.from(mergedSent.values());
+      mergedCount += cloudSentences.length;
+    }
+    persist();
+    renderWordTable();
+    $('cloudSyncTime').textContent = '云端时间: ' + new Date(data.updated_at).toLocaleString('zh-CN');
+    showToast('从云端合并了 ' + mergedCount + ' 条数据（云端优先）');
     $('cloudStatusDot').className = 'cloud-status synced';
   } catch (e) {
     showToast('下载失败: ' + (e.message || '网络错误'));
@@ -2341,7 +2536,7 @@ function cloudAutoSync() {
         .from('user_words')
         .upsert({
           user_id: session.user.id,
-          words: appData.words,
+          words: { words: appData.words, sentences: appData.sentences || [] },
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' });
       $('cloudSyncTime').textContent = '自动同步: ' + new Date().toLocaleString('zh-CN');
@@ -2832,6 +3027,7 @@ function onTabSwitch(tab) {
   if (tab === 'quiz') initQuiz();
   if (tab === 'read') { updateArticleEstimate(); }
   if (tab === 'history') renderHistory();
+  if (tab === 'recite') switchReciteTab('add');
 }
 
 // ═══════════════════════════════════════
@@ -5407,6 +5603,287 @@ function resetCorrection(type) {
     $('writingSavedMsg').style.display = 'none';
     $('writingTopic').focus();
   }
+}
+
+// ═══════════════════════════════════════
+// 好句背诵 (Sentence Recitation)
+// ═══════════════════════════════════════
+let reciteCheckMode = 'manual'; // 'manual' or 'ai'
+let recitePracticeQueue = [];
+let reciteCurrentIndex = 0;
+let reciteCurrentSentence = null;
+
+function switchReciteTab(sub) {
+  document.querySelectorAll('#panel-recite .recite-subtab').forEach(b => b.classList.remove('active'));
+  document.querySelector(`#panel-recite .recite-subtab[data-sub="${sub}"]`).classList.add('active');
+  $('reciteAddPanel').style.display = sub === 'add' ? '' : 'none';
+  $('reciteListPanel').style.display = sub === 'list' ? '' : 'none';
+  $('recitePracticePanel').style.display = sub === 'practice' ? '' : 'none';
+  if (sub === 'list') renderReciteList();
+  if (sub === 'practice') {
+    renderReciteSelectList();
+    // Reset practice sub-state to setup view
+    recitePracticeQueue = [];
+    reciteCurrentIndex = 0;
+    reciteCurrentSentence = null;
+    $('recitePracticeSetup').style.display = '';
+    $('recitePracticeActive').style.display = 'none';
+    $('recitePracticeDone').style.display = 'none';
+  }
+}
+
+function reciteClearForm() {
+  $('reciteEnglish').value = '';
+  $('reciteChinese').value = '';
+  $('reciteSource').value = '';
+  if ($('reciteAddError')) $('reciteAddError').style.display = 'none';
+}
+
+async function reciteAiTranslate() {
+  const english = $('reciteEnglish').value.trim();
+  if (!english) { showToast('请先输入英文句子'); return; }
+  if (!appData.apiKey) { showToast('请先在 API 设置中配置 API Key'); return; }
+
+  const btn = $('btnReciteTranslate');
+  btn.disabled = true;
+  btn.textContent = '⏳ 翻译中...';
+
+  try {
+    const prompt = `请将以下英文句子翻译成地道的中文，只返回翻译结果，不要加任何解释：\n\n${english}`;
+    const result = await callAI(prompt, 512);
+    $('reciteChinese').value = result.trim();
+    showToast('AI 翻译完成');
+  } catch (e) {
+    showToast('翻译失败: ' + (e.message || '请检查 API 配置'));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🤖 AI 翻译';
+  }
+}
+
+function reciteAddSentence() {
+  const english = $('reciteEnglish').value.trim();
+  const chinese = $('reciteChinese').value.trim();
+  const source = $('reciteSource').value.trim();
+
+  if (!english) { showToast('请输入英文句子'); return; }
+  if (!chinese) { showToast('请输入中文翻译或使用 AI 翻译'); return; }
+
+  const sentence = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    english,
+    chinese,
+    source,
+    createdAt: new Date().toISOString(),
+    aiTranslated: false,
+    practiceCount: 0,
+    lastPracticed: null
+  };
+  appData.sentences.unshift(sentence);
+  persist();
+  reciteClearForm();
+  showToast('句子已保存 ✓');
+}
+
+function reciteDeleteSentence(id) {
+  if (!confirm('确定要删除这条句子吗？')) return;
+  appData.sentences = appData.sentences.filter(s => s.id !== id);
+  persist();
+  renderReciteList();
+  showToast('已删除');
+}
+
+function reciteEditSentence(id) {
+  const s = appData.sentences.find(s => s.id === id);
+  if (!s) return;
+  switchReciteTab('add');
+  $('reciteEnglish').value = s.english;
+  $('reciteChinese').value = s.chinese;
+  $('reciteSource').value = s.source || '';
+  // Remove the old one so we don't get duplicates
+  appData.sentences = appData.sentences.filter(s => s.id !== id);
+  persist();
+  showToast('已加载到编辑区，修改后请重新保存');
+}
+
+function renderReciteList() {
+  const list = $('reciteList');
+  const empty = $('reciteListEmpty');
+  const count = $('reciteCount');
+  const sentences = appData.sentences || [];
+
+  count.textContent = '共 ' + sentences.length + ' 句';
+
+  if (sentences.length === 0) {
+    list.style.display = 'none';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  list.style.display = '';
+  list.innerHTML = sentences.map(s => `
+    <div class="recite-sentence-item">
+      <div class="recite-sentence-en">${escapeHtml(s.english)}</div>
+      <div class="recite-sentence-cn">${escapeHtml(s.chinese)}</div>
+      <div class="recite-sentence-meta">
+        ${s.source ? '<span>📖 ' + escapeHtml(s.source) + '</span>' : ''}
+        <span>📅 ${new Date(s.createdAt).toLocaleDateString('zh-CN')}</span>
+        ${s.practiceCount > 0 ? '<span>🔄 练习 ' + s.practiceCount + ' 次</span>' : '<span>🆕 未练习</span>'}
+      </div>
+      <div class="recite-sentence-actions">
+        <button class="btn btn-secondary btn-sm" onclick="reciteEditSentence('${s.id}')">✏️ 编辑</button>
+        <button class="btn btn-danger btn-sm" onclick="reciteDeleteSentence('${s.id}')">🗑️ 删除</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderReciteSelectList() {
+  const container = $('reciteSelectList');
+  const sentences = appData.sentences || [];
+
+  if (sentences.length === 0) {
+    container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:16px;">还没有句子，请先添加</p>';
+    return;
+  }
+
+  container.innerHTML = sentences.map(s => `
+    <label class="recite-select-item">
+      <input type="checkbox" value="${s.id}">
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(s.chinese)}</span>
+      <span style="color:var(--muted);font-size:0.75rem;flex-shrink:0;">${s.practiceCount > 0 ? '练' + s.practiceCount + '次' : '新'}</span>
+    </label>
+  `).join('');
+}
+
+function reciteSetCheckMode(mode) {
+  reciteCheckMode = mode;
+  document.querySelectorAll('.recite-check-mode').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+}
+
+function reciteStartPractice() {
+  const checkboxes = $('reciteSelectList').querySelectorAll('input[type="checkbox"]:checked');
+  if (checkboxes.length === 0) { showToast('请至少选择一句'); return; }
+
+  const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+  recitePracticeQueue = appData.sentences.filter(s => selectedIds.includes(s.id));
+  // Shuffle
+  for (let i = recitePracticeQueue.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [recitePracticeQueue[i], recitePracticeQueue[j]] = [recitePracticeQueue[j], recitePracticeQueue[i]];
+  }
+  reciteCurrentIndex = 0;
+  reciteCurrentSentence = null;
+
+  $('recitePracticeSetup').style.display = 'none';
+  $('recitePracticeActive').style.display = '';
+  $('recitePracticeDone').style.display = 'none';
+  $('reciteResult').style.display = 'none';
+  $('reciteAiFeedback').style.display = 'none';
+
+  reciteShowSentence();
+}
+
+function reciteShowSentence() {
+  if (reciteCurrentIndex >= recitePracticeQueue.length) {
+    reciteFinishPractice();
+    return;
+  }
+  reciteCurrentSentence = recitePracticeQueue[reciteCurrentIndex];
+  $('reciteProgress').textContent = '第 ' + (reciteCurrentIndex + 1) + '/' + recitePracticeQueue.length + ' 句';
+  $('reciteChineseDisplay').textContent = reciteCurrentSentence.chinese;
+  $('reciteUserAnswer').value = '';
+  $('reciteResult').style.display = 'none';
+  $('reciteAiFeedback').style.display = 'none';
+  $('btnReciteCheck').style.display = '';
+  $('reciteUserAnswer').disabled = false;
+  $('reciteUserAnswer').focus();
+}
+
+async function reciteCheckAnswer() {
+  const userAnswer = $('reciteUserAnswer').value.trim();
+  if (!userAnswer) { showToast('请先写出你的答案'); return; }
+
+  const original = reciteCurrentSentence.english;
+  $('reciteOriginalDisplay').textContent = original;
+  $('reciteUserAnswerDisplay').textContent = userAnswer;
+  $('reciteResult').style.display = '';
+  $('btnReciteCheck').style.display = 'none';
+  $('reciteUserAnswer').disabled = true;
+
+  if (reciteCheckMode === 'ai') {
+    if (!appData.apiKey) {
+      showToast('请先在 API 设置中配置 API Key 以使用 AI 核对');
+      $('reciteAiFeedback').style.display = '';
+      $('reciteAiFeedback').innerHTML = '<div class="ai-section-title">⚠️ 提示</div><div class="ai-section-content">未配置 API Key，无法进行 AI 核对。请切换为手动核对或配置 API。</div>';
+      return;
+    }
+
+    $('reciteAiFeedback').style.display = '';
+    $('reciteAiFeedback').innerHTML = '<div class="ai-section-title">🤖 AI 正在评价...</div><div class="ai-section-content"><span class="spinner"></span> 正在分析你的翻译...</div>';
+
+    try {
+      const prompt = `你是一个专业的英语老师，请评价以下翻译练习。
+
+中文原文：${reciteCurrentSentence.chinese}
+标准英文答案：${original}
+学生写的英文：${userAnswer}
+
+请从以下维度评价（用中文回复）：
+1. 翻译准确性：学生的翻译是否准确传达了中文原意？（1-10分）
+2. 语法正确性：学生的英文语法是否正确？（1-10分）
+3. 亮点：学生做得好的地方
+4. 改进建议：需要改进的地方
+5. 总体评价：简短总结（1-2句话）
+
+请用友好的语气，鼓励为主。`;
+
+      const result = await callAI(prompt, 2000);
+      $('reciteAiFeedback').innerHTML = '<div class="ai-section-title">🤖 AI 评价</div><div class="ai-section-content">' + result.replace(/\n/g, '<br>') + '</div>';
+    } catch (e) {
+      $('reciteAiFeedback').innerHTML = '<div class="ai-section-title">⚠️ 评价失败</div><div class="ai-section-content">AI 评价暂时不可用: ' + (e.message || '请检查 API 配置') + '</div>';
+    }
+  } else {
+    // Manual check: show side by side
+    $('reciteAiFeedback').style.display = '';
+    $('reciteAiFeedback').innerHTML = '<div class="ai-section-title">👁️ 手动核对</div><div class="ai-section-content">请自行对比原文和你的答案，检查拼写、语法和用词是否一致。</div>';
+  }
+
+  // Update practice count
+  const s = appData.sentences.find(s => s.id === reciteCurrentSentence.id);
+  if (s) {
+    s.practiceCount = (s.practiceCount || 0) + 1;
+    s.lastPracticed = new Date().toISOString();
+    persist();
+  }
+}
+
+function reciteNextSentence() {
+  reciteCurrentIndex++;
+  reciteShowSentence();
+}
+
+function reciteSkipSentence() {
+  reciteNextSentence();
+}
+
+function reciteRetryAnswer() {
+  $('reciteResult').style.display = 'none';
+  $('reciteAiFeedback').style.display = 'none';
+  $('reciteUserAnswer').value = '';
+  $('reciteUserAnswer').disabled = false;
+  $('btnReciteCheck').style.display = '';
+  $('reciteUserAnswer').focus();
+}
+
+function reciteFinishPractice() {
+  $('recitePracticeActive').style.display = 'none';
+  $('recitePracticeDone').style.display = '';
+  $('reciteDoneCount').textContent = recitePracticeQueue.length;
+  showToast('背诵完成！🎉');
 }
 
 // ═══════════════════════════════════════
