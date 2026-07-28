@@ -1457,11 +1457,11 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
     <div class="card">
       <div class="card-header">
         <span>数据同步</span>
-        <span style="font-size:0.75rem;color:var(--muted);">云端自动同步 + 本地备份</span>
+        <span style="font-size:0.75rem;color:var(--muted);">手动同步到云端 + 本地备份</span>
       </div>
       <div id="cloudSyncArea">
         <div id="cloudNotLoggedIn" style="text-align:center;padding:16px 0;">
-          <p style="color:var(--muted);margin-bottom:12px;">登录后可自动同步数据到云端，跨设备使用</p>
+          <p style="color:var(--muted);margin-bottom:12px;">登录后可手动同步数据到云端，跨设备使用</p>
           <button class="btn btn-primary" onclick="openCloudPanel()">🔐 登录 / 注册</button>
         </div>
         <div id="cloudLoggedIn" style="display:none;">
@@ -1474,7 +1474,7 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
             <button class="btn btn-secondary btn-sm" id="btnCloudDownload" onclick="cloudDownload()">⬇️ 从云端下载</button>
             <button class="btn btn-danger btn-sm" onclick="cloudLogout()">退出登录</button>
           </div>
-          <div class="cloud-info" style="margin-top:8px;">数据会自动保存到云端，登录其他设备即可同步。导出备份作为额外保险。</div>
+          <div class="cloud-info" style="margin-top:8px;">点击「上传到云端」手动同步数据。在其他设备登录后点击「从云端下载」即可恢复。</div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--rule);">
           <button class="btn btn-secondary btn-sm" onclick="exportData()">📤 导出备份</button>
@@ -2559,38 +2559,6 @@ async function cloudDownload() {
     btn.textContent = '⬇️ 从云端下载';
   }
 }
-
-// Auto-sync after changes (upload local to cloud)
-let _cloudSyncTimer = null;
-function cloudAutoSync() {
-  if (!sbClient) return;
-  clearTimeout(_cloudSyncTimer);
-  _cloudSyncTimer = setTimeout(async () => {
-    try {
-      const { data: { session } } = await sbClient.auth.getSession();
-      if (!session) return;
-      $('cloudStatusDot').className = 'cloud-status syncing';
-      await sbClient
-        .from('user_words')
-        .upsert({
-          user_id: session.user.id,
-          words: { words: appData.words, sentences: appData.sentences || [] },
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id' });
-      $('cloudSyncTime').textContent = '自动同步: ' + new Date().toLocaleString('zh-CN');
-      $('cloudStatusDot').className = 'cloud-status synced';
-    } catch (e) {
-      $('cloudStatusDot').className = 'cloud-status offline';
-    }
-  }, 3000);
-}
-
-// Override persist to trigger auto-sync
-const _originalPersist = persist;
-persist = function() {
-  _originalPersist();
-  cloudAutoSync();
-};
 
 // ═══════════════════════════════════════
 // Helpers
