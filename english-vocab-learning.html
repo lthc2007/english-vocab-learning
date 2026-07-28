@@ -5107,12 +5107,18 @@ async function loadCloudAudioList() {
     data.forEach((item, i) => {
       const date = new Date(item.created_at).toLocaleString('zh-CN');
       const size = item.file_size ? (item.file_size / 1024).toFixed(1) + ' KB' : '未知';
-      const isPlaying = String(cloudPlayingId) === String(item.id);
-      const rowStyle = isPlaying ? 'background:var(--accent-soft);border-color:var(--accent);' : 'background:var(--bg);border:1px solid var(--rule);';
-      const playPauseBtn = isPlaying
-        ? '<button class="btn btn-primary btn-sm" onclick="pauseCloudAudio(\'' + item.id + '\')" title="暂停" style="background:var(--accent2);">⏸</button>'
-        : '<button class="btn btn-primary btn-sm" onclick="playCloudAudio(\'' + item.id + '\')" title="播放">▶</button>';
-      const stopBtn = isPlaying
+      const isActive = String(cloudPlayingId) === String(item.id);
+      const isPaused = isActive && cloudAudioIsPaused;
+      const rowStyle = isActive ? 'background:var(--accent-soft);border-color:var(--accent);' : 'background:var(--bg);border:1px solid var(--rule);';
+      let playPauseBtn;
+      if (isActive && !isPaused) {
+        playPauseBtn = '<button class="btn btn-primary btn-sm" onclick="pauseCloudAudio(\'' + item.id + '\')" title="暂停" style="background:var(--accent2);">⏸</button>';
+      } else if (isActive && isPaused) {
+        playPauseBtn = '<button class="btn btn-primary btn-sm" onclick="resumeCloudAudio(\'' + item.id + '\')" title="继续播放">▶</button>';
+      } else {
+        playPauseBtn = '<button class="btn btn-primary btn-sm" onclick="playCloudAudio(\'' + item.id + '\')" title="播放">▶</button>';
+      }
+      const stopBtn = isActive
         ? '<button class="btn btn-secondary btn-sm" onclick="stopCloudAudio(\'' + item.id + '\')" title="停止">⏹</button>'
         : '';
       html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;${rowStyle}border-radius:8px;flex-wrap:wrap;">
@@ -5192,6 +5198,15 @@ function pauseCloudAudio(id) {
     cloudAudioIsPaused = true;
     loadCloudAudioList();
     showToast('已暂停');
+  }
+}
+
+function resumeCloudAudio(id) {
+  if (cloudAudio && String(cloudPlayingId) === String(id)) {
+    cloudAudio.play();
+    cloudAudioIsPaused = false;
+    loadCloudAudioList();
+    showToast('继续播放');
   }
 }
 
