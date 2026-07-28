@@ -1744,6 +1744,7 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
         <button class="btn btn-secondary" id="btnReadResume" onclick="resumeArticleRead()" style="display:none;">▶ 继续</button>
         <button class="btn btn-secondary" id="btnReadStop" onclick="stopArticleRead()" style="display:none;">⏹ 停止</button>
         <button class="btn btn-outline" id="btnReadDownload" onclick="downloadArticleAudio()" style="display:none;">💾 下载音频</button>
+        <button class="btn btn-outline" id="btnReadCloudSave" onclick="saveAudioToCloud()" style="display:none;">☁️ 保存到云端</button>
         <button class="btn btn-secondary btn-sm" id="btnReadClear" onclick="clearArticle()" title="清空文章">🗑 清除</button>
         <span id="readStatus" style="font-size:0.8rem;color:var(--muted);"></span>
       </div>
@@ -1752,6 +1753,18 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
           <div class="progress-fill" id="readProgressFill" style="width:0%;transition:width 0.3s;"></div>
         </div>
         <span id="readProgressText" style="font-size:0.75rem;color:var(--muted);display:none;"></span>
+      </div>
+    </div>
+    <!-- 云端音频 -->
+    <div class="card" id="cloudAudioCard" style="display:none;">
+      <div class="card-header">
+        <span>☁️ 云端音频</span>
+        <button class="btn btn-secondary btn-sm" onclick="loadCloudAudioList()" title="刷新列表">🔄 刷新</button>
+      </div>
+      <div id="cloudAudioList" style="max-height:400px;overflow-y:auto;">
+        <div class="empty-state" style="padding:24px;">
+          <p style="color:var(--muted);">登录后即可查看云端保存的朗读音频</p>
+        </div>
       </div>
     </div>
     </section>
@@ -2238,6 +2251,9 @@ function updateCloudUI(loggedIn, email) {
     text.textContent = '未登录';
     $('cloudNotLoggedIn') && ($('cloudNotLoggedIn').style.display = '');
     $('cloudLoggedIn') && ($('cloudLoggedIn').style.display = 'none');
+    // 隐藏云端音频卡片和保存按钮
+    if ($('cloudAudioCard')) $('cloudAudioCard').style.display = 'none';
+    if ($('btnReadCloudSave')) $('btnReadCloudSave').style.display = 'none';
   }
 }
 
@@ -3057,7 +3073,7 @@ function onTabSwitch(tab) {
   if (tab === 'learn') renderLearn();
   if (tab === 'spell') initSpell();
   if (tab === 'quiz') initQuiz();
-  if (tab === 'read') { updateArticleEstimate(); }
+  if (tab === 'read') { updateArticleEstimate(); loadCloudAudioList(); }
   if (tab === 'history') renderHistory();
   if (tab === 'recite') switchReciteTab('add');
 }
@@ -4869,6 +4885,8 @@ async function startArticleRead() {
       $('readProgressText').style.display = 'none';
       $('btnReadDownload').style.display = '';
       $('btnReadPause').style.display = '';
+      // 如果已登录，显示云端保存按钮
+      updateCloudAudioUI();
       playArticleChunks(0);
       return;
     }
@@ -4962,6 +4980,7 @@ function clearArticle() {
   articleBlob = null;
   $('btnReadPlay').textContent = '▶ 朗读';
   $('btnReadDownload').style.display = 'none';
+  $('btnReadCloudSave').style.display = 'none';
 }
 
 function onArticleEnded() {
@@ -4973,6 +4992,7 @@ function onArticleEnded() {
   $('btnReadResume').style.display = 'none';
   $('btnReadStop').style.display = 'none';
   if (articleBlob) $('btnReadDownload').style.display = '';
+  updateCloudAudioUI();
   $('readStatus').textContent = '朗读完毕';
 }
 
@@ -4987,6 +5007,227 @@ function downloadArticleAudio() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   showToast('音频下载中...');
+}
+
+// ═══════════════════════════════════════
+// Cloud Audio Storage (Supabase)
+// ═══════════════════════════════════════
+function updateCloudAudioUI() {
+  // If logged in and audio is available, show cloud save button
+  if (sbClient && articleBlob) {
+    $('btnReadCloudSave').style.display = '';
+    $('cloudAudioCard').style.display = '';
+  }
+  // Load cloud audio list
+  loadCloudAudioList();
+}
+
+async function saveAudioToCloud() {
+  if (!sbClient || !initSupabase()) { showToast('请先登录'); return; }
+  if (!articleBlob) { showToast('没有可保存的音频'); return; }
+
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (!session) { showToast('登录已过期，请重新登录'); return; }
+
+  const btn = $('btnReadCloudSave');
+  btn.disabled = true;
+  btn.textContent = '⏳ 上传中...';
+
+  try {
+    const userId = session.user.id;
+    const timestamp = Date.now();
+    const fileName = `reading-${timestamp}.mp3`;
+    const filePath = `${userId}/${fileName}`;
+
+    // 上传音频到 Storage
+    const { error: uploadError } = await sbClient.storage
+      .from('audio-readings')
+      .upload(filePath, articleBlob, {
+        contentType: 'audio/mpeg',
+        upsert: false
+      });
+
+    if (uploadError) throw uploadError;
+
+    // 保存元数据
+    const articleText = $('articleText').value.trim();
+    const title = articleText.length > 60 ? articleText.substring(0, 60) + '...' : articleText;
+    const { error: dbError } = await sbClient
+      .from('read_audio')
+      .insert({
+        user_id: userId,
+        title: title,
+        article_text: articleText,
+        file_path: filePath,
+        file_size: articleBlob.size,
+        duration: articleAudio ? articleAudio.duration : null
+      });
+
+    if (dbError) throw dbError;
+
+    showToast('音频已保存到云端 ✓');
+    btn.textContent = '✅ 已保存';
+    loadCloudAudioList();
+  } catch (e) {
+    showToast('保存失败: ' + (e.message || '网络错误'));
+    btn.textContent = '☁️ 保存到云端';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function loadCloudAudioList() {
+  if (!sbClient || !initSupabase()) return;
+
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (!session) return;
+
+  $('cloudAudioCard').style.display = '';
+
+  try {
+    const { data, error } = await sbClient
+      .from('read_audio')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) throw error;
+
+    const listEl = $('cloudAudioList');
+    if (!data || data.length === 0) {
+      listEl.innerHTML = '<div class="empty-state" style="padding:24px;"><p style="color:var(--muted);">暂无云端音频，生成朗读后点击「☁️ 保存到云端」即可保存</p></div>';
+      return;
+    }
+
+    let html = '<div style="display:flex;flex-direction:column;gap:6px;padding:4px 0;">';
+    data.forEach((item, i) => {
+      const date = new Date(item.created_at).toLocaleString('zh-CN');
+      const size = item.file_size ? (item.file_size / 1024).toFixed(1) + ' KB' : '未知';
+      html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg);border-radius:8px;border:1px solid var(--rule);flex-wrap:wrap;">
+        <span style="flex:1;min-width:120px;font-size:0.85rem;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(item.title || '')}">${escapeHtml(item.title || '无标题')}</span>
+        <span style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">${date}</span>
+        <span style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">${size}</span>
+        <button class="btn btn-primary btn-sm" onclick="playCloudAudio('${item.id}')" title="播放">▶</button>
+        <button class="btn btn-secondary btn-sm" onclick="downloadCloudAudio('${item.id}')" title="下载">⬇</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCloudAudio('${item.id}')" title="删除">🗑</button>
+      </div>`;
+    });
+    html += '</div>';
+    listEl.innerHTML = html;
+  } catch (e) {
+    console.error('loadCloudAudioList error:', e);
+  }
+}
+
+async function playCloudAudio(id) {
+  if (!sbClient || !initSupabase()) { showToast('请先登录'); return; }
+
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (!session) { showToast('登录已过期'); return; }
+
+  try {
+    const { data, error } = await sbClient
+      .from('read_audio')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    if (!data) { showToast('音频记录不存在'); return; }
+
+    // 获取下载 URL
+    const { data: urlData, error: urlError } = await sbClient.storage
+      .from('audio-readings')
+      .createSignedUrl(data.file_path, 300);
+
+    if (urlError) throw urlError;
+
+    // 停止当前播放
+    if (articleAudio) { articleAudio.pause(); articleAudio = null; }
+    stopArticleRead();
+
+    articleAudio = new Audio(urlData.signedUrl);
+    articleAudio.onended = () => { showToast('播放完毕'); };
+    articleAudio.onerror = () => { showToast('播放失败'); };
+    articleAudio.play();
+    showToast('正在播放: ' + (data.title || '音频'));
+  } catch (e) {
+    showToast('播放失败: ' + (e.message || '未知错误'));
+  }
+}
+
+async function downloadCloudAudio(id) {
+  if (!sbClient || !initSupabase()) { showToast('请先登录'); return; }
+
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (!session) { showToast('登录已过期'); return; }
+
+  try {
+    const { data, error } = await sbClient
+      .from('read_audio')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    if (!data) { showToast('音频记录不存在'); return; }
+
+    const { data: urlData, error: urlError } = await sbClient.storage
+      .from('audio-readings')
+      .createSignedUrl(data.file_path, 300);
+
+    if (urlError) throw urlError;
+
+    const a = document.createElement('a');
+    a.href = urlData.signedUrl;
+    a.download = `reading-${data.id}.mp3`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast('下载中...');
+  } catch (e) {
+    showToast('下载失败: ' + (e.message || '未知错误'));
+  }
+}
+
+async function deleteCloudAudio(id) {
+  if (!sbClient || !initSupabase()) { showToast('请先登录'); return; }
+  if (!confirm('确定删除这条云端音频？')) return;
+
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (!session) { showToast('登录已过期'); return; }
+
+  try {
+    // 先获取文件路径
+    const { data, error } = await sbClient
+      .from('read_audio')
+      .select('file_path')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    if (!data) { showToast('音频记录不存在'); return; }
+
+    // 删除 Storage 文件
+    const { error: delFileError } = await sbClient.storage
+      .from('audio-readings')
+      .remove([data.file_path]);
+
+    if (delFileError) console.error('delete file error:', delFileError);
+
+    // 删除元数据记录
+    const { error: delDbError } = await sbClient
+      .from('read_audio')
+      .delete()
+      .eq('id', id);
+
+    if (delDbError) throw delDbError;
+
+    showToast('已删除');
+    loadCloudAudioList();
+  } catch (e) {
+    showToast('删除失败: ' + (e.message || '未知错误'));
+  }
 }
 
 function doWebSpeechRead(text) {
