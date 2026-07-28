@@ -1508,7 +1508,7 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
     <div class="card" id="studyTimeCard">
       <div class="card-header">
         <span>📊 学习时长</span>
-        <span style="font-size:0.75rem;color:var(--muted);">自动记录，手动同步到云端</span>
+        <span style="font-size:0.75rem;color:var(--muted);">自动记录，以天为单位自动同步到云端</span>
       </div>
       <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;padding:8px 0;">
         <div style="text-align:center;">
@@ -2160,6 +2160,7 @@ let cloudUserEmail = null;
 let studyTimeSeconds = 0;       // 当前会话累计秒数
 let studyTimeLogs = {};         // { "2026-07-28": 3600, "2026-07-27": 2400 } 本地存储
 let studyTimerInterval = null;   // setInterval 句柄
+let studyAutoSyncInterval = null;  // 自动同步云端计时器
 let studyActive = false;         // 是否正在计时
 
 // Hardcoded Supabase credentials (already configured)
@@ -2209,6 +2210,10 @@ async function handleAuthSignIn(session) {
   if (window.location.hash && window.location.hash.includes('access_token')) {
     window.history.replaceState(null, '', window.location.pathname);
   }
+
+  // 登录后立即拉取云端学习时长并开始自动同步
+  syncStudyTimeFromCloud();
+  autoSyncStudyTime();
 
   // 检查是否有待处理的注册确认（signUp 后邮箱确认链接跳转回来）
   const pendingEmail = localStorage.getItem('pendingRegEmail');
@@ -2560,6 +2565,7 @@ async function cloudUpload() {
     if (error) throw error;
     $('cloudSyncTime').textContent = '上次同步: ' + new Date().toLocaleString('zh-CN');
     $('cloudStatusDot').className = 'cloud-status synced';
+    autoSyncStudyTime();
     showToast('数据已上传到云端 ✓');
   } catch (e) {
     showToast('上传失败: ' + (e.message || '网络错误'));
@@ -2621,6 +2627,7 @@ async function cloudDownload() {
     $('cloudSyncTime').textContent = '云端时间: ' + new Date(data.updated_at).toLocaleString('zh-CN');
     showToast('从云端合并了 ' + mergedCount + ' 条数据（云端优先）');
     $('cloudStatusDot').className = 'cloud-status synced';
+    syncStudyTimeFromCloud();
   } catch (e) {
     showToast('下载失败: ' + (e.message || '网络错误'));
     $('cloudStatusDot').className = 'cloud-status offline';
@@ -6773,6 +6780,8 @@ function initStudyTimer() {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       stopStudyTimer();
+      // 页面隐藏时自动同步一次
+      autoSyncStudyTime();
     } else {
       startStudyTimer();
     }
@@ -6781,21 +6790,96 @@ function initStudyTimer() {
   // 页面关闭前保存
   window.addEventListener('beforeunload', () => {
     stopStudyTimer();
+    autoSyncStudyTime();
   });
+
+  // 每60秒自动同步到云端（仅已登录用户，以天为单位）
+  studyAutoSyncInterval = setInterval(() => {
+    autoSyncStudyTime();
+  }, 60000);
 }
 
+// 从云端拉取学习时长并合并到本地
+async function syncStudyTimeFromCloud() {
+  if (!sbClient || !initSupabase()) return;
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (!session) return;
+
+  try {
+    const { data: cloudData, error } = await sbClient
+      .from('study_time')
+      .select('date, seconds')
+      .eq('user_id', session.user.id);
+
+    if (error || !cloudData || cloudData.length === 0) return;
+
+    cloudData.forEach(row => {
+      const local = studyTimeLogs[row.date] || 0;
+      studyTimeLogs[row.date] = Math.max(local, row.seconds || 0);
+    });
+    saveStudyTimeToLocal();
+    updateStudyTimerDisplay();
+  } catch (e) {
+    console.error('syncStudyTimeFromCloud error:', e);
+  }
+}
+
+// 自动同步：以天为单位，静默上传今日累计时长
+async function autoSyncStudyTime() {
+  if (!sbClient || !initSupabase()) return;
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (!session) return;
+
+  // 保存当前会话秒数到本地日志（不停止计时器）
+  const today = getTodayStr();
+  if (studyActive && studyTimeSeconds > 0) {
+    studyTimeLogs[today] = (studyTimeLogs[today] || 0) + studyTimeSeconds;
+    studyTimeSeconds = 0;
+    saveStudyTimeToLocal();
+  }
+
+  try {
+    const userId = session.user.id;
+    const todaySec = studyTimeLogs[today] || 0;
+
+    // 只在有数据时才上传
+    if (todaySec <= 0) return;
+
+    await sbClient
+      .from('study_time')
+      .upsert({
+        user_id: userId,
+        date: today,
+        seconds: todaySec,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,date' });
+
+    const status = $('studySyncStatus');
+    if (status) status.textContent = '已自动同步';
+  } catch (e) {
+    // 静默失败，不打扰用户
+    console.error('autoSyncStudyTime error:', e);
+  }
+}
+
+// 手动同步：上传所有本地数据 + 下载合并云端数据
 async function syncStudyTimeToCloud() {
   if (!sbClient || !initSupabase()) { showToast('请先登录'); return; }
   const { data: { session } } = await sbClient.auth.getSession();
   if (!session) { showToast('登录已过期，请重新登录'); return; }
 
-  // 先保存当前会话
-  stopStudyTimer();
-
   const btn = $('btnStudySync');
   const status = $('studySyncStatus');
   btn.disabled = true;
   btn.textContent = '⏳ 同步中...';
+
+  // 先保存当前会话
+  if (studyActive && studyTimeSeconds > 0) {
+    const today = getTodayStr();
+    studyTimeLogs[today] = (studyTimeLogs[today] || 0) + studyTimeSeconds;
+    studyTimeSeconds = 0;
+    saveStudyTimeToLocal();
+  }
 
   try {
     const userId = session.user.id;
@@ -6844,8 +6928,6 @@ async function syncStudyTimeToCloud() {
   } finally {
     btn.disabled = false;
     btn.textContent = '☁️ 同步到云端';
-    // 重新开始计时
-    startStudyTimer();
     updateStudyTimerDisplay();
   }
 }
