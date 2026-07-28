@@ -59,7 +59,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 60px;
+  height: 56px;
+  gap: 8px;
 }
 .logo {
   font-family: var(--font-display);
@@ -71,7 +72,8 @@ body {
   gap: 10px;
   letter-spacing: -0.02em;
 }
-.logo svg { width: 28px; height: 28px; }
+.logo svg { width: 28px; height: 28px; flex-shrink: 0; }
+.logo-text { white-space: nowrap; }
 .settings-btn {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -85,6 +87,8 @@ body {
   gap: 6px;
   transition: all var(--transition);
   font-family: var(--font-body);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .settings-btn:hover { border-color: var(--gold); color: var(--accent); background: var(--gold-soft); }
 .api-status {
@@ -110,6 +114,8 @@ body {
   gap: 6px;
   transition: all var(--transition);
   font-family: var(--font-body);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .cloud-btn:hover { border-color: var(--gold); color: var(--accent); background: var(--gold-soft); }
 .study-timer-btn {
@@ -126,6 +132,8 @@ body {
   transition: all var(--transition);
   font-family: var(--font-body);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .study-timer-btn:hover { border-color: var(--accent2); color: var(--accent2); background: #eef2ff; }
 .study-timer-btn.active { border-color: var(--accent2); color: var(--accent2); background: #eef2ff; }
@@ -142,6 +150,8 @@ body {
   gap: 4px;
   transition: all var(--transition);
   font-family: var(--font-body);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .fullscreen-btn:hover { border-color: var(--gold); color: var(--accent); background: var(--gold-soft); }
 .fullscreen-btn svg { width: 16px; height: 16px; }
@@ -176,7 +186,7 @@ body {
   background: rgba(255,255,255,0.88);
   border-bottom: 1px solid var(--rule);
   position: sticky;
-  top: 60px;
+  top: 56px;
   z-index: 99;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -812,16 +822,17 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
 
 /* ── Responsive ── */
 @media (max-width: 640px) {
-  .header { padding: 0 10px; }
-  .header-inner { padding: 0 4px; gap: 6px; }
-  .logo { font-size: 1.1rem; gap: 6px; }
-  .logo svg { width: 22px; height: 22px; }
-  .cloud-btn { padding: 5px 10px; font-size: 0.78rem; }
-  .study-timer-btn { padding: 5px 10px; font-size: 0.78rem; }
-  .settings-btn { padding: 5px 10px; font-size: 0.78rem; }
-  .fullscreen-btn { padding: 5px 8px; font-size: 0.78rem; }
+  .header { padding: 0 8px; height: auto; }
+  .header-inner { padding: 6px 0; gap: 4px; height: auto; flex-wrap: wrap; }
+  .logo { font-size: 1rem; gap: 4px; }
+  .logo svg { width: 20px; height: 20px; }
+  .logo-text { display: none; }
+  .cloud-btn { padding: 4px 8px; font-size: 0.72rem; gap: 3px; }
+  .study-timer-btn { padding: 4px 8px; font-size: 0.72rem; gap: 2px; }
+  .settings-btn { padding: 4px 8px; font-size: 0.72rem; }
+  .fullscreen-btn { padding: 4px 6px; font-size: 0.72rem; }
   .main { padding: 12px; }
-  .nav-tabs { top: 52px; }
+  .nav-tabs { top: 0; }
   .nav-inner { padding: 0 4px; gap: 2px; }
   .nav-tab { padding: 8px 10px; font-size: 0.78rem; margin: 4px 2px; border-radius: 16px; }
   .flashcard { padding: 20px; min-height: 180px; }
@@ -848,6 +859,26 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
   .result-card { padding: 12px; }
   .result-content { font-size: 0.88rem; }
   .login-tab { padding: 8px; font-size: 0.85rem; }
+}
+/* ── 极小屏幕 (max-width: 380px) ── */
+@media (max-width: 380px) {
+  .header-inner { gap: 2px; }
+  .logo svg { width: 18px; height: 18px; }
+  .cloud-btn { padding: 3px 6px; font-size: 0.68rem; gap: 2px; }
+  .study-timer-btn { padding: 3px 6px; font-size: 0.68rem; gap: 1px; }
+  .settings-btn { padding: 3px 6px; font-size: 0.68rem; }
+  .fullscreen-btn { padding: 3px 5px; }
+}
+/* ── Tablet (641px - 768px) ── */
+@media (min-width: 641px) and (max-width: 768px) {
+  .header { padding: 0 12px; }
+  .header-inner { gap: 6px; }
+  .logo { font-size: 1.15rem; gap: 6px; }
+  .logo svg { width: 24px; height: 24px; }
+  .cloud-btn { padding: 5px 10px; font-size: 0.78rem; }
+  .study-timer-btn { padding: 5px 10px; font-size: 0.78rem; }
+  .settings-btn { padding: 5px 10px; font-size: 0.78rem; }
+  .fullscreen-btn { padding: 5px 8px; }
 }
 /* ── Translation & Writing ── */
 .translate-subtab {
@@ -1085,7 +1116,7 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
       </svg>
-      英语学习助手
+      <span class="logo-text">英语学习助手</span>
     </div>
     <button class="cloud-btn" id="cloudBtn" onclick="openCloudPanel()" title="云同步">
       <span class="cloud-status local" id="cloudStatusDot"></span> <span id="cloudBtnText">未登录</span>
