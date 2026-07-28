@@ -4624,6 +4624,7 @@ let articleChunkIdx = -1;     // current playing chunk index
 let articleIsPlaying = false;
 let articleIsPaused = false;
 let articlePausedAt = 0;
+let cloudPlayingId = null;  // 当前播放的云端音频 ID
 
 // TTS pricing: 元/万字符 (MiniMax China) or 元/万字符 (Volcano)
 const TTS_PRICING = { 'speech-2.8-hd': 3.5, 'speech-2.8-turbo': 2, 'speech-2.6-hd': 3.5, 'speech-2.6-turbo': 2, 'speech-02-hd': 3.5, 'speech-02-turbo': 2 };
@@ -4938,14 +4939,14 @@ function pauseArticleRead() {
   if (articleAudio) { articleAudio.pause(); }
   $('btnReadPause').style.display = 'none';
   $('btnReadResume').style.display = '';
-  $('readStatus').textContent = '已暂停';
+  $('readStatus').textContent = cloudPlayingId ? '☁️ 已暂停' : '已暂停';
 }
 
 function resumeArticleRead() {
   if (articleAudio) { articleAudio.play(); articleIsPaused = false; }
   $('btnReadPause').style.display = '';
   $('btnReadResume').style.display = 'none';
-  $('readStatus').textContent = '朗读中...';
+  $('readStatus').textContent = cloudPlayingId ? '☁️ 云端播放中...' : '朗读中...';
 }
 
 function stopArticleRead() {
@@ -4961,6 +4962,7 @@ function stopArticleRead() {
   articleIsPlaying = false;
   articleIsPaused = false;
   articleChunkIdx = -1;
+  cloudPlayingId = null;
   $('btnReadPlay').style.display = '';
   $('btnReadPlay').textContent = articleBlob ? '🔄 重新播放' : '▶ 朗读';
   $('btnReadPause').style.display = 'none';
@@ -4970,6 +4972,8 @@ function stopArticleRead() {
   $('readStatus').textContent = '';
   $('readProgressBar').style.display = 'none';
   $('readProgressText').style.display = 'none';
+  // 刷新云端列表，更新播放按钮状态
+  loadCloudAudioList();
 }
 
 function clearArticle() {
@@ -5103,11 +5107,16 @@ async function loadCloudAudioList() {
     data.forEach((item, i) => {
       const date = new Date(item.created_at).toLocaleString('zh-CN');
       const size = item.file_size ? (item.file_size / 1024).toFixed(1) + ' KB' : '未知';
-      html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg);border-radius:8px;border:1px solid var(--rule);flex-wrap:wrap;">
+      const isPlaying = String(cloudPlayingId) === String(item.id);
+      const rowStyle = isPlaying ? 'background:var(--accent-soft);border-color:var(--accent);' : 'background:var(--bg);border:1px solid var(--rule);';
+      const playBtn = isPlaying
+        ? '<button class="btn btn-primary btn-sm" onclick="pauseArticleRead()" title="暂停" style="background:var(--accent2);">⏸</button>'
+        : '<button class="btn btn-primary btn-sm" onclick="playCloudAudio(\'' + item.id + '\')" title="播放">▶</button>';
+      html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;${rowStyle}border-radius:8px;flex-wrap:wrap;">
         <span style="flex:1;min-width:120px;font-size:0.85rem;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(item.title || '')}">${escapeHtml(item.title || '无标题')}</span>
         <span style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">${date}</span>
         <span style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">${size}</span>
-        <button class="btn btn-primary btn-sm" onclick="playCloudAudio('${item.id}')" title="播放">▶</button>
+        ${playBtn}
         <button class="btn btn-secondary btn-sm" onclick="downloadCloudAudio('${item.id}')" title="下载">⬇</button>
         <button class="btn btn-danger btn-sm" onclick="deleteCloudAudio('${item.id}')" title="删除">🗑</button>
       </div>`;
@@ -5146,10 +5155,47 @@ async function playCloudAudio(id) {
     if (articleAudio) { articleAudio.pause(); articleAudio = null; }
     stopArticleRead();
 
+    cloudPlayingId = id;
+    articleIsPlaying = true;
+    articleIsPaused = false;
+    // 显示播放控制按钮
+    $('btnReadPlay').style.display = 'none';
+    $('btnReadPause').style.display = '';
+    $('btnReadResume').style.display = 'none';
+    $('btnReadStop').style.display = '';
+    $('btnReadDownload').style.display = 'none';
+    $('btnReadCloudSave').style.display = 'none';
+    $('readStatus').textContent = '☁️ 云端播放中...';
+
     articleAudio = new Audio(urlData.signedUrl);
-    articleAudio.onended = () => { showToast('播放完毕'); };
-    articleAudio.onerror = () => { showToast('播放失败'); };
+    articleAudio.onended = () => {
+      cloudPlayingId = null;
+      articleIsPlaying = false;
+      articleIsPaused = false;
+      $('btnReadPlay').style.display = '';
+      $('btnReadPlay').textContent = '▶ 朗读';
+      $('btnReadPause').style.display = 'none';
+      $('btnReadResume').style.display = 'none';
+      $('btnReadStop').style.display = 'none';
+      $('readStatus').textContent = '';
+      updateCloudAudioUI();
+      loadCloudAudioList();
+      showToast('播放完毕');
+    };
+    articleAudio.onerror = () => {
+      cloudPlayingId = null;
+      stopArticleRead();
+      loadCloudAudioList();
+      showToast('播放失败');
+    };
+    articleAudio.onpause = () => {
+      if (articleAudio && !articleAudio.ended) {
+        articleIsPaused = true;
+        articlePausedAt = articleAudio.currentTime;
+      }
+    };
     articleAudio.play();
+    loadCloudAudioList();
     showToast('正在播放: ' + (data.title || '音频'));
   } catch (e) {
     showToast('播放失败: ' + (e.message || '未知错误'));
