@@ -312,6 +312,8 @@ tr:hover td { background: rgba(201,169,110,0.06); }
 .word-eng { font-family: var(--font-display); font-weight: 600; color: var(--accent); font-size: 0.95rem; }
 .word-example { color: var(--muted); font-size: 0.82rem; font-style: italic; }
 .word-actions { display: flex; gap: 6px; }
+tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: highlightPulse 1.5s ease-out; }
+@keyframes highlightPulse { 0% { background: rgba(201,169,110,0.35); } 100% { background: rgba(201,169,110,0.10); } }
 
 .empty-state {
   text-align: center;
@@ -1567,7 +1569,12 @@ tr:hover td { background: rgba(201,169,110,0.06); }
     <div class="card">
       <div class="card-header">
         <span>单词列表 (<span id="wordCount">0</span>)</span>
-        <div style="display:flex;gap:8px;">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div style="position:relative;display:flex;align-items:center;">
+            <input type="text" id="wordSearchInput" placeholder="搜索单词..." onkeydown="if(event.key==='Enter')searchWord()" style="width:160px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.85rem;background:var(--bg);color:var(--ink);outline:none;transition:border-color 0.2s;">
+            <button class="btn btn-primary btn-sm" onclick="searchWord()" style="margin-left:4px;">🔍</button>
+          </div>
+          <div style="flex:1;"></div>
           <button class="btn btn-primary btn-sm" id="btnGenAll" onclick="generateAllContentBatch()" disabled>AI 批量生成全部内容</button>
           <button class="btn btn-danger btn-sm" onclick="clearAllWords()">清空全部单词</button>
         </div>
@@ -3404,7 +3411,7 @@ function renderWordTable() {
     const aiBadge = w.aiGenerated
       ? '<span style="color:var(--success);font-size:0.75rem;">✓ 已生成</span>'
       : '<span style="color:var(--warning);font-size:0.75rem;">未生成</span>';
-    html += `<tr>
+    html += `<tr data-word="${escapeHtml(w.english.toLowerCase())}">
       <td><span class="word-eng">${escapeHtml(w.english)}</span>${w.phonetic ? ' <span style="color:var(--muted);font-size:0.8rem;white-space:nowrap;">' + escapeHtml(w.phonetic) + '</span>' : ''}${w.isPhrase ? '<span class="phrase-badge">短语</span>' : ''}</td>
       <td>${posHtml}</td>
       <td>${escapeHtml(w.chinese)}</td>
@@ -3417,6 +3424,29 @@ function renderWordTable() {
   });
   html += '</tbody></table></div>';
   area.innerHTML = html;
+}
+
+function searchWord() {
+  const input = $('wordSearchInput');
+  const query = input.value.trim().toLowerCase();
+  if (!query) {
+    input.focus();
+    return;
+  }
+  // 先清除之前的高亮
+  document.querySelectorAll('#wordTableArea tr.highlight-row').forEach(r => r.classList.remove('highlight-row'));
+  // 查找匹配的单词
+  const word = appData.words.find(w => w.english.toLowerCase() === query);
+  if (!word) {
+    showToast('未添加该单词：' + input.value.trim(), 3000);
+    return;
+  }
+  // 找到对应的表格行
+  const row = document.querySelector(`#wordTableArea tr[data-word="${escapeHtml(word.english.toLowerCase())}"]`);
+  if (row) {
+    row.classList.add('highlight-row');
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
 
 function escapeHtml(str) {
