@@ -1137,7 +1137,6 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
 <nav class="nav-tabs">
   <div class="nav-inner">
     <button class="nav-tab active" data-tab="lookup">单词查询</button>
-    <button class="nav-tab" data-tab="profile">个人信息</button>
     <button class="nav-tab" data-tab="manage">单词管理</button>
     <button class="nav-tab" data-tab="learn">AI 学习</button>
     <button class="nav-tab" data-tab="spell">拼写练习</button>
@@ -1501,65 +1500,6 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
         <div style="font-family:var(--font-display);font-size:1.3rem;font-weight:600;color:var(--accent);margin-bottom:8px;">背诵完成！</div>
         <div style="color:var(--muted);margin-bottom:16px;">本次共背诵 <span id="reciteDoneCount" style="font-weight:600;color:var(--ink);">5</span> 句</div>
         <button class="btn btn-primary" onclick="switchReciteTab('practice')">再来一次</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- Tab: 个人信息 -->
-  <section class="tab-panel" id="panel-profile">
-    <div class="card">
-      <div class="card-header">
-        <span>数据同步</span>
-        <span style="font-size:0.75rem;color:var(--muted);">手动同步到云端 + 本地备份</span>
-      </div>
-      <div id="cloudSyncArea">
-        <div id="cloudNotLoggedIn" style="text-align:center;padding:16px 0;">
-          <p style="color:var(--muted);margin-bottom:12px;">登录后可手动同步数据到云端，跨设备使用</p>
-          <button class="btn btn-primary" onclick="openCloudPanel()">🔐 登录 / 注册</button>
-        </div>
-        <div id="cloudLoggedIn" style="display:none;">
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
-            <span style="font-size:0.85rem;color:var(--success);">✅ 已登录：<strong id="cloudUserEmail"></strong></span>
-            <span style="font-size:0.75rem;color:var(--muted);" id="cloudSyncTime"></span>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <button class="btn btn-primary btn-sm" id="btnCloudUpload" onclick="cloudUpload()">☁️ 上传到云端</button>
-            <button class="btn btn-secondary btn-sm" id="btnCloudDownload" onclick="cloudDownload()">⬇️ 从云端下载</button>
-            <button class="btn btn-danger btn-sm" onclick="cloudLogout()">退出登录</button>
-          </div>
-          <div class="cloud-info" style="margin-top:8px;">点击「上传到云端」手动同步数据。在其他设备登录后点击「从云端下载」即可恢复。</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--rule);">
-          <button class="btn btn-secondary btn-sm" onclick="exportData()">📤 导出备份</button>
-          <button class="btn btn-secondary btn-sm" onclick="$('importFileInput').click()">📥 导入合并</button>
-          <span style="font-size:0.72rem;color:var(--muted);">无需登录，本地操作</span>
-        </div>
-        <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
-      </div>
-    </div>
-    <div class="card" id="studyTimeCard">
-      <div class="card-header">
-        <span>📊 学习时长</span>
-        <span style="font-size:0.75rem;color:var(--muted);">自动记录，以天为单位自动同步到云端</span>
-      </div>
-      <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;padding:8px 0;">
-        <div style="text-align:center;">
-          <div style="font-size:1.6rem;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;" id="studyTodayDisplay">0分钟</div>
-          <div style="font-size:0.75rem;color:var(--muted);">今日</div>
-        </div>
-        <div style="text-align:center;">
-          <div style="font-size:1.6rem;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;" id="studyTotalDisplay">0分钟</div>
-          <div style="font-size:0.75rem;color:var(--muted);">总计</div>
-        </div>
-        <div style="flex:1;"></div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <span style="font-size:0.72rem;color:var(--muted);" id="studySyncStatus"></span>
-          <button class="btn btn-primary btn-sm" id="btnStudySync" onclick="syncStudyTimeToCloud()">☁️ 同步到云端</button>
-        </div>
-      </div>
-      <div id="studyDetailArea" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--rule);">
-        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;">最近7天</div>
-        <div id="studyDetailList" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
       </div>
     </div>
   </section>
@@ -1949,8 +1889,8 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
 
 <!-- Cloud Login Modal -->
 <div class="modal-overlay" id="modalCloud">
-  <div class="modal" style="max-width:420px;">
-    <div class="modal-title">☁️ 云同步</div>
+  <div class="modal" style="max-width:480px;max-height:85vh;overflow-y:auto;">
+    <div class="modal-title">☁️ 个人信息</div>
     <!-- 未登录视图 -->
     <div id="cloudLoginView">
       <div class="login-tabs">
@@ -2008,21 +1948,77 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
       <div class="cloud-info" id="cloudInfoHint" style="margin-top:16px;font-size:0.82rem;color:var(--muted);">
         输入邮箱和密码即可完成注册，无需邮箱验证。<br>数据通过 Supabase 加密存储，仅你自己可见。
       </div>
+      <!-- 未登录时也提供本地备份/导入入口 -->
+      <div id="cloudNotLoggedIn" style="text-align:center;padding:16px 0 0;border-top:1px solid var(--rule);margin-top:16px;">
+        <p style="color:var(--muted);margin-bottom:12px;font-size:0.82rem;">登录后可同步数据到云端，跨设备使用</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;">
+          <button class="btn btn-secondary btn-sm" onclick="exportData()">📤 导出备份</button>
+          <button class="btn btn-secondary btn-sm" onclick="$('importFileInput').click()">📥 导入合并</button>
+        </div>
+      </div>
     </div>
-    <!-- 已登录视图 -->
+    <!-- 已登录视图：个人信息（数据同步 + 学习时长） -->
     <div id="cloudProfileView" style="display:none;">
-      <div class="cloud-info" style="text-align:center;padding:16px 0;">
-        <div style="font-size:2.5rem;margin-bottom:12px;">✅</div>
+      <!-- 账号信息 -->
+      <div class="cloud-info" style="text-align:center;padding:8px 0 16px;">
+        <div style="font-size:2.5rem;margin-bottom:8px;">✅</div>
         <div style="font-size:1rem;font-weight:600;color:var(--accent);margin-bottom:4px;">已登录</div>
         <div style="font-size:0.9rem;color:var(--ink);margin-bottom:4px;" id="cloudProfileEmail"></div>
-        <div style="font-size:0.75rem;color:var(--muted);margin-bottom:16px;">数据自动同步到云端</div>
-        <div style="display:flex;gap:8px;justify-content:center;">
-          <button class="btn btn-primary btn-sm" onclick="cloudUpload()">☁️ 上传到云端</button>
-          <button class="btn btn-secondary btn-sm" onclick="cloudDownload()">⬇️ 从云端下载</button>
+        <div style="font-size:0.75rem;color:var(--muted);">数据自动同步到云端</div>
+      </div>
+
+      <!-- 数据同步区块 -->
+      <div id="cloudSyncArea" style="border-top:1px solid var(--rule);padding-top:16px;margin-bottom:16px;">
+        <div style="font-size:0.9rem;font-weight:600;color:var(--ink);margin-bottom:12px;">数据同步</div>
+        <div id="cloudLoggedIn">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+            <span style="font-size:0.85rem;color:var(--success);">✅ 已登录：<strong id="cloudUserEmail"></strong></span>
+            <span style="font-size:0.75rem;color:var(--muted);" id="cloudSyncTime"></span>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <button class="btn btn-primary btn-sm" id="btnCloudUpload" onclick="cloudUpload()">☁️ 上传到云端</button>
+            <button class="btn btn-secondary btn-sm" id="btnCloudDownload" onclick="cloudDownload()">⬇️ 从云端下载</button>
+          </div>
+          <div class="cloud-info" style="margin-top:8px;font-size:0.78rem;">点击「上传到云端」手动同步数据。在其他设备登录后点击「从云端下载」即可恢复。</div>
         </div>
-        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--rule);">
-          <button class="btn btn-danger" onclick="cloudLogout()" style="width:100%;">退出登录</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--rule);">
+          <button class="btn btn-secondary btn-sm" onclick="exportData()">📤 导出备份</button>
+          <button class="btn btn-secondary btn-sm" onclick="$('importFileInput').click()">📥 导入合并</button>
+          <span style="font-size:0.72rem;color:var(--muted);">无需登录，本地操作</span>
         </div>
+        <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
+      </div>
+
+      <!-- 学习时长区块 -->
+      <div id="studyTimeCard" style="border-top:1px solid var(--rule);padding-top:16px;margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <span style="font-size:0.9rem;font-weight:600;color:var(--ink);">📊 学习时长</span>
+          <span style="font-size:0.72rem;color:var(--muted);">自动记录，以天为单位同步到云端</span>
+        </div>
+        <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;padding:4px 0;">
+          <div style="text-align:center;">
+            <div style="font-size:1.5rem;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;" id="studyTodayDisplay">0分钟</div>
+            <div style="font-size:0.72rem;color:var(--muted);">今日</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:1.5rem;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;" id="studyTotalDisplay">0分钟</div>
+            <div style="font-size:0.72rem;color:var(--muted);">总计</div>
+          </div>
+          <div style="flex:1;"></div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span style="font-size:0.72rem;color:var(--muted);" id="studySyncStatus"></span>
+            <button class="btn btn-primary btn-sm" id="btnStudySync" onclick="syncStudyTimeToCloud()">☁️ 同步</button>
+          </div>
+        </div>
+        <div id="studyDetailArea" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--rule);">
+          <div style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">最近7天</div>
+          <div id="studyDetailList" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+        </div>
+      </div>
+
+      <!-- 退出登录 -->
+      <div style="border-top:1px solid var(--rule);padding-top:16px;">
+        <button class="btn btn-danger" onclick="cloudLogout()" style="width:100%;">退出登录</button>
       </div>
     </div>
   </div>
