@@ -112,6 +112,23 @@ body {
   font-family: var(--font-body);
 }
 .cloud-btn:hover { border-color: var(--gold); color: var(--accent); background: var(--gold-soft); }
+.study-timer-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 7px 14px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all var(--transition);
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
+}
+.study-timer-btn:hover { border-color: var(--accent2); color: var(--accent2); background: #eef2ff; }
+.study-timer-btn.active { border-color: var(--accent2); color: var(--accent2); background: #eef2ff; }
 .fullscreen-btn {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -800,6 +817,7 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
   .logo { font-size: 1.1rem; gap: 6px; }
   .logo svg { width: 22px; height: 22px; }
   .cloud-btn { padding: 5px 10px; font-size: 0.78rem; }
+  .study-timer-btn { padding: 5px 10px; font-size: 0.78rem; }
   .settings-btn { padding: 5px 10px; font-size: 0.78rem; }
   .fullscreen-btn { padding: 5px 8px; font-size: 0.78rem; }
   .main { padding: 12px; }
@@ -1071,6 +1089,9 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
     </div>
     <button class="cloud-btn" id="cloudBtn" onclick="openCloudPanel()" title="云同步">
       <span class="cloud-status local" id="cloudStatusDot"></span> <span id="cloudBtnText">未登录</span>
+    </button>
+    <button class="study-timer-btn" id="studyTimerBtn" title="今日学习时长">
+      ⏱ <span id="studyTimerDisplay">0分钟</span>
     </button>
     <button class="fullscreen-btn" onclick="toggleFullscreen()" title="全屏显示" aria-label="全屏显示">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
@@ -1482,6 +1503,31 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
           <span style="font-size:0.72rem;color:var(--muted);">无需登录，本地操作</span>
         </div>
         <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
+      </div>
+    </div>
+    <div class="card" id="studyTimeCard">
+      <div class="card-header">
+        <span>📊 学习时长</span>
+        <span style="font-size:0.75rem;color:var(--muted);">自动记录，手动同步到云端</span>
+      </div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;padding:8px 0;">
+        <div style="text-align:center;">
+          <div style="font-size:1.6rem;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;" id="studyTodayDisplay">0分钟</div>
+          <div style="font-size:0.75rem;color:var(--muted);">今日</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:1.6rem;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;" id="studyTotalDisplay">0分钟</div>
+          <div style="font-size:0.75rem;color:var(--muted);">总计</div>
+        </div>
+        <div style="flex:1;"></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span style="font-size:0.72rem;color:var(--muted);" id="studySyncStatus"></span>
+          <button class="btn btn-primary btn-sm" id="btnStudySync" onclick="syncStudyTimeToCloud()">☁️ 同步到云端</button>
+        </div>
+      </div>
+      <div id="studyDetailArea" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--rule);">
+        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;">最近7天</div>
+        <div id="studyDetailList" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
       </div>
     </div>
     <div class="card">
@@ -2107,6 +2153,14 @@ function persist() { saveData(appData); }
 // ═══════════════════════════════════════
 let sbClient = null;
 let cloudUserEmail = null;
+
+// ═══════════════════════════════════════
+// Study Time Tracking
+// ═══════════════════════════════════════
+let studyTimeSeconds = 0;       // 当前会话累计秒数
+let studyTimeLogs = {};         // { "2026-07-28": 3600, "2026-07-27": 2400 } 本地存储
+let studyTimerInterval = null;   // setInterval 句柄
+let studyActive = false;         // 是否正在计时
 
 // Hardcoded Supabase credentials (already configured)
 const SUPABASE_URL = 'https://mmdhtyuyirukvtmfzeby.supabase.co';
@@ -6598,7 +6652,206 @@ function initHistory() {
   renderHistory();
 }
 
+// ═══════════════════════════════════════
+// Study Time Tracking
+// ═══════════════════════════════════════
+function getTodayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function formatStudyTime(seconds) {
+  if (seconds < 60) return '不到1分钟';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return h + '小时' + (m > 0 ? m + '分钟' : '');
+  return m + '分钟';
+}
+
+function loadStudyTimeFromLocal() {
+  try {
+    studyTimeLogs = JSON.parse(localStorage.getItem('studyTimeLogs') || '{}');
+  } catch (e) {
+    studyTimeLogs = {};
+  }
+}
+
+function saveStudyTimeToLocal() {
+  try {
+    localStorage.setItem('studyTimeLogs', JSON.stringify(studyTimeLogs));
+  } catch (e) { /* ignore */ }
+}
+
+function updateStudyTimerDisplay() {
+  const today = getTodayStr();
+  const todaySec = (studyTimeLogs[today] || 0) + (studyActive ? studyTimeSeconds : 0);
+  let totalSec = 0;
+  for (const k in studyTimeLogs) { totalSec += studyTimeLogs[k] || 0; }
+  totalSec += (studyActive ? studyTimeSeconds : 0);
+
+  const display = $('studyTimerDisplay');
+  if (display) display.textContent = formatStudyTime(todaySec);
+
+  const todayDisplay = $('studyTodayDisplay');
+  if (todayDisplay) todayDisplay.textContent = formatStudyTime(todaySec);
+
+  const totalDisplay = $('studyTotalDisplay');
+  if (totalDisplay) totalDisplay.textContent = formatStudyTime(totalSec);
+
+  // 更新最近7天
+  renderStudyDetail();
+}
+
+function renderStudyDetail() {
+  const area = $('studyDetailArea');
+  const list = $('studyDetailList');
+  if (!area || !list) return;
+
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const sec = studyTimeLogs[key] || 0;
+    days.push({ key, sec, label: (i === 0 ? '今天' : (i === 1 ? '昨天' : key.slice(5))) });
+  }
+
+  const maxSec = Math.max(1, ...days.map(d => d.sec));
+  let html = '';
+  days.forEach(d => {
+    const h = Math.max(3, Math.round((d.sec / maxSec) * 60));
+    const color = d.sec > 0 ? 'var(--accent)' : 'var(--rule)';
+    const bg = d.sec > 0 ? 'var(--accent)' : 'var(--rule)';
+    html += '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:48px;">';
+    html += '<div style="font-size:0.7rem;color:var(--muted);">' + formatStudyTime(d.sec) + '</div>';
+    html += '<div style="width:24px;height:' + h + 'px;background:' + bg + ';border-radius:4px 4px 0 0;"></div>';
+    html += '<div style="font-size:0.65rem;color:var(--muted);">' + d.label + '</div>';
+    html += '</div>';
+  });
+  list.innerHTML = html;
+  area.style.display = days.some(d => d.sec > 0) ? '' : 'none';
+}
+
+function startStudyTimer() {
+  if (studyTimerInterval) return;
+  studyActive = true;
+  $('studyTimerBtn') && ($('studyTimerBtn').classList.add('active'));
+  studyTimerInterval = setInterval(() => {
+    studyTimeSeconds++;
+    // 每30秒自动保存到 localStorage
+    if (studyTimeSeconds % 30 === 0) {
+      const today = getTodayStr();
+      studyTimeLogs[today] = (studyTimeLogs[today] || 0) + studyTimeSeconds;
+      studyTimeSeconds = 0;
+      saveStudyTimeToLocal();
+    }
+    updateStudyTimerDisplay();
+  }, 1000);
+}
+
+function stopStudyTimer() {
+  if (!studyTimerInterval) return;
+  clearInterval(studyTimerInterval);
+  studyTimerInterval = null;
+  studyActive = false;
+  $('studyTimerBtn') && ($('studyTimerBtn').classList.remove('active'));
+  // 保存剩余秒数
+  const today = getTodayStr();
+  studyTimeLogs[today] = (studyTimeLogs[today] || 0) + studyTimeSeconds;
+  studyTimeSeconds = 0;
+  saveStudyTimeToLocal();
+  updateStudyTimerDisplay();
+}
+
+function initStudyTimer() {
+  loadStudyTimeFromLocal();
+  updateStudyTimerDisplay();
+
+  // 页面可见时开始计时
+  startStudyTimer();
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopStudyTimer();
+    } else {
+      startStudyTimer();
+    }
+  });
+
+  // 页面关闭前保存
+  window.addEventListener('beforeunload', () => {
+    stopStudyTimer();
+  });
+}
+
+async function syncStudyTimeToCloud() {
+  if (!sbClient || !initSupabase()) { showToast('请先登录'); return; }
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (!session) { showToast('登录已过期，请重新登录'); return; }
+
+  // 先保存当前会话
+  stopStudyTimer();
+
+  const btn = $('btnStudySync');
+  const status = $('studySyncStatus');
+  btn.disabled = true;
+  btn.textContent = '⏳ 同步中...';
+
+  try {
+    const userId = session.user.id;
+    // 上传所有本地记录
+    for (const [date, seconds] of Object.entries(studyTimeLogs)) {
+      if (seconds <= 0) continue;
+      const { error } = await sbClient
+        .from('study_time')
+        .upsert({
+          user_id: userId,
+          date: date,
+          seconds: seconds,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id,date' });
+
+      if (error) {
+        console.error('sync study_time error for', date, error);
+      }
+    }
+
+    // 下载云端数据合并
+    const { data: cloudData, error: fetchErr } = await sbClient
+      .from('study_time')
+      .select('date, seconds')
+      .eq('user_id', userId);
+
+    if (fetchErr) throw fetchErr;
+
+    if (cloudData && cloudData.length > 0) {
+      let merged = 0;
+      cloudData.forEach(row => {
+        const local = studyTimeLogs[row.date] || 0;
+        studyTimeLogs[row.date] = Math.max(local, row.seconds || 0);
+        merged++;
+      });
+      saveStudyTimeToLocal();
+      status.textContent = '已同步 ' + merged + ' 天';
+    } else {
+      status.textContent = '已同步';
+    }
+
+    showToast('学习时长同步完成 ✓');
+  } catch (e) {
+    showToast('同步失败: ' + (e.message || '网络错误'));
+    status.textContent = '同步失败';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '☁️ 同步到云端';
+    // 重新开始计时
+    startStudyTimer();
+    updateStudyTimerDisplay();
+  }
+}
+
 initHistory();
+initStudyTimer();
 init();
 </script>
 <!-- Hidden print area for export -->
