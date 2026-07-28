@@ -3473,13 +3473,23 @@ async function callAI(prompt, maxTokens = 1500) {
   }
 
   // 智谱免费模型列表：按优先级降级尝试
+  const allModels = PROVIDERS.zhipu_free.models;
+  // 总是把 glm-4.7-flash 放前面，glm-4-flash 作为降级后备
   const fallbackModels = isProxy
-    ? (PROVIDERS.zhipu_free.models.filter(m => m !== useModel).concat([useModel]).reverse())
+    ? (useModel === 'glm-4.7-flash'
+        ? ['glm-4.7-flash', 'glm-4-flash']
+        : [useModel, ...allModels.filter(m => m !== useModel)])
     : [useModel];
 
   let lastError = null;
+  let lastModel = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     const tryModel = attempt < fallbackModels.length ? fallbackModels[attempt] : fallbackModels[fallbackModels.length - 1];
+    // 检测模型降级切换
+    if (lastModel && tryModel !== lastModel && isProxy) {
+      showToast(`🔄 ${lastModel} 访问量过大，已自动降级为 ${tryModel}`, 4000);
+    }
+    lastModel = tryModel;
     try {
       // 代理模式：直接 POST 代理地址，不带 Authorization
       // 直连模式：POST apiUrl + /chat/completions，带 Bearer Key
@@ -3506,26 +3516,36 @@ async function callAI(prompt, maxTokens = 1500) {
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        const errMsg = err.error?.message || `HTTP ${resp.status}`;
-        // 429 或访问量过大 — 重试
-        if (resp.status === 429 || resp.status === 503 || errMsg.includes('访问量过大') || errMsg.includes('rate')) {
-          lastError = errMsg;
-          if (attempt < 2) {
-            await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
-            continue;
-          }
+        // 兼容两种错误格式：err.error 为字符串 或 err.error.message 为对象
+        const errMsg = (typeof err.error === 'string' ? err.error : err.error?.message) || `HTTP ${resp.status}`;
+        const errDetail = err.error?.code || err.error?.detail || '';
+        const fullErr = errMsg + (errDetail ? ' ' + errDetail : '');
+        // 429/503 或访问量过大/限流 — 降级重试
+        const isRateLimit = resp.status === 429 || resp.status === 503
+          || fullErr.includes('访问量过大') || fullErr.includes('限流')
+          || fullErr.includes('rate') || fullErr.includes('busy')
+          || fullErr.includes('overload') || fullErr.includes('too many');
+        if (isRateLimit && attempt < 2) {
+          lastError = fullErr;
+          await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+          continue;
         }
-        throw new Error(errMsg);
+        throw new Error(fullErr);
       }
       const data = await resp.json();
       return data.choices[0].message.content.trim();
     } catch (err) {
       lastError = err.message;
-      if (err.name !== 'TimeoutError' && err.name !== 'AbortError' && attempt < 2 && !err.message.startsWith('HTTP')) {
-        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      // 网络错误重试一次
+      if (err.name === 'TypeError' && attempt < 1) {
+        await new Promise(r => setTimeout(r, 1000));
         continue;
       }
-      if (attempt < 2 && (err.message.includes('访问量过大') || err.message.includes('rate') || err.message.includes('429') || err.message.includes('503'))) {
+      // 限流/访问量过大 — 降级重试
+      const isRateLimitErr = err.message.includes('访问量过大') || err.message.includes('限流')
+        || err.message.includes('rate') || err.message.includes('429') || err.message.includes('503')
+        || err.message.includes('busy') || err.message.includes('overload');
+      if (isRateLimitErr && attempt < 2) {
         await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
         continue;
       }

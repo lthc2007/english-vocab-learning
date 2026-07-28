@@ -51,10 +51,12 @@ Deno.serve(async (req: Request) => {
 
     if (!response.ok) {
       const errorText = await response.text();
+      let zhipuError: { error?: { message?: string; code?: string } } = {};
+      try { zhipuError = JSON.parse(errorText); } catch (_) { /* raw text */ }
+      // 保留智谱原始错误结构，前端可直接通过 error.message 读取
       return new Response(
         JSON.stringify({
-          error: `智谱 API 错误: ${response.status}`,
-          detail: errorText,
+          error: zhipuError.error || { message: `智谱 API 错误 (${response.status}): ${errorText}` }
         }),
         {
           status: response.status,
