@@ -1890,7 +1890,10 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
 <!-- Cloud Login Modal -->
 <div class="modal-overlay" id="modalCloud">
   <div class="modal" style="max-width:480px;max-height:85vh;overflow-y:auto;">
-    <div class="modal-title">☁️ 个人信息</div>
+    <div class="modal-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>☁️ 个人信息</span>
+      <button onclick="closeCloudPanel()" style="background:none;border:none;cursor:pointer;font-size:1.3rem;color:var(--muted);padding:0 4px;line-height:1;" title="关闭">✕</button>
+    </div>
     <!-- 未登录视图 -->
     <div id="cloudLoginView">
       <div class="login-tabs">
