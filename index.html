@@ -1107,7 +1107,7 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
         <span>单词查询</span>
         <span style="font-size:0.75rem;color:var(--muted);">输入单词，AI 即时生成释义、例句、派生词等</span>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <input type="text" id="lookupWord" placeholder="输入英文单词..." class="form-input" style="flex:1;font-size:1.1rem;padding:10px 14px;" onkeydown="if(event.key==='Enter')doLookup()">
         <button class="btn btn-primary" id="btnLookup" onclick="doLookup()">🔍 查询</button>
       </div>
@@ -1570,7 +1570,7 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
     <div class="card">
       <div class="card-header">
         <span>单词列表 (<span id="wordCount">0</span>)</span>
-        <div style="display:flex;gap:8px;align-items:center;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <div style="position:relative;display:flex;align-items:center;">
             <input type="text" id="wordSearchInput" placeholder="搜索单词..." onkeydown="if(event.key==='Enter')searchWord()" style="width:160px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.85rem;background:var(--bg);color:var(--ink);outline:none;transition:border-color 0.2s;">
             <button class="btn btn-primary btn-sm" onclick="searchWord()" style="margin-left:4px;">🔍</button>
