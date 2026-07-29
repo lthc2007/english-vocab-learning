@@ -1149,7 +1149,7 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
     <button class="cloud-btn" id="cloudBtn" onclick="openCloudPanel()" title="云同步">
       <span class="cloud-status local" id="cloudStatusDot"></span> <span id="cloudBtnText">未登录</span>
     </button>
-    <button class="study-timer-btn" id="studyTimerBtn" title="今日学习时长" onclick="toggleStudyTimerPopup()">
+    <button class="study-timer-btn" id="studyTimerBtn" title="今日学习时长" onclick="openStudyTimerPanel()">
       ⏱ <span id="studyTimerDisplay">0分钟</span>
     </button>
     <button class="fullscreen-btn" onclick="toggleFullscreen()" title="全屏显示" aria-label="全屏显示">
@@ -1161,14 +1161,14 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
   </div>
 </header>
 
-<!-- 学习时长弹窗 -->
-<div class="study-popup-backdrop" id="studyTimerPopup" style="display:none;">
-  <div class="study-popup-card">
-    <div class="study-popup-header">
-      <span style="font-weight:600;font-size:1rem;">📊 学习时长</span>
-      <button onclick="toggleStudyTimerPopup()" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--muted);padding:0;line-height:1;">✕</button>
+<!-- 学习时长 Modal -->
+<div class="modal-overlay" id="modalStudyTimer">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>📊 学习时长</span>
+      <button onclick="closeStudyTimerPanel()" style="background:none;border:none;cursor:pointer;font-size:1.3rem;color:var(--muted);padding:0 4px;line-height:1;" title="关闭">✕</button>
     </div>
-    <div style="display:flex;gap:28px;padding:12px 0 18px;">
+    <div style="display:flex;gap:28px;padding:8px 0 18px;">
       <div style="text-align:center;flex:1;background:var(--bg);border-radius:10px;padding:14px 8px;">
         <div style="font-size:1.8rem;font-weight:700;color:var(--accent);" id="popupTodayDisplay">0分钟</div>
         <div style="font-size:0.78rem;color:var(--muted);margin-top:2px;">今日学习</div>
@@ -6770,11 +6770,11 @@ function getTodayStr() {
 }
 
 function formatStudyTime(seconds) {
-  if (seconds < 60) return '不到1分钟';
+  if (seconds < 60) return '0m';
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  if (h > 0) return h + '小时' + (m > 0 ? m + '分钟' : '');
-  return m + '分钟';
+  if (h > 0) return h + 'h' + (m > 0 ? m + 'm' : '');
+  return m + 'm';
 }
 
 function loadStudyTimeFromLocal() {
@@ -6857,21 +6857,19 @@ function renderStudyDetail() {
   }
 }
 
-function toggleStudyTimerPopup() {
-  const popup = $('studyTimerPopup');
-  if (!popup) return;
-  if (popup.style.display === 'none') {
-    updateStudyTimerDisplay();
-    popup.style.display = 'flex';
-  } else {
-    popup.style.display = 'none';
-  }
+function openStudyTimerPanel() {
+  updateStudyTimerDisplay();
+  $('modalStudyTimer').classList.add('show');
 }
 
-// 点击遮罩层关闭弹窗
-$('studyTimerPopup').addEventListener('click', function(e) {
+function closeStudyTimerPanel() {
+  $('modalStudyTimer').classList.remove('show');
+}
+
+// 点击遮罩层关闭学习时长弹窗
+$('modalStudyTimer').addEventListener('click', function(e) {
   if (e.target === this) {
-    this.style.display = 'none';
+    closeStudyTimerPanel();
   }
 });
 
