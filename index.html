@@ -137,6 +137,25 @@ body {
 }
 .study-timer-btn:hover { border-color: var(--accent2); color: var(--accent2); background: #eef2ff; }
 .study-timer-btn.active { border-color: var(--accent2); color: var(--accent2); background: #eef2ff; }
+.study-popup {
+  position: absolute;
+  top: 100%;
+  right: 60px;
+  margin-top: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  min-width: 280px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+  z-index: 100;
+}
+.study-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
 .fullscreen-btn {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -829,6 +848,7 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
   .logo-text { display: none; }
   .cloud-btn { padding: 4px 8px; font-size: 0.72rem; gap: 3px; }
   .study-timer-btn { padding: 4px 8px; font-size: 0.72rem; gap: 2px; }
+  .study-popup { right: 8px; min-width: 260px; padding: 12px 16px; }
   .settings-btn { padding: 4px 8px; font-size: 0.72rem; }
   .fullscreen-btn { padding: 4px 6px; font-size: 0.72rem; }
   .main { padding: 12px; }
@@ -1121,7 +1141,7 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
     <button class="cloud-btn" id="cloudBtn" onclick="openCloudPanel()" title="云同步">
       <span class="cloud-status local" id="cloudStatusDot"></span> <span id="cloudBtnText">未登录</span>
     </button>
-    <button class="study-timer-btn" id="studyTimerBtn" title="今日学习时长">
+    <button class="study-timer-btn" id="studyTimerBtn" title="今日学习时长" onclick="toggleStudyTimerPopup()">
       ⏱ <span id="studyTimerDisplay">0分钟</span>
     </button>
     <button class="fullscreen-btn" onclick="toggleFullscreen()" title="全屏显示" aria-label="全屏显示">
@@ -1130,6 +1150,27 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
     <button class="settings-btn" onclick="openSettings()" title="API 设置">
       <span class="api-status" id="apiStatusDot"></span> API 设置
     </button>
+  </div>
+  <!-- 学习时长弹窗 -->
+  <div class="study-popup" id="studyTimerPopup" style="display:none;">
+    <div class="study-popup-header">
+      <span style="font-weight:600;font-size:0.95rem;">📊 学习时长</span>
+      <button onclick="toggleStudyTimerPopup()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:0;line-height:1;">✕</button>
+    </div>
+    <div style="display:flex;gap:20px;padding:8px 0 14px;">
+      <div style="text-align:center;flex:1;">
+        <div style="font-size:1.4rem;font-weight:700;color:var(--accent);" id="popupTodayDisplay">0分钟</div>
+        <div style="font-size:0.72rem;color:var(--muted);">今日</div>
+      </div>
+      <div style="text-align:center;flex:1;">
+        <div style="font-size:1.4rem;font-weight:700;color:var(--ink);" id="popupTotalDisplay">0分钟</div>
+        <div style="font-size:0.72rem;color:var(--muted);">总计</div>
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--rule);padding-top:12px;">
+      <div style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">最近7天</div>
+      <div id="popupDetailList" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;min-height:60px;"></div>
+    </div>
   </div>
 </header>
 
@@ -2312,6 +2353,8 @@ async function checkCloudSession() {
     const { data: { session } } = await sbClient.auth.getSession();
     if (session) {
       updateCloudUI(true, session.user.email);
+      // 页面加载时从云端拉取学习时长（跨设备同步）
+      syncStudyTimeFromCloud();
       // 如果 URL 中还有 hash 残留，清理它
       if (window.location.hash && window.location.hash.includes('access_token')) {
         window.history.replaceState(null, '', window.location.pathname);
@@ -6753,15 +6796,17 @@ function updateStudyTimerDisplay() {
   const totalDisplay = $('studyTotalDisplay');
   if (totalDisplay) totalDisplay.textContent = formatStudyTime(totalSec);
 
-  // 更新最近7天
+  // 更新弹窗中的显示
+  const popupToday = $('popupTodayDisplay');
+  if (popupToday) popupToday.textContent = formatStudyTime(todaySec);
+  const popupTotal = $('popupTotalDisplay');
+  if (popupTotal) popupTotal.textContent = formatStudyTime(totalSec);
+
+  // 更新最近7天（面板和弹窗）
   renderStudyDetail();
 }
 
 function renderStudyDetail() {
-  const area = $('studyDetailArea');
-  const list = $('studyDetailList');
-  if (!area || !list) return;
-
   const days = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
@@ -6772,20 +6817,54 @@ function renderStudyDetail() {
   }
 
   const maxSec = Math.max(1, ...days.map(d => d.sec));
-  let html = '';
-  days.forEach(d => {
-    const h = Math.max(3, Math.round((d.sec / maxSec) * 60));
-    const color = d.sec > 0 ? 'var(--accent)' : 'var(--rule)';
-    const bg = d.sec > 0 ? 'var(--accent)' : 'var(--rule)';
-    html += '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:48px;">';
-    html += '<div style="font-size:0.7rem;color:var(--muted);">' + formatStudyTime(d.sec) + '</div>';
-    html += '<div style="width:24px;height:' + h + 'px;background:' + bg + ';border-radius:4px 4px 0 0;"></div>';
-    html += '<div style="font-size:0.65rem;color:var(--muted);">' + d.label + '</div>';
-    html += '</div>';
-  });
-  list.innerHTML = html;
-  area.style.display = days.some(d => d.sec > 0) ? '' : 'none';
+  const buildHtml = () => {
+    let html = '';
+    days.forEach(d => {
+      const h = Math.max(3, Math.round((d.sec / maxSec) * 60));
+      const bg = d.sec > 0 ? 'var(--accent)' : 'var(--rule)';
+      html += '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:48px;">';
+      html += '<div style="font-size:0.7rem;color:var(--muted);">' + formatStudyTime(d.sec) + '</div>';
+      html += '<div style="width:24px;height:' + h + 'px;background:' + bg + ';border-radius:4px 4px 0 0;"></div>';
+      html += '<div style="font-size:0.65rem;color:var(--muted);">' + d.label + '</div>';
+      html += '</div>';
+    });
+    return html;
+  };
+
+  // 更新面板中的列表
+  const area = $('studyDetailArea');
+  const list = $('studyDetailList');
+  if (area && list) {
+    list.innerHTML = buildHtml();
+    area.style.display = days.some(d => d.sec > 0) ? '' : 'none';
+  }
+
+  // 更新弹窗中的列表
+  const popupList = $('popupDetailList');
+  if (popupList) {
+    popupList.innerHTML = buildHtml();
+  }
 }
+
+function toggleStudyTimerPopup() {
+  const popup = $('studyTimerPopup');
+  if (!popup) return;
+  if (popup.style.display === 'none') {
+    updateStudyTimerDisplay();
+    popup.style.display = '';
+  } else {
+    popup.style.display = 'none';
+  }
+}
+
+// 点击页面其他地方关闭弹窗
+document.addEventListener('click', function(e) {
+  const popup = $('studyTimerPopup');
+  const btn = $('studyTimerBtn');
+  if (popup && popup.style.display !== 'none' && !popup.contains(e.target) && !btn.contains(e.target)) {
+    popup.style.display = 'none';
+  }
+});
 
 function startStudyTimer() {
   if (studyTimerInterval) return;
@@ -6872,7 +6951,7 @@ async function syncStudyTimeFromCloud() {
   }
 }
 
-// 自动同步：以天为单位，静默上传今日累计时长
+// 自动同步：双向同步 — 先从云端拉取合并，再推送本地累计时长
 async function autoSyncStudyTime() {
   if (!sbClient || !initSupabase()) return;
   const { data: { session } } = await sbClient.auth.getSession();
@@ -6888,9 +6967,24 @@ async function autoSyncStudyTime() {
 
   try {
     const userId = session.user.id;
-    const todaySec = studyTimeLogs[today] || 0;
 
-    // 只在有数据时才上传
+    // ① 先从云端拉取并合并（解决跨设备同步问题）
+    const { data: cloudData, error: fetchErr } = await sbClient
+      .from('study_time')
+      .select('date, seconds')
+      .eq('user_id', userId);
+
+    if (!fetchErr && cloudData && cloudData.length > 0) {
+      cloudData.forEach(row => {
+        const local = studyTimeLogs[row.date] || 0;
+        studyTimeLogs[row.date] = Math.max(local, row.seconds || 0);
+      });
+      saveStudyTimeToLocal();
+      updateStudyTimerDisplay();
+    }
+
+    // ② 再推送本地数据到云端
+    const todaySec = studyTimeLogs[today] || 0;
     if (todaySec <= 0) return;
 
     await sbClient
