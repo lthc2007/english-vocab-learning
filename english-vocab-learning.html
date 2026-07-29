@@ -1138,7 +1138,7 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
   <div class="nav-inner">
     <button class="nav-tab active" data-tab="lookup">单词查询</button>
     <button class="nav-tab" data-tab="manage">单词管理</button>
-    <button class="nav-tab" data-tab="learn">AI 学习</button>
+    <button class="nav-tab" data-tab="learn">单词卡片</button>
     <button class="nav-tab" data-tab="spell">拼写练习</button>
     <button class="nav-tab" data-tab="quiz">看英选中</button>
     <button class="nav-tab" data-tab="read">文章朗读</button>
@@ -1793,10 +1793,6 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
 
 </main>
 
-<footer class="site-footer">
-  Created by <strong>little hc</strong> and <strong>TRAE</strong>
-</footer>
-
 <!-- Settings Modal -->
 <div class="modal-overlay" id="modalSettings">
   <div class="modal" style="max-width:520px;">
@@ -2022,6 +2018,10 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
       <div style="border-top:1px solid var(--rule);padding-top:16px;">
         <button class="btn btn-danger" onclick="cloudLogout()" style="width:100%;">退出登录</button>
       </div>
+    </div>
+
+    <div style="text-align:center;padding-top:16px;margin-top:16px;border-top:1px solid var(--rule);font-size:0.75rem;color:var(--muted);">
+      Created by <strong>little hc</strong> and <strong>TRAE</strong>
     </div>
   </div>
 </div>
@@ -2685,37 +2685,51 @@ function showToast(msg, duration) {
   setTimeout(() => el.remove(), duration || 3000);
 }
 
+let sharedAudioCtx = null;
+
+function getAudioCtx() {
+  if (!sharedAudioCtx) {
+    sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (sharedAudioCtx.state === 'suspended') {
+    sharedAudioCtx.resume();
+  }
+  return sharedAudioCtx;
+}
+
 function playDing() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.connect(g);
     g.connect(ctx.destination);
     o.type = 'sine';
-    o.frequency.setValueAtTime(1200, ctx.currentTime);
-    o.frequency.setValueAtTime(1600, ctx.currentTime + 0.06);
-    g.gain.setValueAtTime(0.3, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-    o.start(ctx.currentTime);
-    o.stop(ctx.currentTime + 0.25);
+    o.frequency.setValueAtTime(1200, now);
+    o.frequency.setValueAtTime(1600, now + 0.06);
+    g.gain.setValueAtTime(0.3, now);
+    g.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+    o.start(now);
+    o.stop(now + 0.25);
   } catch (e) { /* silent */ }
 }
 
 function playBuzz() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.connect(g);
     g.connect(ctx.destination);
     o.type = 'sawtooth';
-    o.frequency.setValueAtTime(150, ctx.currentTime);
-    o.frequency.setValueAtTime(100, ctx.currentTime + 0.15);
-    g.gain.setValueAtTime(0.15, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-    o.start(ctx.currentTime);
-    o.stop(ctx.currentTime + 0.3);
+    o.frequency.setValueAtTime(150, now);
+    o.frequency.setValueAtTime(100, now + 0.15);
+    g.gain.setValueAtTime(0.15, now);
+    g.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+    o.start(now);
+    o.stop(now + 0.3);
   } catch (e) { /* silent */ }
 }
 
