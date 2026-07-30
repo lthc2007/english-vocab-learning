@@ -1150,7 +1150,7 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
       <span class="cloud-status local" id="cloudStatusDot"></span> <span id="cloudBtnText">未登录</span>
     </button>
     <button class="study-timer-btn" id="studyTimerBtn" title="今日学习时长" onclick="openStudyTimerPanel()">
-      ⏱ <span id="studyTimerDisplay">0分钟</span>
+      ⏱ <span id="studyTimerDisplay">0m</span>
     </button>
     <button class="fullscreen-btn" onclick="toggleFullscreen()" title="全屏显示" aria-label="全屏显示">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
@@ -2806,6 +2806,7 @@ function exportData() {
     version: 1,
     exportedAt: new Date().toISOString(),
     words: appData.words,
+    sentences: appData.sentences || [],
     apiKey: appData.apiKey,
     apiUrl: appData.apiUrl,
     model: appData.model,
@@ -2847,9 +2848,23 @@ function importData(event) {
             added++;
           }
         });
-        showToast('合并导入完成: ' + added + ' 个新单词已添加');
+        // Merge sentences
+        if (data.sentences && Array.isArray(data.sentences)) {
+          const existingIds = new Set((appData.sentences || []).map(s => s.id));
+          let sentenceAdded = 0;
+          data.sentences.forEach(s => {
+            if (!existingIds.has(s.id)) {
+              (appData.sentences || (appData.sentences = [])).push(s);
+              sentenceAdded++;
+            }
+          });
+          showToast('合并导入完成: ' + added + ' 个新单词已添加, ' + sentenceAdded + ' 个好句已恢复');
+        } else {
+          showToast('合并导入完成: ' + added + ' 个新单词已添加');
+        }
       } else {
         appData.words = data.words;
+        appData.sentences = data.sentences || [];
         if (data.apiKey) appData.apiKey = data.apiKey;
         if (data.apiUrl) appData.apiUrl = data.apiUrl;
         if (data.model) appData.model = data.model;
@@ -2860,7 +2875,7 @@ function importData(event) {
         if (data.ttsUrl) appData.ttsUrl = data.ttsUrl;
         if (data.ttsModel) appData.ttsModel = data.ttsModel;
         if (data.ttsVoice) appData.ttsVoice = data.ttsVoice;
-        showToast('覆盖导入完成: ' + data.words.length + ' 个单词已导入');
+        showToast('覆盖导入完成: ' + data.words.length + ' 个单词、' + ((data.sentences || []).length) + ' 个好句已导入');
       }
       persist();
       renderWordTable();
@@ -3610,6 +3625,20 @@ function escapeHtml(str) {
   return div.innerHTML.replace(/'/g, '&#39;');
 }
 
+// 白名单过滤: 只允许 <span class="error-highlight"> 和 <br>，防止 XSS
+function sanitizeMistakesHtml(str) {
+  if (!str) return '';
+  // 先转义所有 HTML
+  let safe = escapeHtml(str);
+  // 恢复 <br> 标签（escapeHtml 会把 &lt;br&gt; 变成 &amp;lt;br&amp;gt;）
+  safe = safe.replace(/&amp;lt;br&amp;gt;/gi, '<br>').replace(/&lt;br&gt;/gi, '<br>').replace(/&lt;br\/&gt;/gi, '<br>');
+  // 恢复 <span class="error-highlight"> 和 </span>
+  safe = safe.replace(/&lt;span class=&quot;error-highlight&quot;&gt;/gi, '<span class="error-highlight">');
+  safe = safe.replace(/&lt;span class=&#39;error-highlight&#39;&gt;/gi, '<span class="error-highlight">');
+  safe = safe.replace(/&lt;\/span&gt;/gi, '</span>');
+  return safe;
+}
+
 function posClass(pos) {
   if (!pos) return 'other';
   if (pos.startsWith('n.')) return 'n';
@@ -3668,8 +3697,9 @@ async function callAI(prompt, maxTokens = 1500) {
 
   let lastError = null;
   let lastModel = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const tryModel = attempt < fallbackModels.length ? fallbackModels[attempt] : fallbackModels[fallbackModels.length - 1];
+  const maxAttempts = Math.max(fallbackModels.length, 1);
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const tryModel = fallbackModels[attempt];
     // 检测模型降级切换
     if (lastModel && tryModel !== lastModel && isProxy) {
       showToast(`🔄 ${lastModel} 访问量过大，已自动降级为 ${tryModel}`, 4000);
@@ -3710,7 +3740,7 @@ async function callAI(prompt, maxTokens = 1500) {
           || fullErr.includes('访问量过大') || fullErr.includes('限流')
           || fullErr.includes('rate') || fullErr.includes('busy')
           || fullErr.includes('overload') || fullErr.includes('too many');
-        if (isRateLimit && attempt < 2) {
+        if (isRateLimit && attempt < maxAttempts - 1) {
           lastError = fullErr;
           await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
           continue;
@@ -3730,11 +3760,11 @@ async function callAI(prompt, maxTokens = 1500) {
       const isRateLimitErr = err.message.includes('访问量过大') || err.message.includes('限流')
         || err.message.includes('rate') || err.message.includes('429') || err.message.includes('503')
         || err.message.includes('busy') || err.message.includes('overload');
-      if (isRateLimitErr && attempt < 2) {
+      if (isRateLimitErr && attempt < maxAttempts - 1) {
         await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
         continue;
       }
-      if (attempt < 2) continue;
+      if (attempt < maxAttempts - 1) continue;
     }
   }
   showToast('API 调用失败: ' + (lastError || '未知错误'));
@@ -4385,7 +4415,7 @@ let spellTimerInterval = null;
 
 function initSpell() {
   clearInterval(spellTimerInterval);
-  if (appData.words.length < 1) {
+  if (appData.words.length < 4) {
     $('spellEmpty').style.display = '';
     $('spellArea').style.display = 'none';
     return;
@@ -4612,10 +4642,22 @@ function generateOptions(correctWord) {
     seen.add(w.chinese);
     return true;
   });
-  const selected = uniqueOthers.slice(0, 3);
+  let selected = uniqueOthers.slice(0, 3);
+  // 干扰项不足3个时，用英文释义作为兜底补充
+  if (selected.length < 3) {
+    const remaining = shuffledOthers.filter(w => !selected.some(s => s.id === w.id));
+    for (const w of remaining) {
+      if (selected.length >= 3) break;
+      selected.push(w);
+    }
+  }
+  // 仍不足3个时，添加"以上都不对"兜底
+  while (selected.length < 3) {
+    selected.push({ id: 'none_' + selected.length, chinese: '以上都不对', pos: '', isCorrect: false, isFallback: true });
+  }
   const options = [
     { id: correctWord.id, chinese: correctWord.chinese, pos: correctWord.pos, isCorrect: true },
-    ...selected.map(w => ({ id: w.id, chinese: w.chinese, pos: w.pos, isCorrect: false }))
+    ...selected.map(w => ({ id: w.id, chinese: w.chinese, pos: w.pos, isCorrect: false, isFallback: !!w.isFallback }))
   ];
   return shuffleArray(options);
 }
@@ -4787,6 +4829,7 @@ let articleChunkIdx = -1;     // current playing chunk index
 let articleIsPlaying = false;
 let articleIsPaused = false;
 let articlePausedAt = 0;
+let articleWebSpeechMode = false;  // 是否使用浏览器语音朗读
 let cloudPlayingId = null;  // 当前播放的云端音频 ID
 let cloudAudio = null;       // 云端音频播放器（独立于文章朗读的 articleAudio）
 let cloudAudioIsPlaying = false;
@@ -4952,6 +4995,7 @@ function replayArticleBlob() {
   window.speechSynthesis && window.speechSynthesis.cancel();
   articleIsPlaying = false;
   articleIsPaused = false;
+  articleWebSpeechMode = false;
   articleChunkIdx = -1;
 
   $('btnReadPlay').style.display = 'none';
@@ -5052,6 +5096,7 @@ async function startArticleRead() {
       $('readProgressText').style.display = 'none';
       $('btnReadDownload').style.display = '';
       $('btnReadPause').style.display = '';
+      $('articleSpeedSlider').disabled = true;  // 音频已生成，语速不可再调
       // 如果已登录，显示云端保存按钮
       updateCloudAudioUI();
       playArticleChunks(0);
@@ -5097,19 +5142,31 @@ function playArticleChunks(idx) {
     }
   };
   articleAudio.play();
+  articleWebSpeechMode = false;
   articleIsPlaying = true;
   articleIsPaused = false;
 }
 
 function pauseArticleRead() {
-  if (articleAudio) { articleAudio.pause(); }
+  if (articleWebSpeechMode) {
+    window.speechSynthesis.pause();
+    articleIsPaused = true;
+  } else if (articleAudio) {
+    articleAudio.pause();
+  }
   $('btnReadPause').style.display = 'none';
   $('btnReadResume').style.display = '';
   $('readStatus').textContent = '已暂停';
 }
 
 function resumeArticleRead() {
-  if (articleAudio) { articleAudio.play(); articleIsPaused = false; }
+  if (articleWebSpeechMode) {
+    window.speechSynthesis.resume();
+    articleIsPaused = false;
+  } else if (articleAudio) {
+    articleAudio.play();
+    articleIsPaused = false;
+  }
   $('btnReadPause').style.display = '';
   $('btnReadResume').style.display = 'none';
   $('readStatus').textContent = '朗读中...';
@@ -5127,6 +5184,7 @@ function stopArticleRead() {
   window.speechSynthesis && window.speechSynthesis.cancel();
   articleIsPlaying = false;
   articleIsPaused = false;
+  articleWebSpeechMode = false;
   articleChunkIdx = -1;
   $('btnReadPlay').style.display = '';
   $('btnReadPlay').textContent = articleBlob ? '🔄 重新播放' : '▶ 朗读';
@@ -5145,6 +5203,7 @@ function clearArticle() {
   stopArticleRead();
   articleChunks = [];
   articleBlob = null;
+  $('articleSpeedSlider').disabled = false;
   $('btnReadPlay').textContent = '▶ 朗读';
   $('btnReadDownload').style.display = 'none';
   $('btnReadCloudSave').style.display = 'none';
@@ -5153,6 +5212,7 @@ function clearArticle() {
 function onArticleEnded() {
   articleIsPlaying = false;
   articleIsPaused = false;
+  articleWebSpeechMode = false;
   $('btnReadPlay').style.display = '';
   $('btnReadPlay').textContent = '🔄 重新播放';
   $('btnReadPause').style.display = 'none';
@@ -5490,6 +5550,7 @@ function doWebSpeechRead(text) {
   utter.onend = onArticleEnded;
   utter.onerror = onArticleEnded;
   window.speechSynthesis.speak(utter);
+  articleWebSpeechMode = true;
   articleIsPlaying = true;
 }
 
@@ -6058,7 +6119,7 @@ AI范文: <AI根据中文原文翻译的英文范文>
   const fixedEssay = parseSection(result, '修正范文');
 
   $('correctScore').textContent = score || '—';
-  $('correctMistakes').innerHTML = mistakes.replace(/\n/g, '<br>') || '无';
+  $('correctMistakes').innerHTML = sanitizeMistakesHtml(mistakes) || '无';
   $('correctAiEssay').textContent = aiEssay || '';
   $('correctFixedEssay').textContent = fixedEssay || '';
   $('correctResult').style.display = '';
@@ -6117,7 +6178,7 @@ AI范文: <AI根据题目写的英文范文>
 
   $('writingScore').textContent = score || '—';
   $('writingDetail').textContent = detail || '';
-  $('writingMistakes').innerHTML = mistakes.replace(/\n/g, '<br>') || '无';
+  $('writingMistakes').innerHTML = sanitizeMistakesHtml(mistakes) || '无';
   $('writingAiEssay').textContent = aiEssay || '';
   $('writingFixedEssay').textContent = fixedEssay || '';
   $('writingResult').style.display = '';
@@ -6233,6 +6294,7 @@ function reciteClearForm() {
   $('reciteEnglish').value = '';
   $('reciteChinese').value = '';
   $('reciteSource').value = '';
+  editingSentenceId = null;
   if ($('reciteAddError')) $('reciteAddError').style.display = 'none';
 }
 
@@ -6266,8 +6328,24 @@ function reciteAddSentence() {
   if (!english) { showToast('请输入英文句子'); return; }
   if (!chinese) { showToast('请输入中文翻译或使用 AI 翻译'); return; }
 
+  if (editingSentenceId) {
+    // 编辑模式：更新已有句子
+    const s = appData.sentences.find(s => s.id === editingSentenceId);
+    if (s) {
+      s.english = english;
+      s.chinese = chinese;
+      s.source = source;
+    }
+    editingSentenceId = null;
+    persist();
+    renderReciteList();
+    clearReciteForm();
+    showToast('句子已更新');
+    return;
+  }
+
   const sentence = {
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    id: generateId(),
     english,
     chinese,
     source,
@@ -6290,6 +6368,8 @@ function reciteDeleteSentence(id) {
   showToast('已删除');
 }
 
+let editingSentenceId = null;  // 正在编辑的句子 ID
+
 function reciteEditSentence(id) {
   const s = appData.sentences.find(s => s.id === id);
   if (!s) return;
@@ -6297,10 +6377,8 @@ function reciteEditSentence(id) {
   $('reciteEnglish').value = s.english;
   $('reciteChinese').value = s.chinese;
   $('reciteSource').value = s.source || '';
-  // Remove the old one so we don't get duplicates
-  appData.sentences = appData.sentences.filter(s => s.id !== id);
-  persist();
-  showToast('已加载到编辑区，修改后请重新保存');
+  editingSentenceId = id;
+  showToast('已加载到编辑区，修改后点击"保存"即可更新');
 }
 
 function renderReciteList() {
@@ -6698,14 +6776,14 @@ function viewCorrectionDetail(id) {
   if (record.type === 'translation') {
     content += `<div class="result-card"><div class="ai-section-title">中文原文</div><div class="result-content">${escapeHtml(record.original || '')}</div></div>`;
     content += `<div class="result-card"><div class="ai-section-title">你的译文</div><div class="result-content">${escapeHtml(record.translation || '')}</div></div>`;
-    content += `<div class="result-card"><div class="ai-section-title">错误批改</div><div class="result-content">${record.mistakes || '无'}</div></div>`;
+    content += `<div class="result-card"><div class="ai-section-title">错误批改</div><div class="result-content">${sanitizeMistakesHtml(record.mistakes) || '无'}</div></div>`;
     content += `<div class="result-card"><div class="ai-section-title">AI 范文</div><div class="result-content">${escapeHtml(record.aiEssay || '')}</div></div>`;
     content += `<div class="result-card"><div class="ai-section-title">修改后范文</div><div class="result-content">${escapeHtml(record.fixedEssay || '')}</div></div>`;
   } else {
     content += `<div class="result-card"><div class="ai-section-title">作文题目</div><div class="result-content">${escapeHtml(record.topic || '')}</div></div>`;
     content += `<div class="result-card"><div class="ai-section-title">你的作文</div><div class="result-content">${escapeHtml(record.essay || '')}</div></div>`;
     content += `<div class="result-card"><div class="ai-section-title">评分详情</div><div class="result-content">${escapeHtml(record.detail || '')}</div></div>`;
-    content += `<div class="result-card"><div class="ai-section-title">错误批改</div><div class="result-content">${record.mistakes || '无'}</div></div>`;
+    content += `<div class="result-card"><div class="ai-section-title">错误批改</div><div class="result-content">${sanitizeMistakesHtml(record.mistakes) || '无'}</div></div>`;
     content += `<div class="result-card"><div class="ai-section-title">AI 范文</div><div class="result-content">${escapeHtml(record.aiEssay || '')}</div></div>`;
     content += `<div class="result-card"><div class="ai-section-title">修改后范文</div><div class="result-content">${escapeHtml(record.fixedEssay || '')}</div></div>`;
   }
@@ -6770,7 +6848,7 @@ function getTodayStr() {
 }
 
 function formatStudyTime(seconds) {
-  if (seconds < 60) return '0m';
+  if (seconds < 60) return '<1m';
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   if (h > 0) return h + 'h' + (m > 0 ? m + 'm' : '');
