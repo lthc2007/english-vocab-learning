@@ -411,8 +411,9 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
   cursor: default;
   min-height: auto;
 }
-.flashcard .word-front { font-family: var(--font-display); font-size: 3.8rem; font-weight: 700; color: var(--accent); display: inline-block; letter-spacing: 0.02em; word-break: break-word; overflow-wrap: break-word; max-width: 100%; text-align: center; }
-.flashcard .word-front .word-eng { font-family: var(--font-display); font-size: inherit; font-weight: 700; color: inherit; }
+.flashcard .word-front { font-family: var(--font-display); font-size: 3.8rem; font-weight: 700; color: var(--accent); display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; column-gap: 0.25em; letter-spacing: 0.02em; max-width: 100%; text-align: center; }
+.flashcard .word-front .word-eng { font-family: var(--font-display); font-size: inherit; font-weight: 700; color: inherit; white-space: nowrap; }
+.flashcard .word-front .phonetic { font-size: 1.3rem; font-weight: 400; color: var(--muted); font-family: var(--font-display); font-style: italic; white-space: nowrap; }
 .btn-speak {
   display: inline-flex;
   align-items: center;
@@ -2231,8 +2232,21 @@ function saveData(data) {
 let appData = loadData();
 // Ensure sentences array exists for users upgrading from older versions
 if (!appData.sentences) appData.sentences = [];
+// 为旧数据迁移：确保每个单词和句子都有 updatedAt
+let _migrated = false;
+(appData.words || []).forEach(w => {
+  if (!w.updatedAt) { w.updatedAt = w.createdAt || new Date().toISOString(); _migrated = true; }
+});
+(appData.sentences || []).forEach(s => {
+  if (!s.updatedAt) { s.updatedAt = s.createdAt || new Date().toISOString(); _migrated = true; }
+});
+if (_migrated) persist();
 
-function persist() { saveData(appData); }
+function persist() {
+  saveData(appData);
+  // 防抖自动同步单词到云端
+  scheduleWordSync();
+}
 
 // ═══════════════════════════════════════
 // Cloud Sync (Supabase)
@@ -2248,6 +2262,8 @@ let studyTimeLogs = {};         // { "2026-07-28": 3600, "2026-07-27": 2400 } �
 let studyTimerInterval = null;   // setInterval 句柄
 let studyAutoSyncInterval = null;  // 自动同步云端计时器
 let studyActive = false;         // 是否正在计时
+let wordSyncTimer = null;        // 单词防抖同步定时器
+let wordAutoSyncInterval = null; // 单词定期自动同步
 
 // Hardcoded Supabase credentials (already configured)
 const SUPABASE_URL = 'https://mmdhtyuyirukvtmfzeby.supabase.co';
@@ -2297,9 +2313,10 @@ async function handleAuthSignIn(session) {
     window.history.replaceState(null, '', window.location.pathname);
   }
 
-  // 登录后立即拉取云端学习时长并开始自动同步
+  // 登录后立即拉取云端学习时长和单词并开始自动同步
   syncStudyTimeFromCloud();
   autoSyncStudyTime();
+  autoSyncWords();
 
   // 检查是否有待处理的注册确认（signUp 后邮箱确认链接跳转回来）
   const pendingEmail = localStorage.getItem('pendingRegEmail');
@@ -2572,7 +2589,7 @@ async function cloudSubmit(mode) {
       updateCloudUI(true, data.user.email);
       showToast('注册成功！');
       closeCloudPanel();
-      setTimeout(() => cloudDownload(), 500);
+      setTimeout(() => autoSyncWords(), 500);
       return;
     }
 
@@ -2590,7 +2607,7 @@ async function cloudSubmit(mode) {
       updateCloudUI(true, result.data.user.email);
       showToast('登录成功！');
       closeCloudPanel();
-      setTimeout(() => cloudDownload(), 500);
+      setTimeout(() => autoSyncWords(), 500);
     }
   } catch (e) {
     console.error('Login error:', e);
@@ -2694,26 +2711,51 @@ async function cloudDownload() {
     const cloudWords = Array.isArray(data.words) ? data.words : (data.words.words || []);
     const cloudSentences = Array.isArray(data.words) ? [] : (data.words.sentences || []);
 
-    // Merge words
+    // Merge words by updatedAt (newer wins)
     if (cloudWords.length > 0) {
       const merged = new Map();
       appData.words.forEach(w => merged.set(w.english.toLowerCase(), w));
-      cloudWords.forEach(w => merged.set(w.english.toLowerCase(), w));
+      cloudWords.forEach(cw => {
+        const key = cw.english.toLowerCase();
+        const lw = merged.get(key);
+        if (!lw) {
+          merged.set(key, cw);
+          mergedCount++;
+        } else {
+          const cloudTime = cw.updatedAt ? new Date(cw.updatedAt).getTime() : 0;
+          const localTime = lw.updatedAt ? new Date(lw.updatedAt).getTime() : 0;
+          if (cloudTime > localTime) {
+            merged.set(key, cw);
+            mergedCount++;
+          }
+        }
+      });
       appData.words = Array.from(merged.values());
-      mergedCount += cloudWords.length;
     }
-    // Merge sentences
+    // Merge sentences by updatedAt (newer wins)
     if (cloudSentences.length > 0) {
       const mergedSent = new Map();
       (appData.sentences || []).forEach(s => mergedSent.set(s.id, s));
-      cloudSentences.forEach(s => mergedSent.set(s.id, s));
+      cloudSentences.forEach(cs => {
+        const ls = mergedSent.get(cs.id);
+        if (!ls) {
+          mergedSent.set(cs.id, cs);
+          mergedCount++;
+        } else {
+          const cloudTime = cs.updatedAt ? new Date(cs.updatedAt).getTime() : 0;
+          const localTime = ls.updatedAt ? new Date(ls.updatedAt).getTime() : 0;
+          if (cloudTime > localTime) {
+            mergedSent.set(cs.id, cs);
+            mergedCount++;
+          }
+        }
+      });
       appData.sentences = Array.from(mergedSent.values());
-      mergedCount += cloudSentences.length;
     }
     persist();
     renderWordTable();
     $('cloudSyncTime').textContent = '云端时间: ' + new Date(data.updated_at).toLocaleString('zh-CN');
-    showToast('从云端合并了 ' + mergedCount + ' 条数据（云端优先）');
+    showToast('从云端合并了 ' + mergedCount + ' 条数据');
     $('cloudStatusDot').className = 'cloud-status synced';
     syncStudyTimeFromCloud();
   } catch (e) {
@@ -2843,6 +2885,7 @@ function importData(event) {
       if (mode) {
         let added = 0;
         data.words.forEach(w => {
+          if (!w.updatedAt) w.updatedAt = w.createdAt || new Date().toISOString();
           if (!appData.words.some(existing => existing.english.toLowerCase() === w.english.toLowerCase())) {
             appData.words.push(w);
             added++;
@@ -2853,6 +2896,7 @@ function importData(event) {
           const existingIds = new Set((appData.sentences || []).map(s => s.id));
           let sentenceAdded = 0;
           data.sentences.forEach(s => {
+            if (!s.updatedAt) s.updatedAt = s.createdAt || new Date().toISOString();
             if (!existingIds.has(s.id)) {
               (appData.sentences || (appData.sentences = [])).push(s);
               sentenceAdded++;
@@ -2865,6 +2909,9 @@ function importData(event) {
       } else {
         appData.words = data.words;
         appData.sentences = data.sentences || [];
+        // 确保导入的单词有 updatedAt 字段
+        appData.words.forEach(w => { if (!w.updatedAt) w.updatedAt = w.createdAt || new Date().toISOString(); });
+        (appData.sentences || []).forEach(s => { if (!s.updatedAt) s.updatedAt = s.createdAt || new Date().toISOString(); });
         if (data.apiKey) appData.apiKey = data.apiKey;
         if (data.apiUrl) appData.apiUrl = data.apiUrl;
         if (data.model) appData.model = data.model;
@@ -3427,7 +3474,8 @@ function newWord(english, pos, chinese, difficulty) {
     frequency: '',
     isPhrase: false,
     aiGenerated: false,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 }
 
@@ -3835,6 +3883,7 @@ async function generateAllContent(wordId) {
       word.difficulty = parseSection(result, '难度');
       word.frequency = parseSection(result, '考频');
       word.aiGenerated = true;
+      word.updatedAt = new Date().toISOString();
       const missing = [];
       if (!word.dialogue) missing.push('对话');
       if (!word.similarWords) missing.push('形近词');
@@ -3851,6 +3900,7 @@ ${missing.includes('对话') ? '对话: <A:... B:... 一个包含该单词的雅
           if (missing.includes('翻译题')) word.translationExercise = parseSection(fillResult, '翻译题');
         }
       }
+      word.updatedAt = new Date().toISOString();
       persist();
       renderWordTable();
       if (!wordId) showCard();
@@ -3969,6 +4019,7 @@ async function generateAllContentBatch() {
       word.difficulty = parseSection(result, '难度');
       word.frequency = parseSection(result, '考频');
       word.aiGenerated = true;
+      word.updatedAt = new Date().toISOString();
       // 补全缺失的字段
       const missing = [];
       if (!word.dialogue) missing.push('对话');
@@ -6335,6 +6386,7 @@ function reciteAddSentence() {
       s.english = english;
       s.chinese = chinese;
       s.source = source;
+      s.updatedAt = new Date().toISOString();
     }
     editingSentenceId = null;
     persist();
@@ -6350,6 +6402,7 @@ function reciteAddSentence() {
     chinese,
     source,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     aiTranslated: false,
     practiceCount: 0,
     lastPracticed: null
@@ -7159,8 +7212,148 @@ async function syncStudyTimeToCloud() {
   }
 }
 
+// ═══════════════════════════════════════
+// Word Auto-Sync (实时同步单词到云端)
+// ═══════════════════════════════════════
+
+// 防抖调度：3秒内多次 persist() 只触发一次同步
+function scheduleWordSync() {
+  if (wordSyncTimer) clearTimeout(wordSyncTimer);
+  wordSyncTimer = setTimeout(() => {
+    autoSyncWords();
+  }, 3000);
+}
+
+// 自动同步单词：先拉取云端合并，再推送本地
+async function autoSyncWords() {
+  if (!sbClient || !initSupabase()) return;
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (!session) return;
+
+  try {
+    const userId = session.user.id;
+
+    // ① 先从云端拉取并合并（解决跨设备同步问题）
+    const { data: cloudRow, error: fetchErr } = await sbClient
+      .from('user_words')
+      .select('words, updated_at')
+      .eq('user_id', userId)
+      .single();
+
+    if (!fetchErr && cloudRow && cloudRow.words) {
+      const cloudWords = Array.isArray(cloudRow.words) ? cloudRow.words : (cloudRow.words.words || []);
+      const cloudSentences = Array.isArray(cloudRow.words) ? [] : (cloudRow.words.sentences || []);
+
+      // 合并单词：按 english.toLowerCase() 为 key，updatedAt 较新的优先
+      let hasWordChanges = false;
+      const localMap = new Map();
+      appData.words.forEach(w => localMap.set(w.english.toLowerCase(), w));
+
+      cloudWords.forEach(cw => {
+        const key = cw.english.toLowerCase();
+        const lw = localMap.get(key);
+        if (!lw) {
+          // 云端有、本地没有 → 添加
+          localMap.set(key, cw);
+          hasWordChanges = true;
+        } else {
+          // 两端都有 → 比较 updatedAt，云端较新则覆盖
+          const cloudTime = cw.updatedAt ? new Date(cw.updatedAt).getTime() : 0;
+          const localTime = lw.updatedAt ? new Date(lw.updatedAt).getTime() : 0;
+          if (cloudTime > localTime) {
+            localMap.set(key, cw);
+            hasWordChanges = true;
+          }
+        }
+      });
+
+      if (hasWordChanges) {
+        appData.words = Array.from(localMap.values());
+      }
+
+      // 合并句子：按 id 为 key，updatedAt 较新的优先
+      let hasSentChanges = false;
+      if (!appData.sentences) appData.sentences = [];
+      const sentMap = new Map();
+      appData.sentences.forEach(s => sentMap.set(s.id, s));
+
+      cloudSentences.forEach(cs => {
+        const ls = sentMap.get(cs.id);
+        if (!ls) {
+          sentMap.set(cs.id, cs);
+          hasSentChanges = true;
+        } else {
+          const cloudTime = cs.updatedAt ? new Date(cs.updatedAt).getTime() : 0;
+          const localTime = ls.updatedAt ? new Date(ls.updatedAt).getTime() : 0;
+          if (cloudTime > localTime) {
+            sentMap.set(cs.id, cs);
+            hasSentChanges = true;
+          }
+        }
+      });
+
+      if (hasSentChanges) {
+        appData.sentences = Array.from(sentMap.values());
+      }
+
+      if (hasWordChanges || hasSentChanges) {
+        saveData(appData);
+        renderWordTable();
+        updateStudyTimerDisplay();
+      }
+    }
+
+    // ② 推送本地数据到云端
+    const uploadData = {
+      words: appData.words,
+      sentences: appData.sentences || []
+    };
+
+    await sbClient
+      .from('user_words')
+      .upsert({
+        user_id: userId,
+        words: uploadData,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+
+    const syncTime = $('cloudSyncTime');
+    if (syncTime) syncTime.textContent = '上次同步: ' + new Date().toLocaleString('zh-CN');
+    const statusDot = $('cloudStatusDot');
+    if (statusDot) statusDot.className = 'cloud-status synced';
+
+  } catch (e) {
+    // 静默失败，不打扰用户
+    console.error('autoSyncWords error:', e);
+  }
+}
+
+// 初始化单词自动同步
+function initWordAutoSync() {
+  // 每120秒自动同步一次
+  wordAutoSyncInterval = setInterval(() => {
+    autoSyncWords();
+  }, 120000);
+
+  // 页面隐藏时同步
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      autoSyncWords();
+    } else {
+      // 页面恢复可见时，从云端拉取最新数据
+      autoSyncWords();
+    }
+  });
+
+  // 页面关闭前同步
+  window.addEventListener('beforeunload', () => {
+    autoSyncWords();
+  });
+}
+
 initHistory();
 initStudyTimer();
+initWordAutoSync();
 init();
 </script>
 <!-- Hidden print area for export -->
