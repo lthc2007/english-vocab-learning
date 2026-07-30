@@ -2244,8 +2244,6 @@ if (_migrated) persist();
 
 function persist() {
   saveData(appData);
-  // 防抖自动同步单词到云端
-  scheduleWordSync();
 }
 
 // ═══════════════════════════════════════
@@ -2313,10 +2311,9 @@ async function handleAuthSignIn(session) {
     window.history.replaceState(null, '', window.location.pathname);
   }
 
-  // 登录后立即拉取云端学习时长和单词并开始自动同步
+  // 登录后立即拉取云端学习时长并开始自动同步
   syncStudyTimeFromCloud();
   autoSyncStudyTime();
-  autoSyncWords();
 
   // 检查是否有待处理的注册确认（signUp 后邮箱确认链接跳转回来）
   const pendingEmail = localStorage.getItem('pendingRegEmail');
@@ -2589,7 +2586,6 @@ async function cloudSubmit(mode) {
       updateCloudUI(true, data.user.email);
       showToast('注册成功！');
       closeCloudPanel();
-      setTimeout(() => autoSyncWords(), 500);
       return;
     }
 
@@ -2607,7 +2603,6 @@ async function cloudSubmit(mode) {
       updateCloudUI(true, result.data.user.email);
       showToast('登录成功！');
       closeCloudPanel();
-      setTimeout(() => autoSyncWords(), 500);
     }
   } catch (e) {
     console.error('Login error:', e);
@@ -7326,32 +7321,8 @@ async function uploadWordsOnly() {
   }
 }
 
-// 初始化单词自动同步
-function initWordAutoSync() {
-  // 每120秒自动上传一次（仅上传，不下载）
-  wordAutoSyncInterval = setInterval(() => {
-    uploadWordsOnly();
-  }, 120000);
-
-  // 页面隐藏时：仅上传本地数据到云端（不下载）
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      uploadWordsOnly();
-    } else {
-      // 页面恢复可见时：从云端拉取最新数据（下载+上传）
-      autoSyncWords();
-    }
-  });
-
-  // 页面关闭前：仅上传本地数据到云端（不下载）
-  window.addEventListener('beforeunload', () => {
-    uploadWordsOnly();
-  });
-}
-
 initHistory();
 initStudyTimer();
-initWordAutoSync();
 init();
 </script>
 <!-- Hidden print area for export -->
