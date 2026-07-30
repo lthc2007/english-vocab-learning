@@ -7209,13 +7209,13 @@ async function autoSyncWords() {
       const cloudWords = Array.isArray(cloudRow.words) ? cloudRow.words : (cloudRow.words.words || []);
       const cloudSentences = Array.isArray(cloudRow.words) ? [] : (cloudRow.words.sentences || []);
 
-      // 合并单词：云端为基础，本地已编辑的单词保留本地版本
+      // 合并单词：云端为权威来源，本地较新版本可覆盖云端，但本地独有的单词不保留（另一设备已删除）
       const resultMap = new Map();
       // 先放入云端单词作为基础
       cloudWords.forEach(cw => {
         resultMap.set(cw.english.toLowerCase(), cw);
       });
-      // 本地单词覆盖同名云端单词（本地编辑优先），本地独有的也保留
+      // 本地单词覆盖同名云端单词（本地编辑优先），本地独有的不保留
       appData.words.forEach(lw => {
         const key = lw.english.toLowerCase();
         const cw = resultMap.get(key);
@@ -7227,10 +7227,8 @@ async function autoSyncWords() {
             resultMap.set(key, lw);
             hasChanges = true;
           }
-        } else {
-          // 云端没有的本地单词：保留（用户本地新增的）
-          resultMap.set(key, lw);
         }
+        // 云端没有的本地单词：不保留（另一设备已删除）
       });
 
       resultWords = Array.from(resultMap.values());
@@ -7238,7 +7236,7 @@ async function autoSyncWords() {
         hasChanges = true;
       }
 
-      // 合并句子：云端为基础，本地编辑保留
+      // 合并句子：云端为权威来源，本地编辑保留
       const sentResultMap = new Map();
       cloudSentences.forEach(cs => sentResultMap.set(cs.id, cs));
       (appData.sentences || []).forEach(ls => {
@@ -7250,9 +7248,8 @@ async function autoSyncWords() {
             sentResultMap.set(ls.id, ls);
             hasChanges = true;
           }
-        } else {
-          sentResultMap.set(ls.id, ls);
         }
+        // 云端没有的本地句子：不保留（另一设备已删除）
       });
       resultSentences = Array.from(sentResultMap.values());
 
