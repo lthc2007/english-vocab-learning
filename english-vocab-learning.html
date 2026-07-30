@@ -7323,9 +7323,9 @@ async function uploadWordsOnly() {
 
 // 初始化单词自动同步
 function initWordAutoSync() {
-  // 每120秒自动同步一次
+  // 每120秒自动上传一次（仅上传，不下载）
   wordAutoSyncInterval = setInterval(() => {
-    autoSyncWords();
+    uploadWordsOnly();
   }, 120000);
 
   // 页面隐藏时：仅上传本地数据到云端（不下载）
