@@ -26,6 +26,7 @@
   --shadow: 0 2px 8px rgba(58,56,53,0.05), 0 1px 3px rgba(58,56,53,0.03);
   --shadow-md: 0 8px 32px rgba(58,56,53,0.08), 0 2px 8px rgba(58,56,53,0.04);
   --shadow-card: 0 4px 20px rgba(58,56,53,0.06), 0 1px 4px rgba(58,56,53,0.03);
+  --bg-card: #ffffff;
   --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --font-display: "Playfair Display", "Noto Serif SC", Georgia, serif;
   --font-body: "DM Sans", "Noto Serif SC", -apple-system, sans-serif;
@@ -1171,11 +1172,11 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
     </div>
     <div style="display:flex;gap:28px;padding:8px 0 18px;">
       <div style="text-align:center;flex:1;background:var(--bg);border-radius:10px;padding:14px 8px;">
-        <div style="font-size:1.8rem;font-weight:700;color:var(--accent);" id="popupTodayDisplay">0分钟</div>
+        <div style="font-size:1.8rem;font-weight:700;color:var(--accent);" id="popupTodayDisplay">0m</div>
         <div style="font-size:0.78rem;color:var(--muted);margin-top:2px;">今日学习</div>
       </div>
       <div style="text-align:center;flex:1;background:var(--bg);border-radius:10px;padding:14px 8px;">
-        <div style="font-size:1.8rem;font-weight:700;color:var(--ink);" id="popupTotalDisplay">0分钟</div>
+        <div style="font-size:1.8rem;font-weight:700;color:var(--ink);" id="popupTotalDisplay">0m</div>
         <div style="font-size:0.78rem;color:var(--muted);margin-top:2px;">累计总计</div>
       </div>
     </div>
@@ -2048,11 +2049,11 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
         </div>
         <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;padding:4px 0;">
           <div style="text-align:center;">
-            <div style="font-size:1.5rem;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;" id="studyTodayDisplay">0分钟</div>
+            <div style="font-size:1.5rem;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;" id="studyTodayDisplay">0m</div>
             <div style="font-size:0.72rem;color:var(--muted);">今日</div>
           </div>
           <div style="text-align:center;">
-            <div style="font-size:1.5rem;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;" id="studyTotalDisplay">0分钟</div>
+            <div style="font-size:1.5rem;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;" id="studyTotalDisplay">0m</div>
             <div style="font-size:0.72rem;color:var(--muted);">总计</div>
           </div>
           <div style="flex:1;"></div>
@@ -2260,8 +2261,6 @@ let studyTimeLogs = {};         // { "2026-07-28": 3600, "2026-07-27": 2400 } �
 let studyTimerInterval = null;   // setInterval 句柄
 let studyAutoSyncInterval = null;  // 自动同步云端计时器
 let studyActive = false;         // 是否正在计时
-let wordSyncTimer = null;        // 单词防抖同步定时器
-let wordAutoSyncInterval = null; // 单词定期自动同步
 
 // Hardcoded Supabase credentials (already configured)
 const SUPABASE_URL = 'https://mmdhtyuyirukvtmfzeby.supabase.co';
@@ -5872,7 +5871,8 @@ function addLookedUpWord() {
     frequency: '',
     isPhrase: false,
     aiGenerated: false,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 
   appData.words.push(wordEntry);
@@ -6347,7 +6347,7 @@ function reciteAddSentence() {
     editingSentenceId = null;
     persist();
     renderReciteList();
-    clearReciteForm();
+    reciteClearForm();
     showToast('句子已更新');
     return;
   }
@@ -6594,7 +6594,7 @@ async function reciteCheckAnswer() {
 请用友好的语气，鼓励为主。`;
 
       const result = await callAI(prompt, 2000);
-      $('reciteAiFeedback').innerHTML = '<div class="ai-section-title">🤖 AI 评价</div><div class="ai-section-content">' + result.replace(/\n/g, '<br>') + '</div>';
+      $('reciteAiFeedback').innerHTML = '<div class="ai-section-title">🤖 AI 评价</div><div class="ai-section-content">' + escapeHtml(result).replace(/\n/g, '<br>') + '</div>';
     } catch (e) {
       $('reciteAiFeedback').innerHTML = '<div class="ai-section-title">⚠️ 评价失败</div><div class="ai-section-content">AI 评价暂时不可用: ' + (e.message || '请检查 API 配置') + '</div>';
     }
@@ -6823,14 +6823,14 @@ function exportCorrection() {
   if (record.type === 'translation') {
     html += `<div class="export-section"><div class="export-section-title">中文原文</div><div class="export-section-content">${escapeHtml(record.original || '')}</div></div>`;
     html += `<div class="export-section"><div class="export-section-title">你的译文</div><div class="export-section-content">${escapeHtml(record.translation || '')}</div></div>`;
-    html += `<div class="export-section"><div class="export-section-title">错误批改</div><div class="export-section-content">${record.mistakes || '无'}</div></div>`;
+    html += `<div class="export-section"><div class="export-section-title">错误批改</div><div class="export-section-content">${sanitizeMistakesHtml(record.mistakes) || '无'}</div></div>`;
     html += `<div class="export-section"><div class="export-section-title">AI 范文</div><div class="export-section-content">${escapeHtml(record.aiEssay || '')}</div></div>`;
     html += `<div class="export-section"><div class="export-section-title">修改后范文</div><div class="export-section-content">${escapeHtml(record.fixedEssay || '')}</div></div>`;
   } else {
     html += `<div class="export-section"><div class="export-section-title">作文题目</div><div class="export-section-content">${escapeHtml(record.topic || '')}</div></div>`;
     html += `<div class="export-section"><div class="export-section-title">你的作文</div><div class="export-section-content">${escapeHtml(record.essay || '')}</div></div>`;
     html += `<div class="export-section"><div class="export-section-title">评分详情</div><div class="export-section-content">${escapeHtml(record.detail || '')}</div></div>`;
-    html += `<div class="export-section"><div class="export-section-title">错误批改</div><div class="export-section-content">${record.mistakes || '无'}</div></div>`;
+    html += `<div class="export-section"><div class="export-section-title">错误批改</div><div class="export-section-content">${sanitizeMistakesHtml(record.mistakes) || '无'}</div></div>`;
     html += `<div class="export-section"><div class="export-section-title">AI 范文</div><div class="export-section-content">${escapeHtml(record.aiEssay || '')}</div></div>`;
     html += `<div class="export-section"><div class="export-section-title">修改后范文</div><div class="export-section-content">${escapeHtml(record.fixedEssay || '')}</div></div>`;
   }
@@ -7165,159 +7165,6 @@ async function syncStudyTimeToCloud() {
     btn.disabled = false;
     btn.textContent = '☁️ 同步到云端';
     updateStudyTimerDisplay();
-  }
-}
-
-// ═══════════════════════════════════════
-// Word Auto-Sync (实时同步单词到云端)
-// ═══════════════════════════════════════
-
-// 防抖调度：3秒内多次 persist() 只触发一次上传（仅上传，不下载）
-function scheduleWordSync() {
-  if (wordSyncTimer) clearTimeout(wordSyncTimer);
-  wordSyncTimer = setTimeout(() => {
-    uploadWordsOnly();
-  }, 3000);
-}
-
-// 自动同步单词：下载云端数据更新本地，仅在本地有修改时才上传
-// 避免竞态：如果本地无修改，只下载不上传，防止覆盖另一设备的变更
-async function autoSyncWords() {
-  if (!sbClient || !initSupabase()) return;
-  const { data: { session } } = await sbClient.auth.getSession();
-  if (!session) return;
-
-  try {
-    const userId = session.user.id;
-
-    // ① 先从云端拉取数据
-    const { data: cloudRow, error: fetchErr } = await sbClient
-      .from('user_words')
-      .select('words, updated_at')
-      .eq('user_id', userId)
-      .single();
-
-    let needsUpload = false;       // 本地有修改需要推送到云端
-    let needsLocalUpdate = false;  // 云端有修改需要更新本地
-    let resultWords = [...appData.words];
-    let resultSentences = [...(appData.sentences || [])];
-
-    if (fetchErr || !cloudRow || !cloudRow.words) {
-      // 云端无数据（新用户）：上传本地数据
-      needsUpload = true;
-    } else {
-      const cloudWords = Array.isArray(cloudRow.words) ? cloudRow.words : (cloudRow.words.words || []);
-      const cloudSentences = Array.isArray(cloudRow.words) ? [] : (cloudRow.words.sentences || []);
-
-      // 合并单词：云端为权威来源，本地较新版本可覆盖云端
-      const resultMap = new Map();
-      cloudWords.forEach(cw => {
-        resultMap.set(cw.english.toLowerCase(), cw);
-      });
-      appData.words.forEach(lw => {
-        const key = lw.english.toLowerCase();
-        const cw = resultMap.get(key);
-        if (cw) {
-          const cloudTime = cw.updatedAt ? new Date(cw.updatedAt).getTime() : 0;
-          const localTime = lw.updatedAt ? new Date(lw.updatedAt).getTime() : 0;
-          if (localTime > cloudTime) {
-            resultMap.set(key, lw);
-            needsUpload = true;  // 本地版本更新，需要推送
-          }
-        }
-        // 云端没有的本地单词：不保留（另一设备已删除）
-      });
-
-      resultWords = Array.from(resultMap.values());
-      if (resultWords.length !== appData.words.length) {
-        needsLocalUpdate = true;  // 数量变化，需要更新本地
-      }
-
-      // 合并句子：云端为权威来源
-      const sentResultMap = new Map();
-      cloudSentences.forEach(cs => sentResultMap.set(cs.id, cs));
-      (appData.sentences || []).forEach(ls => {
-        const cs = sentResultMap.get(ls.id);
-        if (cs) {
-          const cloudTime = cs.updatedAt ? new Date(cs.updatedAt).getTime() : 0;
-          const localTime = ls.updatedAt ? new Date(ls.updatedAt).getTime() : 0;
-          if (localTime > cloudTime) {
-            sentResultMap.set(ls.id, ls);
-            needsUpload = true;
-          }
-        }
-        // 云端没有的本地句子：不保留（另一设备已删除）
-      });
-      resultSentences = Array.from(sentResultMap.values());
-      if (resultSentences.length !== (appData.sentences || []).length) {
-        needsLocalUpdate = true;
-      }
-
-      // 应用云端变更到本地
-      if (needsLocalUpdate || needsUpload) {
-        appData.words = resultWords;
-        appData.sentences = resultSentences;
-        saveData(appData);
-        renderWordTable();
-        updateStudyTimerDisplay();
-      }
-    }
-
-    // ② 仅在本地有修改时才推送到云端（避免覆盖另一设备的最新变更）
-    if (needsUpload) {
-      const uploadData = {
-        words: resultWords,
-        sentences: resultSentences
-      };
-
-      await sbClient
-        .from('user_words')
-        .upsert({
-          user_id: userId,
-          words: uploadData,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id' });
-    }
-
-    const syncTime = $('cloudSyncTime');
-    if (syncTime) syncTime.textContent = '上次同步: ' + new Date().toLocaleString('zh-CN');
-    const statusDot = $('cloudStatusDot');
-    if (statusDot) statusDot.className = 'cloud-status synced';
-
-  } catch (e) {
-    // 静默失败，不打扰用户
-    console.error('autoSyncWords error:', e);
-  }
-}
-
-// 仅上传本地数据到云端（不同步下载）
-// 用途：用户在本设备上修改单词后，只推送到云端，不拉取
-async function uploadWordsOnly() {
-  if (!sbClient || !initSupabase()) return;
-  const { data: { session } } = await sbClient.auth.getSession();
-  if (!session) return;
-
-  try {
-    const userId = session.user.id;
-    const uploadData = {
-      words: appData.words,
-      sentences: appData.sentences || []
-    };
-
-    await sbClient
-      .from('user_words')
-      .upsert({
-        user_id: userId,
-        words: uploadData,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' });
-
-    const syncTime = $('cloudSyncTime');
-    if (syncTime) syncTime.textContent = '上次同步: ' + new Date().toLocaleString('zh-CN');
-    const statusDot = $('cloudStatusDot');
-    if (statusDot) statusDot.className = 'cloud-status synced';
-  } catch (e) {
-    console.error('uploadWordsOnly error:', e);
   }
 }
 
