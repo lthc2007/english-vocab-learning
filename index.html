@@ -7185,7 +7185,8 @@ function scheduleWordSync() {
   }, 3000);
 }
 
-// 自动同步单词：云端为基础，本地编辑保留，上传合并结果
+// 自动同步单词：下载云端数据更新本地，仅在本地有修改时才上传
+// 避免竞态：如果本地无修改，只下载不上传，防止覆盖另一设备的变更
 async function autoSyncWords() {
   if (!sbClient || !initSupabase()) return;
   const { data: { session } } = await sbClient.auth.getSession();
@@ -7201,42 +7202,43 @@ async function autoSyncWords() {
       .eq('user_id', userId)
       .single();
 
+    let needsUpload = false;       // 本地有修改需要推送到云端
+    let needsLocalUpdate = false;  // 云端有修改需要更新本地
     let resultWords = [...appData.words];
     let resultSentences = [...(appData.sentences || [])];
-    let hasChanges = false;
 
-    if (!fetchErr && cloudRow && cloudRow.words) {
+    if (fetchErr || !cloudRow || !cloudRow.words) {
+      // 云端无数据（新用户）：上传本地数据
+      needsUpload = true;
+    } else {
       const cloudWords = Array.isArray(cloudRow.words) ? cloudRow.words : (cloudRow.words.words || []);
       const cloudSentences = Array.isArray(cloudRow.words) ? [] : (cloudRow.words.sentences || []);
 
-      // 合并单词：云端为权威来源，本地较新版本可覆盖云端，但本地独有的单词不保留（另一设备已删除）
+      // 合并单词：云端为权威来源，本地较新版本可覆盖云端
       const resultMap = new Map();
-      // 先放入云端单词作为基础
       cloudWords.forEach(cw => {
         resultMap.set(cw.english.toLowerCase(), cw);
       });
-      // 本地单词覆盖同名云端单词（本地编辑优先），本地独有的不保留
       appData.words.forEach(lw => {
         const key = lw.english.toLowerCase();
         const cw = resultMap.get(key);
         if (cw) {
-          // 同名单词：比较 updatedAt，本地较新则保留本地版本
           const cloudTime = cw.updatedAt ? new Date(cw.updatedAt).getTime() : 0;
           const localTime = lw.updatedAt ? new Date(lw.updatedAt).getTime() : 0;
           if (localTime > cloudTime) {
             resultMap.set(key, lw);
-            hasChanges = true;
+            needsUpload = true;  // 本地版本更新，需要推送
           }
         }
         // 云端没有的本地单词：不保留（另一设备已删除）
       });
 
       resultWords = Array.from(resultMap.values());
-      if (resultWords.length !== appData.words.length || hasChanges) {
-        hasChanges = true;
+      if (resultWords.length !== appData.words.length) {
+        needsLocalUpdate = true;  // 数量变化，需要更新本地
       }
 
-      // 合并句子：云端为权威来源，本地编辑保留
+      // 合并句子：云端为权威来源
       const sentResultMap = new Map();
       cloudSentences.forEach(cs => sentResultMap.set(cs.id, cs));
       (appData.sentences || []).forEach(ls => {
@@ -7246,14 +7248,18 @@ async function autoSyncWords() {
           const localTime = ls.updatedAt ? new Date(ls.updatedAt).getTime() : 0;
           if (localTime > cloudTime) {
             sentResultMap.set(ls.id, ls);
-            hasChanges = true;
+            needsUpload = true;
           }
         }
         // 云端没有的本地句子：不保留（另一设备已删除）
       });
       resultSentences = Array.from(sentResultMap.values());
+      if (resultSentences.length !== (appData.sentences || []).length) {
+        needsLocalUpdate = true;
+      }
 
-      if (hasChanges) {
+      // 应用云端变更到本地
+      if (needsLocalUpdate || needsUpload) {
         appData.words = resultWords;
         appData.sentences = resultSentences;
         saveData(appData);
@@ -7262,19 +7268,21 @@ async function autoSyncWords() {
       }
     }
 
-    // ② 推送本地数据到云端
-    const uploadData = {
-      words: resultWords,
-      sentences: resultSentences
-    };
+    // ② 仅在本地有修改时才推送到云端（避免覆盖另一设备的最新变更）
+    if (needsUpload) {
+      const uploadData = {
+        words: resultWords,
+        sentences: resultSentences
+      };
 
-    await sbClient
-      .from('user_words')
-      .upsert({
-        user_id: userId,
-        words: uploadData,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' });
+      await sbClient
+        .from('user_words')
+        .upsert({
+          user_id: userId,
+          words: uploadData,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' });
+    }
 
     const syncTime = $('cloudSyncTime');
     if (syncTime) syncTime.textContent = '上次同步: ' + new Date().toLocaleString('zh-CN');
