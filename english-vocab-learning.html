@@ -2681,7 +2681,7 @@ async function cloudUpload() {
   }
 }
 
-// Download words from cloud
+// Download words from cloud — fully replace local with cloud data
 async function cloudDownload() {
   if (!sbClient || !initSupabase()) { showToast('请先登录'); return; }
   const { data: { session } } = await sbClient.auth.getSession();
@@ -2706,56 +2706,17 @@ async function cloudDownload() {
       return;
     }
 
-    let mergedCount = 0;
     // Parse cloud data: support both old format (array) and new format ({words, sentences})
     const cloudWords = Array.isArray(data.words) ? data.words : (data.words.words || []);
     const cloudSentences = Array.isArray(data.words) ? [] : (data.words.sentences || []);
 
-    // Merge words by updatedAt (newer wins)
-    if (cloudWords.length > 0) {
-      const merged = new Map();
-      appData.words.forEach(w => merged.set(w.english.toLowerCase(), w));
-      cloudWords.forEach(cw => {
-        const key = cw.english.toLowerCase();
-        const lw = merged.get(key);
-        if (!lw) {
-          merged.set(key, cw);
-          mergedCount++;
-        } else {
-          const cloudTime = cw.updatedAt ? new Date(cw.updatedAt).getTime() : 0;
-          const localTime = lw.updatedAt ? new Date(lw.updatedAt).getTime() : 0;
-          if (cloudTime > localTime) {
-            merged.set(key, cw);
-            mergedCount++;
-          }
-        }
-      });
-      appData.words = Array.from(merged.values());
-    }
-    // Merge sentences by updatedAt (newer wins)
-    if (cloudSentences.length > 0) {
-      const mergedSent = new Map();
-      (appData.sentences || []).forEach(s => mergedSent.set(s.id, s));
-      cloudSentences.forEach(cs => {
-        const ls = mergedSent.get(cs.id);
-        if (!ls) {
-          mergedSent.set(cs.id, cs);
-          mergedCount++;
-        } else {
-          const cloudTime = cs.updatedAt ? new Date(cs.updatedAt).getTime() : 0;
-          const localTime = ls.updatedAt ? new Date(ls.updatedAt).getTime() : 0;
-          if (cloudTime > localTime) {
-            mergedSent.set(cs.id, cs);
-            mergedCount++;
-          }
-        }
-      });
-      appData.sentences = Array.from(mergedSent.values());
-    }
+    // 云端数据完全替换本地（云端是唯一真相来源）
+    appData.words = cloudWords;
+    appData.sentences = cloudSentences;
     persist();
     renderWordTable();
     $('cloudSyncTime').textContent = '云端时间: ' + new Date(data.updated_at).toLocaleString('zh-CN');
-    showToast('从云端合并了 ' + mergedCount + ' 条数据');
+    showToast('已从云端下载 ' + cloudWords.length + ' 个单词、' + cloudSentences.length + ' 个好句');
     $('cloudStatusDot').className = 'cloud-status synced';
     syncStudyTimeFromCloud();
   } catch (e) {
@@ -7216,15 +7177,15 @@ async function syncStudyTimeToCloud() {
 // Word Auto-Sync (实时同步单词到云端)
 // ═══════════════════════════════════════
 
-// 防抖调度：3秒内多次 persist() 只触发一次同步
+// 防抖调度：3秒内多次 persist() 只触发一次上传（仅上传，不下载）
 function scheduleWordSync() {
   if (wordSyncTimer) clearTimeout(wordSyncTimer);
   wordSyncTimer = setTimeout(() => {
-    autoSyncWords();
+    uploadWordsOnly();
   }, 3000);
 }
 
-// 自动同步单词：先拉取云端合并，再推送本地
+// 自动同步单词：云端为基础，本地编辑保留，上传合并结果
 async function autoSyncWords() {
   if (!sbClient || !initSupabase()) return;
   const { data: { session } } = await sbClient.auth.getSession();
@@ -7233,70 +7194,71 @@ async function autoSyncWords() {
   try {
     const userId = session.user.id;
 
-    // ① 先从云端拉取并合并（解决跨设备同步问题）
+    // ① 先从云端拉取数据
     const { data: cloudRow, error: fetchErr } = await sbClient
       .from('user_words')
       .select('words, updated_at')
       .eq('user_id', userId)
       .single();
 
+    let resultWords = [...appData.words];
+    let resultSentences = [...(appData.sentences || [])];
+    let hasChanges = false;
+
     if (!fetchErr && cloudRow && cloudRow.words) {
       const cloudWords = Array.isArray(cloudRow.words) ? cloudRow.words : (cloudRow.words.words || []);
       const cloudSentences = Array.isArray(cloudRow.words) ? [] : (cloudRow.words.sentences || []);
 
-      // 合并单词：按 english.toLowerCase() 为 key，updatedAt 较新的优先
-      let hasWordChanges = false;
-      const localMap = new Map();
-      appData.words.forEach(w => localMap.set(w.english.toLowerCase(), w));
-
+      // 合并单词：云端为基础，本地已编辑的单词保留本地版本
+      const resultMap = new Map();
+      // 先放入云端单词作为基础
       cloudWords.forEach(cw => {
-        const key = cw.english.toLowerCase();
-        const lw = localMap.get(key);
-        if (!lw) {
-          // 云端有、本地没有 → 添加
-          localMap.set(key, cw);
-          hasWordChanges = true;
-        } else {
-          // 两端都有 → 比较 updatedAt，云端较新则覆盖
+        resultMap.set(cw.english.toLowerCase(), cw);
+      });
+      // 本地单词覆盖同名云端单词（本地编辑优先），本地独有的也保留
+      appData.words.forEach(lw => {
+        const key = lw.english.toLowerCase();
+        const cw = resultMap.get(key);
+        if (cw) {
+          // 同名单词：比较 updatedAt，本地较新则保留本地版本
           const cloudTime = cw.updatedAt ? new Date(cw.updatedAt).getTime() : 0;
           const localTime = lw.updatedAt ? new Date(lw.updatedAt).getTime() : 0;
-          if (cloudTime > localTime) {
-            localMap.set(key, cw);
-            hasWordChanges = true;
+          if (localTime > cloudTime) {
+            resultMap.set(key, lw);
+            hasChanges = true;
           }
+        } else {
+          // 云端没有的本地单词：保留（用户本地新增的）
+          resultMap.set(key, lw);
         }
       });
 
-      if (hasWordChanges) {
-        appData.words = Array.from(localMap.values());
+      resultWords = Array.from(resultMap.values());
+      if (resultWords.length !== appData.words.length || hasChanges) {
+        hasChanges = true;
       }
 
-      // 合并句子：按 id 为 key，updatedAt 较新的优先
-      let hasSentChanges = false;
-      if (!appData.sentences) appData.sentences = [];
-      const sentMap = new Map();
-      appData.sentences.forEach(s => sentMap.set(s.id, s));
-
-      cloudSentences.forEach(cs => {
-        const ls = sentMap.get(cs.id);
-        if (!ls) {
-          sentMap.set(cs.id, cs);
-          hasSentChanges = true;
-        } else {
+      // 合并句子：云端为基础，本地编辑保留
+      const sentResultMap = new Map();
+      cloudSentences.forEach(cs => sentResultMap.set(cs.id, cs));
+      (appData.sentences || []).forEach(ls => {
+        const cs = sentResultMap.get(ls.id);
+        if (cs) {
           const cloudTime = cs.updatedAt ? new Date(cs.updatedAt).getTime() : 0;
           const localTime = ls.updatedAt ? new Date(ls.updatedAt).getTime() : 0;
-          if (cloudTime > localTime) {
-            sentMap.set(cs.id, cs);
-            hasSentChanges = true;
+          if (localTime > cloudTime) {
+            sentResultMap.set(ls.id, ls);
+            hasChanges = true;
           }
+        } else {
+          sentResultMap.set(ls.id, ls);
         }
       });
+      resultSentences = Array.from(sentResultMap.values());
 
-      if (hasSentChanges) {
-        appData.sentences = Array.from(sentMap.values());
-      }
-
-      if (hasWordChanges || hasSentChanges) {
+      if (hasChanges) {
+        appData.words = resultWords;
+        appData.sentences = resultSentences;
         saveData(appData);
         renderWordTable();
         updateStudyTimerDisplay();
@@ -7305,8 +7267,8 @@ async function autoSyncWords() {
 
     // ② 推送本地数据到云端
     const uploadData = {
-      words: appData.words,
-      sentences: appData.sentences || []
+      words: resultWords,
+      sentences: resultSentences
     };
 
     await sbClient
@@ -7328,6 +7290,37 @@ async function autoSyncWords() {
   }
 }
 
+// 仅上传本地数据到云端（不同步下载）
+// 用途：用户在本设备上修改单词后，只推送到云端，不拉取
+async function uploadWordsOnly() {
+  if (!sbClient || !initSupabase()) return;
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (!session) return;
+
+  try {
+    const userId = session.user.id;
+    const uploadData = {
+      words: appData.words,
+      sentences: appData.sentences || []
+    };
+
+    await sbClient
+      .from('user_words')
+      .upsert({
+        user_id: userId,
+        words: uploadData,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+
+    const syncTime = $('cloudSyncTime');
+    if (syncTime) syncTime.textContent = '上次同步: ' + new Date().toLocaleString('zh-CN');
+    const statusDot = $('cloudStatusDot');
+    if (statusDot) statusDot.className = 'cloud-status synced';
+  } catch (e) {
+    console.error('uploadWordsOnly error:', e);
+  }
+}
+
 // 初始化单词自动同步
 function initWordAutoSync() {
   // 每120秒自动同步一次
@@ -7335,19 +7328,19 @@ function initWordAutoSync() {
     autoSyncWords();
   }, 120000);
 
-  // 页面隐藏时同步
+  // 页面隐藏时：仅上传本地数据到云端（不下载）
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      autoSyncWords();
+      uploadWordsOnly();
     } else {
-      // 页面恢复可见时，从云端拉取最新数据
+      // 页面恢复可见时：从云端拉取最新数据（下载+上传）
       autoSyncWords();
     }
   });
 
-  // 页面关闭前同步
+  // 页面关闭前：仅上传本地数据到云端（不下载）
   window.addEventListener('beforeunload', () => {
-    autoSyncWords();
+    uploadWordsOnly();
   });
 }
 
