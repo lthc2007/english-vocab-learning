@@ -610,18 +610,23 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
 }
 .score-bar {
   display: flex;
-  justify-content: center;
-  gap: 20px;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 20px;
-  flex-wrap: wrap;
   padding: 14px 20px;
   background: var(--bg);
   border-radius: var(--radius-sm);
   border: 1px solid var(--rule);
 }
+.score-row {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
 .score-item {
   text-align: center;
-  min-width: 60px;
+  min-width: 56px;
 }
 .score-value {
   font-family: var(--font-display);
@@ -629,6 +634,8 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
   font-weight: 700;
   color: var(--accent);
   line-height: 1.2;
+  min-width: 56px;
+  display: inline-block;
 }
 .score-label {
   font-size: 0.9rem;
@@ -870,7 +877,8 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
   .options-grid { grid-template-columns: 1fr; }
   .form-row { flex-direction: column; }
   .stats-section { max-width: 100%; }
-  .score-bar { gap: 10px; padding: 10px 12px; max-width: 100%; }
+  .score-bar { gap: 6px; padding: 10px 12px; max-width: 100%; }
+  .score-row { gap: 10px; }
   .score-value { font-size: 1.7rem; }
   .card { padding: 14px; }
   .card-header { flex-direction: column; align-items: flex-start; gap: 4px; }
@@ -1747,10 +1755,12 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
     <div id="spellArea" style="display:none;">
       <div class="stats-section">
         <div class="score-bar">
-          <div class="score-item"><div class="score-value" id="spellCorrect">0</div><div class="score-label">正确</div></div>
-          <div class="score-item"><div class="score-value" id="spellTotal">0</div><div class="score-label">已答</div></div>
-          <div class="score-item"><div class="score-value" id="spellRemain">0</div><div class="score-label">剩余</div></div>
-          <div class="score-item"><div class="score-value" id="spellTimer">00:00</div><div class="score-label">用时</div></div>
+          <div class="score-row">
+            <div class="score-item"><div class="score-value" id="spellCorrect">0</div><div class="score-label">正确</div></div>
+            <div class="score-item"><div class="score-value" id="spellTotal">0</div><div class="score-label">已答</div></div>
+            <div class="score-item"><div class="score-value" id="spellRemain">0</div><div class="score-label">剩余</div></div>
+            <div class="score-item"><div class="score-value" id="spellTimer">00:00</div><div class="score-label">用时</div></div>
+          </div>
           <div class="score-item"><div class="score-value" id="spellAvg">—</div><div class="score-label">平均/题</div></div>
         </div>
         <div class="progress-bar"><div class="progress-fill" id="spellProgress" style="width:0%"></div></div>
@@ -1778,10 +1788,12 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
     <div id="quizArea" style="display:none;">
       <div class="stats-section">
         <div class="score-bar">
-          <div class="score-item"><div class="score-value" id="quizCorrect">0</div><div class="score-label">正确</div></div>
-          <div class="score-item"><div class="score-value" id="quizTotal">0</div><div class="score-label">已答</div></div>
-          <div class="score-item"><div class="score-value" id="quizRemain">0</div><div class="score-label">剩余</div></div>
-          <div class="score-item"><div class="score-value" id="quizTimer">00:00</div><div class="score-label">用时</div></div>
+          <div class="score-row">
+            <div class="score-item"><div class="score-value" id="quizCorrect">0</div><div class="score-label">正确</div></div>
+            <div class="score-item"><div class="score-value" id="quizTotal">0</div><div class="score-label">已答</div></div>
+            <div class="score-item"><div class="score-value" id="quizRemain">0</div><div class="score-label">剩余</div></div>
+            <div class="score-item"><div class="score-value" id="quizTimer">00:00</div><div class="score-label">用时</div></div>
+          </div>
           <div class="score-item"><div class="score-value" id="quizAvg">—</div><div class="score-label">平均/题</div></div>
         </div>
         <div class="progress-bar"><div class="progress-fill" id="quizProgress" style="width:0%"></div></div>
