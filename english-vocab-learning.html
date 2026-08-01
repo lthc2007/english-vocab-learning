@@ -993,6 +993,21 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
   .result-card { padding: 12px; }
   .result-content { font-size: 0.88rem; }
   .login-tab { padding: 8px; font-size: 0.85rem; }
+  /* ── Mobile word table: hide 词性 and AI columns ── */
+  .vw-hdr .vc:nth-child(2),
+  .vw-hdr .vc:nth-child(5),
+  .vw-row .vc:nth-child(2),
+  .vw-row .vc:nth-child(5) {
+    display: none;
+  }
+  .vw-hdr .vc:nth-child(1),
+  .vw-row .vc:nth-child(1) { width: 28% !important; }
+  .vw-hdr .vc:nth-child(3),
+  .vw-row .vc:nth-child(3) { width: 24% !important; }
+  .vw-hdr .vc:nth-child(4),
+  .vw-row .vc:nth-child(4) { width: 28% !important; }
+  .vw-hdr .vc:nth-child(6),
+  .vw-row .vc:nth-child(6) { width: 20% !important; }
 }
 /* ── 极小屏幕 (max-width: 380px) ── */
 @media (max-width: 380px) {
