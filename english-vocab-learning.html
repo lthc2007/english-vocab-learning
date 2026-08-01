@@ -408,7 +408,7 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
   display: flex;
   align-items: center;
   padding: 0 16px;
-  min-height: 60px;
+  min-height: 72px;
   font-size: 0.875rem;
   border-bottom: 1px solid var(--rule);
   box-sizing: border-box;
@@ -3796,7 +3796,7 @@ function renderWordTable() {
     return;
   }
 
-  const ROW_H = 60;
+  const ROW_H = 72;
   const BUFFER = 5;
   const totalH = count * ROW_H;
   const prevScroll = _vwState.scrollTop;
@@ -3907,7 +3907,7 @@ function searchWord() {
   // 滚动虚拟容器到目标位置
   const container = _vwState.container;
   if (container) {
-    const targetTop = idx * 60 - container.clientHeight / 2 + 30;
+    const targetTop = idx * 72 - container.clientHeight / 2 + 36;
     container.scrollTop = Math.max(0, targetTop);
     // 等待 rAF 渲染后高亮
     requestAnimationFrame(() => {
