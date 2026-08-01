@@ -2284,7 +2284,50 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
 <!-- Toast container -->
 <div id="toastContainer"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- Supabase JS SDK: 主 CDN + 回退 CDN 双保险加载 -->
+<script>
+(function() {
+  // 标记 Supabase SDK 加载状态
+  window.__supabaseLoading = true;
+  window.__supabaseReady = new Promise(function(resolve) {
+    window.__supabaseResolve = resolve;
+  });
+
+  // 尝试从不同 CDN 加载
+  function loadScript(url) {
+    return new Promise(function(resolve, reject) {
+      var s = document.createElement('script');
+      s.src = url;
+      s.onload = resolve;
+      s.onerror = reject;
+      s.crossOrigin = 'anonymous';
+      document.head.appendChild(s);
+    });
+  }
+
+  // 主 CDN → 回退 CDN
+  (function tryLoad() {
+    loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js')
+      .catch(function() {
+        console.warn('[Supabase] jsDelivr 加载失败，尝试回退 CDN...');
+        return loadScript('https://unpkg.com/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js');
+      })
+      .catch(function() {
+        console.warn('[Supabase] unpkg 也加载失败，尝试最新版...');
+        return loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js');
+      })
+      .then(function() {
+        window.__supabaseLoading = false;
+        window.__supabaseResolve();
+      })
+      .catch(function() {
+        console.error('[Supabase] 所有 CDN 加载失败，云功能将不可用');
+        window.__supabaseLoading = false;
+        window.__supabaseResolve(); // 仍然 resolve，让代码走降级路径
+      });
+  })();
+})();
+</script>
 <script>
 // 全局错误边界
 window.addEventListener('error', function(e) {
@@ -2446,15 +2489,45 @@ let studyActive = false;         // 是否正在计时
 const SUPABASE_URL = 'https://mmdhtyuyirukvtmfzeby.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_rPnHnnwRKm-fi14h_zWE6w_SJVMO61c';
 
+// 网络请求重试工具：指数退避，最多 retries 次
+async function withRetry(fn, retries, delay) {
+  retries = retries || 3;
+  delay = delay || 1000;
+  for (var i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i === retries - 1) throw e;
+      // 非网络错误不重试
+      if (e && e.status && e.status >= 400 && e.status < 500) throw e;
+      console.warn('[withRetry] 第 ' + (i + 1) + ' 次失败，' + delay + 'ms 后重试:', e.message);
+      await new Promise(function(r) { setTimeout(r, delay); });
+      delay *= 2; // 指数退避
+    }
+  }
+}
+
 function initSupabase() {
   if (sbClient) return true; // 单例：已初始化则直接返回
   if (window.supabase) {
     try {
       sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
         auth: {
-          flowType: 'implicit',          // 显式声明 implicit 流程
+          flowType: 'pkce',              // 使用 PKCE 流程（更安全，推荐）
           detectSessionInUrl: true,      // 让 SDK 自动处理 #access_token 回调
-          persistSession: true
+          persistSession: true,
+          autoRefreshToken: true
+        },
+        global: {
+          fetch: function(url, opts) {
+            // 为所有 Supabase 请求添加 30 秒超时
+            return Promise.race([
+              fetch(url, opts),
+              new Promise(function(_, reject) {
+                setTimeout(function() { reject(new Error('请求超时（30秒）')); }, 30000);
+              })
+            ]);
+          }
         }
       });
 
@@ -2467,6 +2540,14 @@ function initSupabase() {
           handlePasswordRecovery();
         } else if (event === 'SIGNED_OUT') {
           updateCloudUI(false);
+        } else if (event === 'TOKEN_REFRESHED') {
+          // 令牌刷新成功，对用户透明
+          console.log('[Supabase] 令牌已自动刷新');
+        } else if (event === 'USER_UPDATED' && session) {
+          // 用户信息更新（如密码重置后）
+          if (session.user.email && session.user.email !== cloudUserEmail) {
+            updateCloudUI(true, session.user.email);
+          }
         }
       });
 
@@ -2477,6 +2558,24 @@ function initSupabase() {
     }
   }
   return false;
+}
+
+// 等待 Supabase SDK 加载完成后再初始化（支持异步调用）
+async function initSupabaseAsync() {
+  if (sbClient) return true;
+  // 等待 SDK 加载（最多 15 秒）
+  if (window.__supabaseReady) {
+    try {
+      await Promise.race([
+        window.__supabaseReady,
+        new Promise(function(_, reject) { setTimeout(function() { reject(new Error('SDK 加载超时')); }, 15000); })
+      ]);
+    } catch (e) {
+      console.error('initSupabaseAsync:', e.message);
+      return false;
+    }
+  }
+  return initSupabase();
 }
 
 // 在 onAuthStateChange 的 SIGNED_IN 事件里调用
@@ -2546,15 +2645,18 @@ async function confirmResetPassword() {
 
 // Check if session exists and restore on page load
 async function checkCloudSession() {
-  if (!initSupabase()) {
+  if (!await initSupabaseAsync()) {
     updateCloudUI(false);
     return;
   }
   try {
+    // 等待 SDK 完全就绪后获取 session
     // detectSessionInUrl 会自动处理 URL 中的 hash（如果有）
     // 注册/密码重置等后续逻辑由 onAuthStateChange 处理
     // 这里只需从 localStorage 恢复已有的 session
-    const { data: { session } } = await sbClient.auth.getSession();
+    const { data: { session } } = await withRetry(function() {
+      return sbClient.auth.getSession();
+    }, 2, 500);
     if (session) {
       updateCloudUI(true, session.user.email);
       // 页面加载时从云端拉取学习时长（跨设备同步）
@@ -2669,14 +2771,16 @@ async function forgotPassword() {
     $('cloudError').style.display = '';
     return;
   }
-  if (!initSupabase()) {
+  if (!await initSupabaseAsync()) {
     $('cloudError').textContent = '服务暂不可用，请稍后重试';
     $('cloudError').style.display = '';
     return;
   }
   try {
-    const { error } = await sbClient.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
+    const { error } = await withRetry(function() {
+      return sbClient.auth.resetPasswordForEmail(email, {
+        redirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
+      });
     });
     if (error) throw error;
     $('cloudError').style.display = 'none';
@@ -2707,7 +2811,7 @@ async function cloudSubmit(mode) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('请输入有效的邮箱地址'); return; }
   if (password.length < 6) { showToast('密码至少需要6位'); return; }
 
-  if (!initSupabase()) {
+  if (!await initSupabaseAsync()) {
     $(errorId).textContent = '服务暂不可用，请稍后重试';
     $(errorId).style.display = '';
     return;
@@ -2743,12 +2847,14 @@ async function cloudSubmit(mode) {
     }
 
     // 直接使用 signUp 注册，无需邮箱验证
-    const { data, error } = await sbClient.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
-      }
+    const { data, error } = await withRetry(function() {
+      return sbClient.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: 'https://lthc2007.github.io/english-vocab-learning/'
+        }
+      });
     });
 
     if (error) {
@@ -2776,7 +2882,9 @@ async function cloudSubmit(mode) {
 
   // 登录模式
   try {
-    const result = await sbClient.auth.signInWithPassword({ email, password });
+    const result = await withRetry(function() {
+      return sbClient.auth.signInWithPassword({ email, password });
+    });
     if (result.error) throw result.error;
     if (result.data.session) {
       updateCloudUI(true, result.data.user.email);
@@ -2833,13 +2941,15 @@ async function cloudUpload() {
   try {
     const userId = session.user.id;
     // Upsert user's word data
-    const { error } = await sbClient
-      .from('user_words')
-      .upsert({
-        user_id: userId,
-        words: { words: appData.words, sentences: appData.sentences || [] },
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' });
+    const { error } = await withRetry(function() {
+      return sbClient
+        .from('user_words')
+        .upsert({
+          user_id: userId,
+          words: { words: appData.words, sentences: appData.sentences || [] },
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' });
+    });
 
     if (error) throw error;
     $('cloudSyncTime').textContent = '上次同步: ' + new Date().toLocaleString('zh-CN');
@@ -2867,11 +2977,13 @@ async function cloudDownload() {
   $('cloudStatusDot').className = 'cloud-status syncing';
 
   try {
-    const { data, error } = await sbClient
-      .from('user_words')
-      .select('words, updated_at')
-      .eq('user_id', session.user.id)
-      .single();
+    const { data, error } = await withRetry(function() {
+      return sbClient
+        .from('user_words')
+        .select('words, updated_at')
+        .eq('user_id', session.user.id)
+        .single();
+    });
 
     if (error && error.code !== 'PGRST116') throw error;
     if (!data || !data.words) {
@@ -5063,7 +5175,8 @@ function init() {
     renderLearn();
     initSpell();
     initQuiz();
-    checkCloudSession();
+    // 延迟检查云会话，给 SDK 加载留出时间
+    setTimeout(checkCloudSession, 500);
   });
 }
 
