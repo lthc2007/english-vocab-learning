@@ -249,9 +249,18 @@ body {
   margin: 0 auto;
   padding: 24px;
 }
-.tab-panel { display: none; }
+.tab-panel { display: none; content-visibility: auto; contain: layout style paint; }
 .tab-panel.active { display: block; animation: fadeIn 0.2s ease-out; will-change: opacity; contain: layout style; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff; border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle; margin-right: 4px;
+}
+
 
 /* ── Cards ── */
 .card {
@@ -369,6 +378,93 @@ tr:hover td { background: rgba(201,169,110,0.06); }
 .word-actions { display: flex; gap: 6px; }
 tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: highlightPulse 1.5s ease-out; }
 @keyframes highlightPulse { 0% { background: rgba(201,169,110,0.35); } 100% { background: rgba(201,169,110,0.10); } }
+
+/* ── Virtual Scroll Word Table ── */
+.virtual-wrap {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.vw-header {
+  background: var(--bg);
+  border-bottom: 1.5px solid var(--rule);
+}
+.vw-hdr {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: var(--font-body);
+}
+.vw-body {
+  position: relative;
+  overflow-y: auto;
+}
+.vw-row {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  min-height: 60px;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--rule);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.vw-body .vw-row:last-child { border-bottom: none; }
+.vw-body .vw-row:hover { background: rgba(201,169,110,0.06); }
+.vw-body .vw-row { cursor: pointer; }
+.vw-row.highlight-row { background: rgba(201,169,110,0.18) !important; animation: highlightPulse 1.5s ease-out; }
+.vc {
+  padding: 0 8px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+.vc-eng { font-family: var(--font-display); font-weight: 600; color: var(--accent); font-size: 0.95rem; }
+.vc-phonetic { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+.vc-example {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-style: italic;
+  line-height: 1.3;
+}
+.vc-actions { display: flex; gap: 6px; align-items: center; }
+.vc-muted { color: var(--muted); font-size: 0.8rem; }
+
+/* ── Word Detail Modal ── */
+.wd-row {
+  display: flex;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule);
+  align-items: flex-start;
+}
+.wd-row:last-child { border-bottom: none; }
+.wd-label {
+  flex-shrink: 0;
+  width: 70px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-top: 2px;
+}
+.wd-val {
+  flex: 1;
+  font-size: 0.92rem;
+  color: var(--ink);
+  word-break: break-word;
+  line-height: 1.5;
+}
+.wd-example { font-style: italic; }
 
 .empty-state {
   text-align: center;
@@ -1140,6 +1236,12 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
   .export-sentence .es-cn { font-size: 0.9rem; color: #5a5550; margin-bottom: 4px; line-height: 1.6; }
   .export-sentence .es-meta { font-size: 0.72rem; color: #9a958f; padding-top: 4px; border-top: 1px dashed #e4ddd5; }
 }
+
+/* 专注模式 */
+body.focus-mode .header,
+body.focus-mode .nav-tabs { display: none; }
+body.focus-mode .main { max-width: 100%; padding: 16px; }
+
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2122,11 +2224,62 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
   </div>
 </div>
 
+<!-- Shortcuts Modal -->
+<div class="modal-overlay" id="modalShortcuts">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-title">⌨️ 快捷键</div>
+    <div style="padding:12px 0;">
+      <table style="width:100%;font-size:0.85rem;">
+        <tr><td style="padding:6px 12px;"><code>← →</code></td><td>上一个/下一个单词（闪卡模式）</td></tr>
+        <tr><td style="padding:6px 12px;"><code>Space / Enter</code></td><td>翻转闪卡</td></tr>
+        <tr><td style="padding:6px 12px;"><code>F</code></td><td>切换专注模式</td></tr>
+        <tr><td style="padding:6px 12px;"><code>1-9</code></td><td>切换标签页</td></tr>
+        <tr><td style="padding:6px 12px;"><code>?</code></td><td>显示此快捷键面板</td></tr>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="$('modalShortcuts').classList.remove('show')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="modalConfirm">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-title" id="confirmTitle">确认</div>
+    <div style="padding:16px 0;font-size:0.95rem;color:var(--ink);" id="confirmMessage"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="confirmNo">取消</button>
+      <button class="btn btn-primary" id="confirmYes">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- Word Detail Modal -->
+<div class="modal-overlay" id="modalWordDetail">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-title" id="wdTitle">单词详情</div>
+    <div id="wdBody" style="padding:8px 0;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeWordDetail()">关闭</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div id="toastContainer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
+// 全局错误边界
+window.addEventListener('error', function(e) {
+  console.error('[Global Error]', e.error || e.message);
+  return true;
+});
+window.addEventListener('unhandledrejection', function(e) {
+  console.error('[Unhandled Promise]', e.reason);
+});
+
 // ═══════════════════════════════════════
 // Data Layer
 // ═══════════════════════════════════════
@@ -2641,7 +2794,7 @@ async function cloudSubmit(mode) {
 }
 
 async function cloudLogout() {
-  if (!confirm('确定要退出登录吗？本地数据不会丢失。')) return;
+  if (!await showConfirm('确定要退出登录吗？本地数据不会丢失。')) return;
   // 先关闭面板，避免 UI 闪烁
   closeCloudPanel();
   updateCloudUI(false);
@@ -2738,6 +2891,31 @@ async function cloudDownload() {
 // Helpers
 // ═══════════════════════════════════════
 function $(id) { return document.getElementById(id); }
+function showConfirm(message) {
+  return new Promise(resolve => {
+    $('confirmMessage').textContent = message;
+    $('modalConfirm').classList.add('show');
+    $('confirmYes').onclick = function() {
+      $('modalConfirm').classList.remove('show');
+      resolve(true);
+    };
+    $('confirmNo').onclick = function() {
+      $('modalConfirm').classList.remove('show');
+      resolve(false);
+    };
+  });
+}
+
+function withLoading(btn, asyncFn) {
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 处理中…';
+  return asyncFn().finally(() => {
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  });
+}
+
 
 function showToast(msg, duration) {
   const container = $('toastContainer');
@@ -2841,14 +3019,14 @@ function importData(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     try {
       const data = JSON.parse(e.target.result);
       if (!data.words || !Array.isArray(data.words)) {
         showToast('无效的备份文件');
         return;
       }
-      const mode = confirm('导入模式：\n\n点击"确定" = 合并导入（保留已有单词，新单词追加）\n点击"取消" = 覆盖导入（清空当前数据）');
+      const mode = await showConfirm('导入模式：\n\n点击"确定" = 合并导入（保留已有单词，新单词追加）\n点击"取消" = 覆盖导入（清空当前数据）');
       if (mode) {
         let added = 0;
         data.words.forEach(w => {
@@ -3259,14 +3437,26 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
   });
 });
 
+const lazyInit = {};
+
+function lazyInitTab(tabName, initFn) {
+  if (lazyInit[tabName]) return;
+  lazyInit[tabName] = true;
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(initFn, { timeout: 3000 });
+  } else {
+    setTimeout(initFn, 500);
+  }
+}
+
 function onTabSwitch(tab) {
   // Clean up any running progress timers
   Object.keys(progressTimers).forEach(k => stopProgress(k));
-  if (tab === 'learn') renderLearn();
-  if (tab === 'spell') initSpell();
-  if (tab === 'quiz') initQuiz();
-  if (tab === 'read') { updateArticleEstimate(); loadCloudAudioList(); }
-  if (tab === 'history') renderHistory();
+  if (tab === 'learn') lazyInitTab('learn', renderLearn);
+  if (tab === 'spell') lazyInitTab('spell', initSpell);
+  if (tab === 'quiz') lazyInitTab('quiz', initQuiz);
+  if (tab === 'read') { lazyInitTab('read', updateArticleEstimate); loadCloudAudioList(); }
+  if (tab === 'history') lazyInitTab('history', renderHistory);
   if (tab === 'recite') switchReciteTab('add');
 }
 
@@ -3557,22 +3747,25 @@ function batchImport() {
   showToast(msg);
 }
 
-function deleteWord(id) {
-  if (!confirm('确定删除该单词吗？')) return;
+async function deleteWord(id) {
+  if (!await showConfirm('确定删除该单词吗？')) return;
   appData.words = appData.words.filter(w => String(w.id) !== String(id));
   persist();
   renderWordTable();
   showToast('单词已删除');
 }
 
-function clearAllWords() {
-  if (!confirm('确定要清空全部单词吗？此操作不可恢复！')) return;
-  if (!confirm('再次确认：清空全部单词？')) return;
+async function clearAllWords() {
+  if (!await showConfirm('确定要清空全部单词吗？此操作不可恢复！')) return;
+  if (!await showConfirm('再次确认：清空全部单词？')) return;
   appData.words = [];
   persist();
   renderWordTable();
   showToast('已清空全部单词');
 }
+
+// ── Virtual scroll state for word table ──
+let _vwState = { scrollTop: 0 };
 
 function renderWordTable() {
   const area = $('wordTableArea');
@@ -3584,31 +3777,101 @@ function renderWordTable() {
     area.innerHTML = `<div class="empty-state">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>
       <p>还没有单词，快去添加吧！</p></div>`;
+    _vwState.scrollTop = 0;
     return;
   }
 
-  let html = '<div class="table-wrap"><table><thead><tr><th>英文</th><th>词性</th><th>中文</th><th>例句</th><th>AI</th><th>操作</th></tr></thead><tbody>';
-  appData.words.forEach(w => {
-    const posHtml = w.pos ? `<span class="pos-tag ${posClass(w.pos)}">${escapeHtml(w.pos)}</span>` : '<span style="color:var(--muted);font-size:0.8rem;">-</span>';
-    const exampleHtml = w.example
-      ? `<span class="word-example">${escapeHtml(w.example)}${w.exampleCn ? ' (' + escapeHtml(w.exampleCn) + ')' : ''}</span>`
-      : '<span style="color:var(--muted);font-size:0.8rem;">暂无</span>';
-    const aiBadge = w.aiGenerated
-      ? '<span style="color:var(--success);font-size:0.75rem;">✓ 已生成</span>'
-      : '<span style="color:var(--warning);font-size:0.75rem;">未生成</span>';
-    html += `<tr data-word="${escapeHtml(w.english.toLowerCase())}">
-      <td><span class="word-eng">${escapeHtml(w.english)}</span>${w.phonetic ? ' <span style="color:var(--muted);font-size:0.8rem;white-space:nowrap;">' + escapeHtml(w.phonetic) + '</span>' : ''}${w.isPhrase ? '<span class="phrase-badge">短语</span>' : ''}</td>
-      <td>${posHtml}</td>
-      <td>${escapeHtml(w.chinese)}</td>
-      <td>${exampleHtml}</td>
-      <td>${aiBadge}</td>
-      <td class="word-actions">
-        <button class="btn btn-primary btn-sm" onclick="generateAllContent('${w.id}')" ${hasValidApiConfig() ? '' : 'disabled'}>AI 生成内容</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteWord('${w.id}')">删除</button>
-      </td></tr>`;
+  const ROW_H = 60;
+  const BUFFER = 5;
+  const totalH = count * ROW_H;
+  const prevScroll = _vwState.scrollTop;
+
+  area.innerHTML = `
+    <div class="virtual-wrap">
+      <div class="vw-header"><div class="vw-hdr">
+        <div class="vc" style="width:22%;">英文</div>
+        <div class="vc" style="width:8%;">词性</div>
+        <div class="vc" style="width:18%;">中文</div>
+        <div class="vc" style="width:22%;">例句</div>
+        <div class="vc" style="width:10%;">AI</div>
+        <div class="vc" style="width:20%;">操作</div>
+      </div></div>
+      <div class="vw-body" style="max-height:420px;">
+        <div class="vw-spacer" style="height:${totalH}px;position:relative;"></div>
+      </div>
+    </div>`;
+
+  const container = area.querySelector('.vw-body');
+  _vwState.container = container;
+  container.scrollTop = Math.min(prevScroll, totalH - container.clientHeight);
+
+  let rafId = null;
+  function renderVisible() {
+    if (rafId) return;
+    rafId = requestAnimationFrame(() => {
+      rafId = null;
+      const st = container.scrollTop;
+      _vwState.scrollTop = st;
+      const vh = container.clientHeight;
+      const si = Math.max(0, Math.floor(st / ROW_H) - BUFFER);
+      const ei = Math.min(count, Math.ceil((st + vh) / ROW_H) + BUFFER);
+
+      const spacer = container.querySelector('.vw-spacer');
+      let html = '';
+      for (let i = si; i < ei; i++) {
+        const w = appData.words[i];
+        const posHtml = w.pos ? `<span class="pos-tag ${posClass(w.pos)}">${escapeHtml(w.pos)}</span>` : '<span class="vc-muted">-</span>';
+        const exampleHtml = w.example
+          ? `<div class="vc-example" title="${escapeHtml(w.example)}${w.exampleCn ? ' (' + escapeHtml(w.exampleCn) + ')' : ''}">${escapeHtml(w.example)}${w.exampleCn ? ' <span class="vc-muted">(' + escapeHtml(w.exampleCn) + ')</span>' : ''}</div>`
+          : '<span class="vc-muted">暂无</span>';
+        const aiBadge = w.aiGenerated
+          ? '<span style="color:var(--success);font-size:0.75rem;">✓ 已生成</span>'
+          : '<span style="color:var(--warning);font-size:0.75rem;">未生成</span>';
+        html += `<div class="vw-row" data-index="${i}" data-word="${escapeHtml(w.english.toLowerCase())}" style="position:absolute;left:0;right:0;height:${ROW_H}px;transform:translateY(${i * ROW_H}px);">
+          <div class="vc" style="width:22%;"><span class="vc-eng">${escapeHtml(w.english)}</span>${w.phonetic ? ' <span class="vc-phonetic">' + escapeHtml(w.phonetic) + '</span>' : ''}${w.isPhrase ? '<span class="phrase-badge">短语</span>' : ''}</div>
+          <div class="vc" style="width:8%;">${posHtml}</div>
+          <div class="vc" style="width:18%;">${escapeHtml(w.chinese)}</div>
+          <div class="vc" style="width:22%;">${exampleHtml}</div>
+          <div class="vc" style="width:10%;">${aiBadge}</div>
+          <div class="vc vc-actions" style="width:20%;">
+            <button class="btn btn-primary btn-sm" onclick="generateAllContent('${w.id}')" ${hasValidApiConfig() ? '' : 'disabled'}>AI 生成内容</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteWord('${w.id}')">删除</button>
+          </div>
+        </div>`;
+      }
+      spacer.innerHTML = html;
+    });
+  }
+
+  renderVisible();
+  container.addEventListener('scroll', renderVisible);
+  // 点击单词行查看详情
+  container.addEventListener('click', function(e) {
+    if (e.target.closest('button')) return;
+    const row = e.target.closest('.vw-row');
+    if (!row) return;
+    const idx = parseInt(row.dataset.index, 10);
+    if (isNaN(idx) || !appData.words[idx]) return;
+    showWordDetail(appData.words[idx]);
   });
-  html += '</tbody></table></div>';
-  area.innerHTML = html;
+}
+
+function showWordDetail(w) {
+  $('wdTitle').textContent = w.english;
+  let html = '';
+  if (w.phonetic) html += `<div class="wd-row"><span class="wd-label">音标</span><span class="wd-val">${escapeHtml(w.phonetic)}</span></div>`;
+  if (w.pos) html += `<div class="wd-row"><span class="wd-label">词性</span><span class="wd-val"><span class="pos-tag ${posClass(w.pos)}">${escapeHtml(w.pos)}</span></span></div>`;
+  if (w.chinese) html += `<div class="wd-row"><span class="wd-label">中文</span><span class="wd-val">${escapeHtml(w.chinese)}</span></div>`;
+  if (w.example) html += `<div class="wd-row"><span class="wd-label">例句</span><span class="wd-val wd-example">${escapeHtml(w.example)}</span></div>`;
+  if (w.exampleCn) html += `<div class="wd-row"><span class="wd-label">例句翻译</span><span class="wd-val wd-example">${escapeHtml(w.exampleCn)}</span></div>`;
+  if (w.aiGenerated !== undefined) html += `<div class="wd-row"><span class="wd-label">AI</span><span class="wd-val">${w.aiGenerated ? '<span style="color:var(--success);">✓ 已生成</span>' : '<span style="color:var(--warning);">未生成</span>'}</span></div>`;
+  if (!html) html = '<p style="color:var(--muted);text-align:center;padding:20px 0;">暂无详细信息</p>';
+  $('wdBody').innerHTML = html;
+  $('modalWordDetail').classList.add('show');
+}
+
+function closeWordDetail() {
+  $('modalWordDetail').classList.remove('show');
 }
 
 function searchWord() {
@@ -3618,19 +3881,26 @@ function searchWord() {
     input.focus();
     return;
   }
-  // 先清除之前的高亮
-  document.querySelectorAll('#wordTableArea tr.highlight-row').forEach(r => r.classList.remove('highlight-row'));
-  // 查找匹配的单词
-  const word = appData.words.find(w => w.english.toLowerCase() === query);
-  if (!word) {
+  // 清除之前的高亮
+  document.querySelectorAll('.vw-row.highlight-row').forEach(r => r.classList.remove('highlight-row'));
+  // 查找匹配的单词索引
+  const idx = appData.words.findIndex(w => w.english.toLowerCase() === query);
+  if (idx === -1) {
     showToast('未添加该单词：' + input.value.trim(), 3000);
     return;
   }
-  // 找到对应的表格行
-  const row = document.querySelector(`#wordTableArea tr[data-word="${escapeHtml(word.english.toLowerCase())}"]`);
-  if (row) {
-    row.classList.add('highlight-row');
-    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // 滚动虚拟容器到目标位置
+  const container = _vwState.container;
+  if (container) {
+    const targetTop = idx * 60 - container.clientHeight / 2 + 30;
+    container.scrollTop = Math.max(0, targetTop);
+    // 等待 rAF 渲染后高亮
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const row = container.querySelector(`.vw-row[data-index="${idx}"]`);
+        if (row) row.classList.add('highlight-row');
+      });
+    });
   }
 }
 
@@ -3685,7 +3955,30 @@ function hasValidApiConfig() {
   return !!appData.apiKey;
 }
 
-async function callAI(prompt, maxTokens = 1500) {
+
+let aiQueue = Promise.resolve();
+
+function enqueueAI(prompt, maxTokens) {
+  const task = aiQueue.then(() => executeAI(prompt, maxTokens));
+  aiQueue = task.catch(() => {});
+  return task;
+}
+
+async function executeAI(prompt, maxTokens, attempt = 0) {
+  const maxAttempts = 4;
+  try {
+    return await doCallAI(prompt, maxTokens);
+  } catch (err) {
+    if (attempt >= maxAttempts - 1) throw err;
+    const delay = Math.min(1000 * Math.pow(2, attempt), 16000);
+    showToast(`请求失败，${delay / 1000}秒后重试 (${attempt + 1}/${maxAttempts})`);
+    await new Promise(r => setTimeout(r, delay));
+    return executeAI(prompt, maxTokens, attempt + 1);
+  }
+}
+const callAI = enqueueAI;
+
+async function doCallAI(prompt, maxTokens = 1500) {
   const isProxy = appData.provider === 'zhipu_free';
   let useKey = appData.apiKey;
   let useUrl = appData.apiUrl;
@@ -3800,6 +4093,68 @@ function parseSection(text, label) {
   return '';
 }
 
+
+async function generateWordContent(word) {
+  const posStr = word.pos ? '(' + word.pos + ') ' : '';
+  const prompt = `请为英语单词 "${word.english}" ${posStr}（中文意思：${word.chinese}）生成以下完整学习内容。请严格按照格式输出，每个标签独立一行：
+
+音标: <该单词的国际音标 IPA，例如 /əˈæbəndən/>
+例句: <一个自然实用的英文例句>
+例句翻译: <例句的中文翻译>
+近义词: <词1>/<词2>/<词3>
+反义词: <词1>/<词2>/<词3>
+搭配: <英文搭配(中文释义)> | <英文搭配(中文释义)> | <英文搭配(中文释义)>
+词根: <词根词缀拆解说明>
+短文: <一段3-5句的英文短文，自然融入该单词，附中文翻译>
+对话: <A:... B:... 一个包含该单词的雅思口语难度的对话，至少 4 轮，场景自然，词汇丰富，附中文翻译>
+形近词: <词1> - <区别说明> / <词2> - <区别说明>
+填空: <一句包含该单词的完形填空，用___替换该单词，附答案>
+翻译题: <一个中文句子，要求用该单词翻译成英文，附参考答案>
+难度: <中考/高考/四级/六级/雅思/托福/专八 中选一个最符合的>
+考频: <高频/中频/低频 中选一个，并简要说明>`;
+
+  const result = await callAI(prompt, 4000);
+  if (!result) return false;
+
+  word.example = parseSection(result, '例句');
+  word.phonetic = parseSection(result, '音标');
+  word.exampleCn = parseSection(result, '例句翻译');
+  word.synonyms = parseSection(result, '近义词');
+  word.antonyms = parseSection(result, '反义词');
+  word.collocations = parseSection(result, '搭配');
+  word.rootAnalysis = parseSection(result, '词根');
+  word.passage = parseSection(result, '短文');
+  word.dialogue = parseSection(result, '对话');
+  word.similarWords = parseSection(result, '形近词');
+  word.clozeTest = parseSection(result, '填空');
+  word.translationExercise = parseSection(result, '翻译题');
+  word.difficulty = parseSection(result, '难度');
+  word.frequency = parseSection(result, '考频');
+  word.aiGenerated = true;
+  word.updatedAt = new Date().toISOString();
+
+  // 补缺
+  const missing = [];
+  if (!word.dialogue) missing.push('对话');
+  if (!word.similarWords) missing.push('形近词');
+  if (!word.clozeTest) missing.push('填空');
+  if (!word.translationExercise) missing.push('翻译题');
+  if (missing.length > 0) {
+    const fillPrompt = `请为英语单词 "${word.english}" ${posStr}（中文意思：${word.chinese}）补充以下缺失的学习内容，严格按照格式输出：
+${missing.includes('对话') ? '对话: <A:... B:... 一个包含该单词的雅思口语难度的对话，至少 4 轮，场景自然，词汇丰富，附中文翻译>\\n' : ''}${missing.includes('形近词') ? '形近词: <词1> - <区别说明> / <词2> - <区别说明>\\n' : ''}${missing.includes('填空') ? '填空: <一句包含该单词的完形填空，用___替换该单词，附答案>\\n' : ''}${missing.includes('翻译题') ? '翻译题: <一个中文句子，要求用该单词翻译成英文，附参考答案>\\n' : ''}`;
+    const fillResult = await callAI(fillPrompt, 1500);
+    if (fillResult) {
+      if (missing.includes('对话')) word.dialogue = parseSection(fillResult, '对话');
+      if (missing.includes('形近词')) word.similarWords = parseSection(fillResult, '形近词');
+      if (missing.includes('填空')) word.clozeTest = parseSection(fillResult, '填空');
+      if (missing.includes('翻译题')) word.translationExercise = parseSection(fillResult, '翻译题');
+    }
+  }
+  word.updatedAt = new Date().toISOString();
+  persist();
+  return true;
+}
+
 async function generateAllContent(wordId) {
   let word;
   if (wordId) {
@@ -3815,60 +4170,8 @@ async function generateAllContent(wordId) {
   $('btnGenOne').textContent = '生成中...';
 
   try {
-    const posStr = word.pos ? '(' + word.pos + ') ' : '';
-    const prompt = `请为英语单词 "${word.english}" ${posStr}（中文意思：${word.chinese}）生成以下完整学习内容。请严格按照格式输出，每个标签独立一行：
-
-音标: <该单词的国际音标 IPA，例如 /əˈbændən/>
-例句: <一个自然实用的英文例句>
-例句翻译: <例句的中文翻译>
-近义词: <词1>/<词2>/<词3>
-反义词: <词1>/<词2>/<词3>
-搭配: <英文搭配(中文释义)> | <英文搭配(中文释义)> | <英文搭配(中文释义)>
-词根: <词根词缀拆解说明>
-短文: <一段3-5句的英文短文，自然融入该单词，附中文翻译>
-对话: <A:... B:... 一个包含该单词的雅思口语难度的对话，至少 4 轮，场景自然，词汇丰富，附中文翻译>
-形近词: <词1> - <区别说明> / <词2> - <区别说明>
-填空: <一句包含该单词的完形填空，用___替换该单词，附答案>
-翻译题: <一个中文句子，要求用该单词翻译成英文，附参考答案>
-难度: <中考/高考/四级/六级/雅思/托福/专八 中选一个最符合的>
-考频: <高频/中频/低频 中选一个，并简要说明>`;
-
-    const result = await callAI(prompt, 4000);
-    if (result) {
-      word.example = parseSection(result, '例句');
-      word.phonetic = parseSection(result, '音标');
-      word.exampleCn = parseSection(result, '例句翻译');
-      word.synonyms = parseSection(result, '近义词');
-      word.antonyms = parseSection(result, '反义词');
-      word.collocations = parseSection(result, '搭配');
-      word.rootAnalysis = parseSection(result, '词根');
-      word.passage = parseSection(result, '短文');
-      word.dialogue = parseSection(result, '对话');
-      word.similarWords = parseSection(result, '形近词');
-      word.clozeTest = parseSection(result, '填空');
-      word.translationExercise = parseSection(result, '翻译题');
-      word.difficulty = parseSection(result, '难度');
-      word.frequency = parseSection(result, '考频');
-      word.aiGenerated = true;
-      word.updatedAt = new Date().toISOString();
-      const missing = [];
-      if (!word.dialogue) missing.push('对话');
-      if (!word.similarWords) missing.push('形近词');
-      if (!word.clozeTest) missing.push('填空');
-      if (!word.translationExercise) missing.push('翻译题');
-      if (missing.length > 0) {
-        const fillPrompt = `请为英语单词 "${word.english}" ${posStr}（中文意思：${word.chinese}）补充以下缺失的学习内容，严格按照格式输出：
-${missing.includes('对话') ? '对话: <A:... B:... 一个包含该单词的雅思口语难度的对话，至少 4 轮，场景自然，词汇丰富，附中文翻译>\n' : ''}${missing.includes('形近词') ? '形近词: <词1> - <区别说明> / <词2> - <区别说明>\n' : ''}${missing.includes('填空') ? '填空: <一句包含该单词的完形填空，用___替换该单词，附答案>\n' : ''}${missing.includes('翻译题') ? '翻译题: <一个中文句子，要求用该单词翻译成英文，附参考答案>\n' : ''}`;
-        const fillResult = await callAI(fillPrompt, 1500);
-        if (fillResult) {
-          if (missing.includes('对话')) word.dialogue = parseSection(fillResult, '对话');
-          if (missing.includes('形近词')) word.similarWords = parseSection(fillResult, '形近词');
-          if (missing.includes('填空')) word.clozeTest = parseSection(fillResult, '填空');
-          if (missing.includes('翻译题')) word.translationExercise = parseSection(fillResult, '翻译题');
-        }
-      }
-      word.updatedAt = new Date().toISOString();
-      persist();
+    const ok = await generateWordContent(word);
+    if (ok) {
       renderWordTable();
       if (!wordId) showCard();
       showToast('全部学习内容生成完毕！');
@@ -3880,9 +4183,7 @@ ${missing.includes('对话') ? '对话: <A:... B:... 一个包含该单词的雅
 
   $('btnGenOne').disabled = false;
   $('btnGenOne').textContent = 'AI 生成全部学习内容';
-}
-
-async function generatePhoneticAndExample() {
+}async function generatePhoneticAndExample() {
   const w = appData.words[learnIndex];
   if (!w) return;
   if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
@@ -3940,79 +4241,27 @@ function parsePhoneticAndExample(w, text) {
 
 async function generateAllContentBatch() {
   try {
-  if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
-  const wordsToGen = appData.words.filter(w => !w.aiGenerated);
-  if (wordsToGen.length === 0) { showToast('所有单词都已有 AI 学习内容'); return; }
-  if (!confirm(`将为 ${wordsToGen.length} 个单词生成全部学习内容，每个约需3-5秒，确认继续？`)) return;
+    if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
+    const wordsToGen = appData.words.filter(w => !w.aiGenerated);
+    if (wordsToGen.length === 0) { showToast('所有单词都已有 AI 学习内容'); return; }
+    if (!await showConfirm(`将为 ${wordsToGen.length} 个单词生成全部学习内容，每个约需3-5秒，确认继续？`)) return;
 
-  showToast('开始批量生成...');
-  let done = 0;
-  for (const word of wordsToGen) {
-    $('btnGenAll').disabled = true;
-    $('btnGenAll').textContent = `生成中... ${done + 1}/${wordsToGen.length}`;
+    showToast('开始批量生成...');
+    let done = 0;
+    for (const word of wordsToGen) {
+      $('btnGenAll').disabled = true;
+      $('btnGenAll').textContent = `生成中... ${done + 1}/${wordsToGen.length}`;
 
-    const posStr = word.pos ? '(' + word.pos + ') ' : '';
-    const prompt = `请为英语单词 "${word.english}" ${posStr}（中文意思：${word.chinese}）生成以下完整学习内容。请严格按照格式输出，每个标签独立一行：
-
-音标: <该单词的国际音标 IPA，例如 /əˈbændən/>
-例句: <一个自然实用的英文例句>
-例句翻译: <例句的中文翻译>
-近义词: <词1>/<词2>/<词3>
-反义词: <词1>/<词2>/<词3>
-搭配: <英文搭配(中文释义)> | <英文搭配(中文释义)> | <英文搭配(中文释义)>
-词根: <词根词缀拆解说明>
-短文: <一段3-5句的英文短文，自然融入该单词>
-对话: <A:... B:... 一个包含该单词的雅思口语难度的对话，至少 4 轮，场景自然，词汇丰富>
-形近词: <词1> - <区别说明> / <词2> - <区别说明>
-填空: <一句包含该单词的完形填空，用___替换该单词>
-翻译题: <一个中文句子，要求用该单词翻译成英文，附参考答案>
-难度: <中考/高考/四级/六级/雅思/托福/专八 中选一个最符合的>
-考频: <高频/中频/低频 中选一个，并简要说明>`;
-
-    const result = await callAI(prompt, 4000);
-    if (result) {
-      word.example = parseSection(result, '例句');
-      word.phonetic = parseSection(result, '音标');
-      word.exampleCn = parseSection(result, '例句翻译');
-      word.synonyms = parseSection(result, '近义词');
-      word.antonyms = parseSection(result, '反义词');
-      word.collocations = parseSection(result, '搭配');
-      word.rootAnalysis = parseSection(result, '词根');
-      word.passage = parseSection(result, '短文');
-      word.dialogue = parseSection(result, '对话');
-      word.similarWords = parseSection(result, '形近词');
-      word.clozeTest = parseSection(result, '填空');
-      word.translationExercise = parseSection(result, '翻译题');
-      word.difficulty = parseSection(result, '难度');
-      word.frequency = parseSection(result, '考频');
-      word.aiGenerated = true;
-      word.updatedAt = new Date().toISOString();
-      // 补全缺失的字段
-      const missing = [];
-      if (!word.dialogue) missing.push('对话');
-      if (!word.similarWords) missing.push('形近词');
-      if (!word.clozeTest) missing.push('填空');
-      if (!word.translationExercise) missing.push('翻译题');
-      if (missing.length > 0) {
-        const fillPrompt = `请为英语单词 "${word.english}" ${posStr}（中文意思：${word.chinese}）补充以下缺失的学习内容，严格按照格式输出：
-${missing.includes('对话') ? '对话: <A:... B:... 一个包含该单词的雅思口语难度的对话，至少 4 轮，场景自然，词汇丰富，附中文翻译>\n' : ''}${missing.includes('形近词') ? '形近词: <词1> - <区别说明> / <词2> - <区别说明>\n' : ''}${missing.includes('填空') ? '填空: <一句包含该单词的完形填空，用___替换该单词，附答案>\n' : ''}${missing.includes('翻译题') ? '翻译题: <一个中文句子，要求用该单词翻译成英文，附参考答案>\n' : ''}`;
-        const fillResult = await callAI(fillPrompt, 1500);
-        if (fillResult) {
-          if (missing.includes('对话')) word.dialogue = parseSection(fillResult, '对话');
-          if (missing.includes('形近词')) word.similarWords = parseSection(fillResult, '形近词');
-          if (missing.includes('填空')) word.clozeTest = parseSection(fillResult, '填空');
-          if (missing.includes('翻译题')) word.translationExercise = parseSection(fillResult, '翻译题');
-        }
+      const ok = await generateWordContent(word);
+      if (ok) {
+        done++;
+        renderWordTable();
       }
-      done++;
-      persist();
-      renderWordTable();
+      await new Promise(r => setTimeout(r, 800));
     }
-    await new Promise(r => setTimeout(r, 800));
-  }
-  $('btnGenAll').disabled = appData.words.length === 0 || !hasValidApiConfig();
-  $('btnGenAll').textContent = 'AI 批量生成全部内容';
-  showToast(`批量生成完成: ${done}/${wordsToGen.length} 成功`);
+    $('btnGenAll').disabled = appData.words.length === 0 || !hasValidApiConfig();
+    $('btnGenAll').textContent = 'AI 批量生成全部内容';
+    showToast(`批量生成完成: ${done}/${wordsToGen.length} 成功`);
   } catch (e) {
     showToast('操作失败: ' + (e.message || '未知错误'));
     console.error(e);
@@ -4020,8 +4269,6 @@ ${missing.includes('对话') ? '对话: <A:... B:... 一个包含该单词的雅
     $('btnGenAll').textContent = 'AI 批量生成全部内容';
   }
 }
-
-// ═══════════════════════════════════════
 // Learning (Flashcard)
 // ═══════════════════════════════════════
 let learnIndex = 0;
@@ -5499,7 +5746,7 @@ async function downloadCloudAudio(id) {
 
 async function deleteCloudAudio(id) {
   if (!sbClient || !initSupabase()) { showToast('请先登录'); return; }
-  if (!confirm('确定删除这条云端音频？')) return;
+  if (!await showConfirm('确定删除这条云端音频？')) return;
 
   const { data: { session } } = await sbClient.auth.getSession();
   if (!session) { showToast('登录已过期'); return; }
@@ -6381,8 +6628,8 @@ function reciteAddSentence() {
   showToast('句子已保存 ✓');
 }
 
-function reciteDeleteSentence(id) {
-  if (!confirm('确定要删除这条句子吗？')) return;
+async function reciteDeleteSentence(id) {
+  if (!await showConfirm('确定要删除这条句子吗？')) return;
   appData.sentences = appData.sentences.filter(s => s.id !== id);
   persist();
   renderReciteList();
@@ -6766,8 +7013,8 @@ function renderHistory() {
   }).join('');
 }
 
-function deleteCorrection(id) {
-  if (!confirm('确定删除这条批改记录吗？')) return;
+async function deleteCorrection(id) {
+  if (!await showConfirm('确定删除这条批改记录吗？')) return;
   const history = loadHistory();
   const filtered = history.filter(r => String(r.id) !== String(id));
   saveHistory(filtered);
@@ -6775,8 +7022,8 @@ function deleteCorrection(id) {
   showToast('记录已删除');
 }
 
-function clearAllCorrections() {
-  if (!confirm('确定清空全部批改记录吗？此操作不可恢复。')) return;
+async function clearAllCorrections() {
+  if (!await showConfirm('确定清空全部批改记录吗？此操作不可恢复。')) return;
   saveHistory([]);
   renderHistory();
   showToast('全部记录已清空');
@@ -7183,6 +7430,33 @@ async function syncStudyTimeToCloud() {
 initHistory();
 initStudyTimer();
 init();
+
+function toggleFocusMode() {
+  document.body.classList.toggle('focus-mode');
+  showToast(document.body.classList.contains('focus-mode') ? '已进入专注模式，按 F 退出' : '已退出专注模式');
+}
+
+
+document.addEventListener('keydown', function(e) {
+  if (e.target.matches('input, textarea')) return;
+  if (e.key === '?' && !e.shiftKey) {
+    $('modalShortcuts').classList.toggle('show');
+  }
+  if (e.key === 'f' || e.key === 'F') {
+    if (!e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      toggleFocusMode();
+    }
+  }
+  if (/^[1-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey) {
+    const tabs = ['lookup','manage','learn','spell','quiz','read','translate','history','recite'];
+    const idx = parseInt(e.key) - 1;
+    if (tabs[idx]) {
+      const tabEl = document.querySelector(`.nav-tab[data-tab="${tabs[idx]}"]`);
+      if (tabEl) tabEl.click();
+    }
+  }
+});
 </script>
 <!-- Hidden print area for export -->
 <div id="printArea" style="display:none;"></div>
