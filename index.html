@@ -7998,7 +7998,12 @@ ${text}
 
     const paraSection = extractSection(result1, '===段落对照===', '===重点单词===');
     if (paraSection) {
-      const blocks = paraSection.split('---').filter(Boolean);
+      // 先按 --- 分割，处理有分隔符的情况
+      let blocks = paraSection.split(/\n---\n?/).filter(b => b.trim());
+      // 如果没有分隔符，尝试按"原文:"分割
+      if (blocks.length <= 1 && paraSection.includes('原文')) {
+        blocks = paraSection.split(/(?=\n?原文[:：])/).filter(b => b.trim());
+      }
       intensiveData.paragraphs = blocks.map(b => {
         const orig = extractLabeled(b, '原文');
         const trans = extractLabeled(b, '译文');
@@ -8190,7 +8195,10 @@ function parseIntensiveResult(text) {
   // 提取段落对照
   const paraSection = extractSection(text, '===段落对照===', '===重点单词===');
   if (paraSection) {
-    const blocks = paraSection.split('---').filter(Boolean);
+    let blocks = paraSection.split(/\n---\n?/).filter(b => b.trim());
+    if (blocks.length <= 1 && paraSection.includes('原文')) {
+      blocks = paraSection.split(/(?=\n?原文[:：])/).filter(b => b.trim());
+    }
     intensiveData.paragraphs = blocks.map(b => {
       const orig = extractLabeled(b, '原文');
       const trans = extractLabeled(b, '译文');
@@ -8266,7 +8274,8 @@ function extractSection(text, startLabel, endLabel) {
 }
 
 function extractLabeled(text, label) {
-  const m = text.match(new RegExp(label + '[:：]\\s*([\\s\\S]+?)(?=\\n(?:原文|译文|---|$))', 's'));
+  const regex = new RegExp(label + '[:：]\\s*([\\s\\S]+?)(?=\\n(?:原文|译文)[:：]|\\n---|\\n===|$)', 's');
+  const m = text.match(regex);
   return m ? m[1].trim() : '';
 }
 
@@ -8526,11 +8535,13 @@ td { padding: 8px 10px; border-bottom: 1px solid #eee; }
   // 用 html2pdf 生成 PDF
   const container = document.createElement('div');
   container.style.position = 'fixed';
-  container.style.left = '-9999px';
   container.style.top = '0';
+  container.style.left = '0';
   container.style.width = '800px';
   container.style.background = '#fff';
-  container.style.zIndex = '-1';
+  container.style.zIndex = '-9999';
+  container.style.visibility = 'hidden';
+  container.style.pointerEvents = 'none';
   container.innerHTML = html;
   document.body.appendChild(container);
 
@@ -8543,6 +8554,7 @@ td { padding: 8px 10px; border-bottom: 1px solid #eee; }
   };
 
   showToast('正在生成 PDF...');
+  container.style.visibility = 'visible';
   html2pdf().set(opt).from(container).save().then(() => {
     document.body.removeChild(container);
     showToast('导出成功！');
