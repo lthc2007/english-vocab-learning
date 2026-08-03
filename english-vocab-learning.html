@@ -8593,7 +8593,7 @@ function exportIntensive() {
   // 创建容器 — 放在可视区域内，用 z-index 隐藏
   const container = document.createElement('div');
   container.id = 'pdf-export-container';
-  container.style.cssText = 'position:absolute; left:-9999px; top:0; width:800px; background:#fff;';
+  container.style.cssText = 'position:fixed; left:0; top:0; width:800px; background:#fff; opacity:0; pointer-events:none; z-index:2147483647;';
   container.innerHTML = html;
   document.body.appendChild(container);
 
@@ -8691,10 +8691,10 @@ function exportWordListPdf() {
   html += `<div style="text-align: center; font-size: 11px; color: #999; margin-top: 30px; border-top: 1px solid #eee; padding-top: 12px;">由英语学习助手生成 · ${new Date().toLocaleDateString('zh-CN')}</div>`;
   html += '</div>';
 
-  // 创建容器 — 放在可视区域内，用 left:-9999px 隐藏
+  // 创建容器 — 放在视口内但透明，确保 html2canvas 能捕获
   const container = document.createElement('div');
   container.id = 'pdf-export-container';
-  container.style.cssText = 'position:absolute; left:-9999px; top:0; width:800px; background:#fff;';
+  container.style.cssText = 'position:fixed; left:0; top:0; width:800px; background:#fff; opacity:0; pointer-events:none; z-index:2147483647;';
   container.innerHTML = html;
   document.body.appendChild(container);
 
