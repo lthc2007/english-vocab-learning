@@ -4364,9 +4364,25 @@ function enqueueAI(prompt, maxTokens) {
 async function executeAI(prompt, maxTokens, attempt = 0) {
   const maxAttempts = 4;
   try {
-    return await doCallAI(prompt, maxTokens);
+    const result = await doCallAI(prompt, maxTokens);
+    // 检查返回内容是否为空，为空则重试
+    if (!result) {
+      if (attempt >= maxAttempts - 1) {
+        console.warn('[executeAI] 重试耗尽，AI 返回为空');
+        showToast('AI 多次请求均返回空，请检查文章是否过长或 API 状态');
+        return null;
+      }
+      const delay = Math.min(1000 * Math.pow(2, attempt), 16000);
+      showToast(`AI 返回为空，${delay / 1000}秒后重试 (${attempt + 1}/${maxAttempts})`);
+      await new Promise(r => setTimeout(r, delay));
+      return executeAI(prompt, maxTokens, attempt + 1);
+    }
+    return result;
   } catch (err) {
-    if (attempt >= maxAttempts - 1) throw err;
+    if (attempt >= maxAttempts - 1) {
+      console.error('[executeAI] 重试耗尽，请求异常:', err);
+      throw err;
+    }
     const delay = Math.min(1000 * Math.pow(2, attempt), 16000);
     showToast(`请求失败，${delay / 1000}秒后重试 (${attempt + 1}/${maxAttempts})`);
     await new Promise(r => setTimeout(r, delay));
@@ -4432,7 +4448,7 @@ async function doCallAI(prompt, maxTokens = 1500) {
         method: 'POST',
         headers: reqHeaders,
         body: JSON.stringify(reqBody),
-        signal: AbortSignal.timeout(30000)
+        signal: AbortSignal.timeout(Math.max(120000, maxTokens * 8))
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
@@ -4453,9 +4469,23 @@ async function doCallAI(prompt, maxTokens = 1500) {
         throw new Error(fullErr);
       }
       const data = await resp.json();
-      return data.choices[0].message.content.trim();
+      // 安全获取内容：处理 choices 为空或 content 为 null 的情况
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) {
+        console.warn('[doCallAI] 返回内容为空，响应结构:', JSON.stringify(data).slice(0, 500));
+        return null;
+      }
+      return content.trim();
     } catch (err) {
       lastError = err.message;
+      // 请求超时（AbortError）— 延长超时后重试
+      if (err.name === 'AbortError') {
+        console.warn('[doCallAI] 请求超时，尝试降级重试');
+        if (attempt < maxAttempts - 1) {
+          await new Promise(r => setTimeout(r, 1000));
+          continue;
+        }
+      }
       // 网络错误重试一次
       if (err.name === 'TypeError' && attempt < 1) {
         await new Promise(r => setTimeout(r, 1000));
@@ -7945,8 +7975,10 @@ A3: <第三个问题的答案>
 
 注意：选择题难度应与六级阅读理解相当。每个选择题必须有4个选项、正确答案字母和解析。重点单词用**加粗**标记。词汇总结每个单词一行，包含音标和中文释义。`;
 
-    const result = await callAI(prompt, 10000);
-    if (!result) { throw new Error('AI 返回为空'); }
+    const result = await callAI(prompt, 30000);
+    if (!result) {
+      throw new Error('AI 多次返回为空，可能是文章过长或 API 服务不稳定，请缩短文章后重试');
+    }
 
     intensiveData = { raw: result, title: title, questions: [], paragraphs: [], boldText: '', vocab: [], quiz: [], answers: [] };
     parseIntensiveResult(result);
