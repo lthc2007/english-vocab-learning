@@ -1144,6 +1144,35 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
   color: var(--success);
   font-weight: 600;
 }
+/* ── Mistake Items (批改记录结构化显示) ── */
+.mistake-item {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+.mistake-item:last-child { border-bottom: none; }
+.mistake-error {
+  color: #dc2626;
+  font-weight: 700;
+}
+.mistake-arrow {
+  color: var(--muted);
+  margin: 0 4px;
+}
+.mistake-correct {
+  color: var(--success);
+  font-weight: 600;
+}
+.mistake-label {
+  display: inline-block;
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: var(--bg);
+  border-radius: 4px;
+  padding: 0 6px;
+  margin-right: 6px;
+}
 .score-big {
   font-family: var(--font-display);
   font-size: 4rem;
@@ -4109,18 +4138,83 @@ function escapeHtml(str) {
   return div.innerHTML.replace(/'/g, '&#39;');
 }
 
-// 白名单过滤: 只允许 <span class="error-highlight"> 和 <br>，防止 XSS
+// 将 AI 返回的错误批改文本解析为结构化的 HTML 显示
+// 支持多种格式：<span class="error-highlight">错误</span> → 正确，错误 → 正确，- 错误 → 正确
 function sanitizeMistakesHtml(str) {
   if (!str) return '';
-  // 先转义所有 HTML
-  let safe = escapeHtml(str);
-  // 恢复 <br> 标签（escapeHtml 会把 &lt;br&gt; 变成 &amp;lt;br&amp;gt;）
-  safe = safe.replace(/&amp;lt;br&amp;gt;/gi, '<br>').replace(/&lt;br&gt;/gi, '<br>').replace(/&lt;br\/&gt;/gi, '<br>');
-  // 恢复 <span class="error-highlight"> 和 </span>
-  safe = safe.replace(/&lt;span class=&quot;error-highlight&quot;&gt;/gi, '<span class="error-highlight">');
-  safe = safe.replace(/&lt;span class=&#39;error-highlight&#39;&gt;/gi, '<span class="error-highlight">');
-  safe = safe.replace(/&lt;\/span&gt;/gi, '</span>');
-  return safe;
+  // 如果是"无错误"类消息，直接返回
+  if (/^无|正确.*无错误|没有.*错误/.test(str.trim())) {
+    return '<span style="color:var(--success);font-weight:600;">' + escapeHtml(str) + '</span>';
+  }
+
+  // 按行拆分，逐行解析
+  const lines = str.split(/\r?\n/).filter(line => line.trim().length > 0);
+  const items = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // 跳过纯数字、纯符号行
+    if (/^[\d\s\.\-\*\u3000]+$/.test(trimmed)) continue;
+
+    // 清理行首的列表符号：数字. - * 等
+    let content = trimmed.replace(/^[\d\.]+\s*/, '').replace(/^[\-\*\u2022\u25cf]\s*/, '').trim();
+
+    // 提取错误部分和正确部分（用 → 或 -> 分隔）
+    // 首先清理可能的 HTML 标签，把 <span class="error-highlight">xxx</span> 提取为纯文本
+    let errorPart = '';
+    let correctPart = '';
+    let description = '';
+
+    // 去除所有 HTML 标签，保留纯文本
+    const plainText = content.replace(/<[^>]+>/g, '').trim();
+
+    // 尝试用箭头分隔
+    const arrowMatch = plainText.match(/^(.+?)\s*(?:→|->|→|=>)\s*(.+)$/);
+    if (arrowMatch) {
+      errorPart = arrowMatch[1].trim();
+      const rest = arrowMatch[2].trim();
+      // 正确部分后面可能还有说明文字，用句号或空格分隔
+      const descMatch = rest.match(/^([^。\n]+?)[。\s]{2,}(.+)$/);
+      if (descMatch) {
+        correctPart = descMatch[1].trim();
+        description = descMatch[2].trim();
+      } else {
+        correctPart = rest;
+      }
+    } else {
+      // 没有箭头，尝试提取常见模式："错误词/短语" + 说明
+      errorPart = plainText;
+    }
+
+    if (errorPart) {
+      items.push({
+        error: errorPart.replace(/^["'`]|["'`]$/g, ''),
+        correct: correctPart.replace(/^["'`]|["'`]$/g, ''),
+        desc: description
+      });
+    }
+  }
+
+  if (items.length === 0) {
+    // 无法解析，直接转义显示
+    return escapeHtml(str).replace(/\n/g, '<br>');
+  }
+
+  // 生成结构化 HTML
+  return items.map((item, i) => {
+    let html = '<div class="mistake-item">';
+    html += '<span class="mistake-label">错误 ' + (i + 1) + '</span>';
+    html += '<span class="mistake-error">' + escapeHtml(item.error) + '</span>';
+    if (item.correct) {
+      html += ' <span class="mistake-arrow">→</span> ';
+      html += '<span class="mistake-correct">' + escapeHtml(item.correct) + '</span>';
+    }
+    if (item.desc) {
+      html += '<div style="font-size:0.85rem;color:var(--muted);margin-top:2px;padding-left:0;">' + escapeHtml(item.desc) + '</div>';
+    }
+    html += '</div>';
+    return html;
+  }).join('');
 }
 
 function posClass(pos) {
