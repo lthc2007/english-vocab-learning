@@ -7967,19 +7967,18 @@ async function startIntensiveRead() {
   startProgress('intensiveProgress');
   $('intensiveStatus').textContent = 'AI 正在分析...';
 
+  intensiveData = { raw: '', title: title, questions: [], paragraphs: [], boldText: '', vocab: [], quiz: [], answers: [] };
+
   try {
-    const prompt = `你是一位专业的英语阅读教师。请对以下英文文章进行精读分析，并严格按照下面的格式输出，每个部分用明确的标签分隔，不要添加额外说明。
+    // ── 第 1 步：段落对照 + 词汇总结 ──
+    $('intensiveStatus').textContent = '正在翻译段落 (1/4)...';
+    const step1Prompt = `你是一位专业的英语阅读教师。请对以下英文文章进行精读分析，严格按照下面的格式输出。
 
 文章标题: ${title || '（无标题）'}
 文章内容：
 ${text}
 
-请按以下格式输出（每个大标签独立一行，不要遗漏任何标签）：
-
-===思考问题===
-Q1: <第一个思考问题，基于文章内容提出的深度理解性问题>
-Q2: <第二个思考问题，基于文章推理/extend的问题>
-Q3: <第三个思考问题，基于文章评价/批判性思考的问题>
+请严格按以下格式输出：
 
 ===段落对照===
 <对于文章的每一个段落，按以下格式输出，段落之间用"---"分隔>
@@ -7991,65 +7990,181 @@ Q3: <第三个思考问题，基于文章评价/批判性思考的问题>
 
 ===词汇总结===
 <对文章中标注的重点单词，按以下格式逐一列出，每个单词一行>
-单词: <英文单词> | 音标: <国际音标> | 释义: <中文释义>
+单词: <英文单词> | 音标: <国际音标> | 释义: <中文释义>`;
+
+    const result1 = await callAI(step1Prompt, 4000);
+    if (!result1) throw new Error('第1步 AI 返回为空');
+    intensiveData.raw = result1 + '\n';
+
+    const paraSection = extractSection(result1, '===段落对照===', '===重点单词===');
+    if (paraSection) {
+      const blocks = paraSection.split('---').filter(Boolean);
+      intensiveData.paragraphs = blocks.map(b => {
+        const orig = extractLabeled(b, '原文');
+        const trans = extractLabeled(b, '译文');
+        return { original: orig, translation: trans };
+      }).filter(p => p.original || p.translation);
+    }
+
+    const boldSection = extractSection(result1, '===重点单词===', '===词汇总结===');
+    if (boldSection) intensiveData.boldText = boldSection.trim();
+
+    const vocabSection = extractSection(result1, '===词汇总结===');
+    if (vocabSection) {
+      intensiveData.vocab = vocabSection.split(/\n/).filter(l => l.trim()).map(l => {
+        const word = l.match(/单词[:：]\s*(\S+)/);
+        const phonetic = l.match(/音标[:：]\s*(\S+)/);
+        const def = l.match(/释义[:：]\s*(.+)/);
+        return {
+          word: word ? word[1] : '',
+          phonetic: phonetic ? phonetic[1] : '',
+          definition: def ? def[1].trim() : ''
+        };
+      }).filter(v => v.word);
+    }
+    renderIntensiveResult();
+
+    // ── 第 2 步：选择题 ──
+    $('intensiveStatus').textContent = '正在生成选择题 (2/4)...';
+    const step2Prompt = `你是一位专业的英语阅读教师。请根据以下英文文章内容，生成5道六级难度选择题。
+
+文章标题: ${title || '（无标题）'}
+文章内容：
+${text}
+
+请严格按以下格式输出：
 
 ===选择题===
-Q1: <选择题题干>
+Q1: <题干>
 A. <选项A>
 B. <选项B>
 C. <选项C>
 D. <选项D>
 答案: <正确选项字母>
-解析: <为什么这个选项正确>
+解析: <解析内容>
 
-Q2: <选择题题干>
+Q2: <题干>
 A. <选项A>
 B. <选项B>
 C. <选项C>
 D. <选项D>
 答案: <正确选项字母>
-解析: <为什么这个选项正确>
+解析: <解析内容>
 
-Q3: <选择题题干>
+Q3: <题干>
 A. <选项A>
 B. <选项B>
 C. <选项C>
 D. <选项D>
 答案: <正确选项字母>
-解析: <为什么这个选项正确>
+解析: <解析内容>
 
-Q4: <选择题题干>
+Q4: <题干>
 A. <选项A>
 B. <选项B>
 C. <选项C>
 D. <选项D>
 答案: <正确选项字母>
-解析: <为什么这个选项正确>
+解析: <解析内容>
 
-Q5: <选择题题干>
+Q5: <题干>
 A. <选项A>
 B. <选项B>
 C. <选项C>
 D. <选项D>
 答案: <正确选项字母>
-解析: <为什么这个选项正确>
+解析: <解析内容>`;
+
+    const result2 = await callAI(step2Prompt, 3000);
+    if (!result2) throw new Error('第2步 AI 返回为空');
+    intensiveData.raw += result2 + '\n';
+
+    const quizSection = extractSection(result2, '===选择题===');
+    if (quizSection) {
+      const qBlocks = quizSection.split(/\n(?=Q\d+[:：])/).filter(Boolean);
+      intensiveData.quiz = qBlocks.map(b => {
+        const qMatch = b.match(/^Q\d+[:：]\s*(.+?)(?:\n|$)/);
+        const options = [];
+        const optMatch = b.match(/[A-D][.、]\s*(.+?)(?=\n[A-D]|$|\n答案)/g);
+        if (optMatch) {
+          optMatch.forEach(o => {
+            const m = o.match(/^([A-D])[.、]\s*(.+)/);
+            if (m) options.push(m[2].trim());
+          });
+        }
+        const answer = b.match(/答案[:：]\s*([A-D])/);
+        const explanation = b.match(/解析[:：]\s*(.+?)(?=\nQ\d|$)/s);
+        return {
+          question: qMatch ? qMatch[1].trim() : '',
+          options: options,
+          answer: answer ? answer[1] : '',
+          explanation: explanation ? explanation[1].trim() : ''
+        };
+      }).filter(q => q.question && q.options.length === 4);
+    }
+    renderIntensiveResult();
+
+    // ── 第 3 步：思考问题 ──
+    $('intensiveStatus').textContent = '正在生成思考题 (3/4)...';
+    const step3Prompt = `你是一位专业的英语阅读教师。请根据以下英文文章提出3个深度思考问题。
+
+文章标题: ${title || '（无标题）'}
+文章内容：
+${text}
+
+请严格按以下格式输出：
+
+===思考问题===
+Q1: <基于文章内容的深度理解性问题>
+Q2: <基于文章推理/延伸的问题>
+Q3: <基于文章评价/批判性思考的问题>`;
+
+    const result3 = await callAI(step3Prompt, 1000);
+    if (!result3) throw new Error('第3步 AI 返回为空');
+    intensiveData.raw += result3 + '\n';
+
+    const qSection = extractSection(result3, '===思考问题===');
+    if (qSection) {
+      intensiveData.questions = qSection.split(/\n/).filter(l => l.trim().startsWith('Q')).map(l => {
+        const m = l.match(/^Q\d+[:：]\s*(.+)/);
+        return m ? m[1].trim() : l.trim();
+      }).filter(Boolean);
+    }
+    renderIntensiveResult();
+
+    // ── 第 4 步：思考问题答案 ──
+    $('intensiveStatus').textContent = '正在生成答案 (4/4)...';
+    const questionsText = intensiveData.questions.map((q, i) => `Q${i+1}: ${q}`).join('\n');
+    const step4Prompt = `你是一位专业的英语阅读教师。请回答以下关于文章的思考问题。
+
+文章标题: ${title || '（无标题）'}
+文章内容：
+${text}
+
+思考问题：
+${questionsText}
+
+请严格按以下格式输出：
 
 ===思考问题答案===
 A1: <第一个问题的答案>
 A2: <第二个问题的答案>
-A3: <第三个问题的答案>
+A3: <第三个问题的答案>`;
 
-注意：选择题难度应与六级阅读理解相当。每个选择题必须有4个选项、正确答案字母和解析。重点单词用**加粗**标记。词汇总结每个单词一行，包含音标和中文释义。`;
+    const result4 = await callAI(step4Prompt, 1500);
+    if (!result4) throw new Error('第4步 AI 返回为空');
+    intensiveData.raw += result4 + '\n';
 
-    const result = await callAI(prompt, 30000);
-    if (!result) {
-      throw new Error('AI 多次返回为空，可能是文章过长或 API 服务不稳定，请缩短文章后重试');
+    const answerSection = extractSection(result4, '===思考问题答案===');
+    if (answerSection) {
+      intensiveData.answers = answerSection.split(/\n/).filter(l => l.trim().startsWith('A')).map(l => {
+        const m = l.match(/^A\d+[:：]\s*(.+)/);
+        return m ? m[1].trim() : l.trim();
+      }).filter(Boolean);
     }
-
-    intensiveData = { raw: result, title: title, questions: [], paragraphs: [], boldText: '', vocab: [], quiz: [], answers: [] };
-    parseIntensiveResult(result);
     renderIntensiveResult();
-    $('intensiveResult').style.display = '';
+
+    $('intensiveStatus').textContent = '';
     showToast('精读完成！');
   } catch (e) {
     showToast('精读失败: ' + (e.message || '未知错误'));
