@@ -8655,78 +8655,98 @@ function exportWordListPdf() {
     return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
   });
 
-  let html = `
-<div style="font-family: 'Noto Serif SC', 'SimSun', serif; font-size: 14px; line-height: 1.8; color: #222; max-width: 800px; margin: 0 auto; padding: 20px;">
-<h1 style="font-size: 22px; text-align: center; color: #2d5a5a; margin-bottom: 8px; border-bottom: 2px solid #c9a96e; padding-bottom: 12px;">我的单词列表</h1>
-<p style="text-align: center; font-size: 13px; color: #888; margin-bottom: 20px;">共 ${words.length} 个单词 · ${new Date().toLocaleDateString('zh-CN')}</p>`;
+  let htmlContent = `
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>我的单词列表</title>
+<style>
+body { font-family: 'Noto Serif SC', 'SimSun', 'Songti SC', serif; font-size: 14px; line-height: 1.8; color: #222; max-width: 800px; margin: 0 auto; padding: 20px; }
+h1 { font-size: 22px; text-align: center; color: #2d5a5a; margin-bottom: 8px; border-bottom: 2px solid #c9a96e; padding-bottom: 12px; }
+.subtitle { text-align: center; font-size: 13px; color: #888; margin-bottom: 20px; }
+h2 { font-size: 17px; color: #2d5a5a; margin-top: 24px; margin-bottom: 10px; border-left: 4px solid #c9a96e; padding-left: 10px; }
+table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+th { background: #f0eeeb; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #ddd; }
+td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+.footer { text-align: center; font-size: 11px; color: #999; margin-top: 30px; border-top: 1px solid #eee; padding-top: 12px; }
+@media print { body { padding: 0; } }
+</style>
+</head>
+<body>
+<h1>我的单词列表</h1>
+<p class="subtitle">共 ${words.length} 个单词 · ${new Date().toLocaleDateString('zh-CN')}</p>`;
 
   sortedLevels.forEach(level => {
     const group = groups[level];
-    html += `
-<h2 style="font-size: 17px; color: #2d5a5a; margin-top: 24px; margin-bottom: 10px; border-left: 4px solid #c9a96e; padding-left: 10px;">${escapeHtml(level)} <span style="font-size: 13px; color: #999; font-weight: 400;">(${group.length} 个)</span></h2>
-<table style="width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px;">
+    htmlContent += `
+<h2>${escapeHtml(level)} <span style="font-size:13px;color:#999;font-weight:400;">(${group.length} 个)</span></h2>
+<table>
 <thead>
 <tr>
-  <th style="background: #f0eeeb; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #ddd; width: 22%;">单词</th>
-  <th style="background: #f0eeeb; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #ddd; width: 10%;">词性</th>
-  <th style="background: #f0eeeb; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #ddd; width: 18%;">音标</th>
-  <th style="background: #f0eeeb; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #ddd; width: 50%;">释义</th>
+  <th style="width:22%;">单词</th>
+  <th style="width:10%;">词性</th>
+  <th style="width:18%;">音标</th>
+  <th style="width:50%;">释义</th>
 </tr>
 </thead>
 <tbody>`;
     group.forEach(w => {
-      const posHtml = w.pos ? `<span style="color:#888;">(${escapeHtml(w.pos)})</span>` : '';
-      const phoneticHtml = w.phonetic ? `<em style="color:#666;">${escapeHtml(w.phonetic)}</em>` : '<span style="color:#bbb;">-</span>';
-      const chineseHtml = w.chinese ? escapeHtml(w.chinese) : '<span style="color:#bbb;">-</span>';
-      html += `<tr>
-  <td style="padding: 8px 10px; border-bottom: 1px solid #eee; font-weight: 600;">${escapeHtml(w.english)}</td>
-  <td style="padding: 8px 10px; border-bottom: 1px solid #eee; color: #666;">${posHtml}</td>
-  <td style="padding: 8px 10px; border-bottom: 1px solid #eee;">${phoneticHtml}</td>
-  <td style="padding: 8px 10px; border-bottom: 1px solid #eee; color: #333;">${chineseHtml}</td>
+      const posHtml = w.pos ? `(${escapeHtml(w.pos)})` : '';
+      const phoneticHtml = w.phonetic || '-';
+      const chineseHtml = w.chinese || '-';
+      htmlContent += `<tr>
+  <td style="font-weight:600;">${escapeHtml(w.english)}</td>
+  <td style="color:#666;">${posHtml}</td>
+  <td><em style="color:#666;">${escapeHtml(phoneticHtml)}</em></td>
+  <td>${escapeHtml(chineseHtml)}</td>
 </tr>`;
     });
-    html += '</tbody></table>';
+    htmlContent += '</tbody></table>';
   });
 
-  html += `<div style="text-align: center; font-size: 11px; color: #999; margin-top: 30px; border-top: 1px solid #eee; padding-top: 12px;">由英语学习助手生成 · ${new Date().toLocaleDateString('zh-CN')}</div>`;
-  html += '</div>';
+  htmlContent += `<div class="footer">由英语学习助手生成 · ${new Date().toLocaleDateString('zh-CN')}</div>
+</body>
+</html>`;
 
-  // 创建容器 — 放在视口内但透明，确保 html2canvas 能捕获
-  const container = document.createElement('div');
-  container.id = 'pdf-export-container';
-  container.style.cssText = 'position:fixed; left:0; top:0; width:800px; background:#fff; opacity:0; pointer-events:none; z-index:2147483647;';
-  container.innerHTML = html;
-  document.body.appendChild(container);
+  showToast('正在打开打印窗口，请选择"另存为 PDF"');
 
-  showToast('正在生成 PDF...');
-
-  setTimeout(() => {
-    const opt = {
-      margin: [10, 10, 10, 10],
-      filename: '单词列表_' + new Date().toISOString().slice(0, 10) + '.pdf',
-      image: { type: 'jpeg', quality: 0.95 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  const printWin = window.open('', '_blank');
+  if (printWin) {
+    printWin.document.write(htmlContent);
+    printWin.document.close();
+    printWin.onload = () => {
+      setTimeout(() => {
+        printWin.print();
+      }, 300);
     };
+  } else {
+    // 弹窗被拦截，尝试 html2pdf 降级
+    showToast('弹窗被拦截，尝试 html2pdf...');
+    const container = document.createElement('div');
+    container.id = 'pdf-export-container';
+    container.style.cssText = 'position:fixed;left:0;top:0;width:800px;background:#fff;z-index:2147483647;';
+    container.innerHTML = htmlContent;
+    document.body.appendChild(container);
 
-    html2pdf().set(opt).from(container).save().then(() => {
-      document.body.removeChild(container);
-      showToast('导出成功！');
-    }).catch(err => {
-      console.error('[PDF导出] 单词列表失败:', err);
-      document.body.removeChild(container);
-
-      const printWin = window.open('', '_blank');
-      if (printWin) {
-        printWin.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>单词列表</title></head><body>' + html + '</body></html>');
-        printWin.document.close();
-        printWin.onload = () => { printWin.print(); printWin.close(); };
-        showToast('已打开打印窗口，请选择"另存为 PDF"');
-      } else {
-        showToast('导出失败，请允许弹窗后重试');
-      }
-    });
-  }, 500);
+    setTimeout(() => {
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: '单词列表_' + new Date().toISOString().slice(0, 10) + '.pdf',
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      html2pdf().set(opt).from(container).save().then(() => {
+        document.body.removeChild(container);
+        showToast('导出成功！');
+      }).catch(err => {
+        console.error('[PDF导出] 失败:', err);
+        document.body.removeChild(container);
+        showToast('导出失败，请检查控制台');
+      });
+    }, 500);
+  }
 }
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
