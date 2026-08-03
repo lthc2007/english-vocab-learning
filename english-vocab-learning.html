@@ -7961,77 +7961,104 @@ async function startIntensiveRead() {
   if (!text) { showToast('请先粘贴文章内容'); return; }
   if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
 
+  // 包装 callAI，添加重试机制
+  async function callAIWithRetry(prompt, maxTokens, retries = 2) {
+    for (let i = 0; i <= retries; i++) {
+      try {
+        console.log(`[精读] 第 ${i + 1} 次尝试，prompt 长度: ${prompt.length}, maxTokens: ${maxTokens}`);
+        const result = await callAI(prompt, maxTokens);
+
+        if (!result || result.trim().length === 0) {
+          console.error(`[精读] 第 ${i + 1} 次尝试返回空结果`);
+          if (i < retries) {
+            console.log(`[精读] 等待 2 秒后重试...`);
+            await new Promise(r => setTimeout(r, 2000));
+            continue;
+          }
+          throw new Error('AI 返回为空，请检查 API 配置或稍后重试');
+        }
+
+        console.log(`[精读] 成功，返回长度: ${result.length}`);
+        return result;
+      } catch (e) {
+        console.error(`[精读] 第 ${i + 1} 次尝试失败:`, e);
+        if (i < retries) {
+          console.log(`[精读] 等待 2 秒后重试...`);
+          await new Promise(r => setTimeout(r, 2000));
+        } else {
+          throw e;
+        }
+      }
+    }
+  }
+
   $('btnIntensiveRead').disabled = true;
   $('intensiveLoading').style.display = '';
   $('intensiveResult').style.display = 'none';
   startProgress('intensiveProgress');
-  $('intensiveStatus').textContent = 'AI 正在分析...';
 
   intensiveData = { raw: '', title: title, questions: [], paragraphs: [], boldText: '', vocab: [], quiz: [], answers: [] };
 
   try {
-    // ── 第 1 步：段落对照 + 词汇总结 ──
+    // ── 第 1 步：段落对照翻译 + 重点单词加粗 ──
     $('intensiveStatus').textContent = '正在翻译段落 (1/4)...';
-    const step1Prompt = `你是一位专业的英语阅读教师。请对以下英文文章进行精读分析，严格按照下面的格式输出。
+    const step1Prompt = `你是一位专业的英语阅读教师。请对以下英文文章逐段翻译，并对重点单词加粗。
 
 文章标题: ${title || '（无标题）'}
 文章内容：
 ${text}
 
-请严格按以下格式输出：
+请按以下格式输出：
 
 ===段落对照===
-<对于文章的每一个段落，按以下格式输出，段落之间用"---"分隔>
-原文: <段落英文原文>
+（每个段落按以下格式输出，段落之间用"---"分隔）
+原文: <段落英文原文，对四六级考研常考重点单词用**加粗**标记>
 译文: <段落中文译文>
 
-===重点单词===
-<在原文中，对四六级考研常考重点单词用**加粗**标记，输出完整原文，单词用**单词**包裹>
-
 ===词汇总结===
-<对文章中标注的重点单词，按以下格式逐一列出，每个单词一行>
+（对文章中标注的重点单词，按以下格式逐一列出，每个单词一行，最多15个）
 单词: <英文单词> | 音标: <国际音标> | 释义: <中文释义>`;
 
-    const result1 = await callAI(step1Prompt, 4000);
-    if (!result1) throw new Error('第1步 AI 返回为空');
-    intensiveData.raw = result1 + '\n';
+    const result1 = await callAIWithRetry(step1Prompt, 4000);
+    intensiveData.raw += result1 + '\n';
 
-    const paraSection = extractSection(result1, '===段落对照===', '===重点单词===');
+    // 解析第1步结果
+    const paraSection = extractSection(result1, '===段落对照===', '===词汇总结===');
     if (paraSection) {
-      // 先按 --- 分割，处理有分隔符的情况
       let blocks = paraSection.split(/\n---\n?/).filter(b => b.trim());
-      // 如果没有分隔符，尝试按"原文:"分割
       if (blocks.length <= 1 && paraSection.includes('原文')) {
         blocks = paraSection.split(/(?=\n?原文[:：])/).filter(b => b.trim());
       }
+
       intensiveData.paragraphs = blocks.map(b => {
         const orig = extractLabeled(b, '原文');
         const trans = extractLabeled(b, '译文');
         return { original: orig, translation: trans };
       }).filter(p => p.original || p.translation);
-    }
 
-    const boldSection = extractSection(result1, '===重点单词===', '===词汇总结===');
-    if (boldSection) intensiveData.boldText = boldSection.trim();
+      intensiveData.boldText = intensiveData.paragraphs.map(p => p.original).join('\n');
+    }
 
     const vocabSection = extractSection(result1, '===词汇总结===');
     if (vocabSection) {
       intensiveData.vocab = vocabSection.split(/\n/).filter(l => l.trim()).map(l => {
         const word = l.match(/单词[:：]\s*(\S+)/);
-        const phonetic = l.match(/音标[:：]\s*(\S+)/);
+        const phonetic = l.match(/音标[:：]\s*(.+?)\s*\|/);
         const def = l.match(/释义[:：]\s*(.+)/);
         return {
           word: word ? word[1] : '',
-          phonetic: phonetic ? phonetic[1] : '',
+          phonetic: phonetic ? phonetic[1].trim() : '',
           definition: def ? def[1].trim() : ''
         };
       }).filter(v => v.word);
     }
+
     renderIntensiveResult();
+    $('intensiveResult').style.display = '';
 
     // ── 第 2 步：选择题 ──
     $('intensiveStatus').textContent = '正在生成选择题 (2/4)...';
-    const step2Prompt = `你是一位专业的英语阅读教师。请根据以下英文文章内容，生成5道六级难度选择题。
+    const step2Prompt = `你是一位专业的英语阅读教师。请根据以下英文文章出5道阅读理解选择题，难度与六级相当。
 
 文章标题: ${title || '（无标题）'}
 文章内容：
@@ -8080,8 +8107,7 @@ D. <选项D>
 答案: <正确选项字母>
 解析: <解析内容>`;
 
-    const result2 = await callAI(step2Prompt, 3000);
-    if (!result2) throw new Error('第2步 AI 返回为空');
+    const result2 = await callAIWithRetry(step2Prompt, 3000);
     intensiveData.raw += result2 + '\n';
 
     const quizSection = extractSection(result2, '===选择题===');
@@ -8124,8 +8150,7 @@ Q1: <基于文章内容的深度理解性问题>
 Q2: <基于文章推理/延伸的问题>
 Q3: <基于文章评价/批判性思考的问题>`;
 
-    const result3 = await callAI(step3Prompt, 1000);
-    if (!result3) throw new Error('第3步 AI 返回为空');
+    const result3 = await callAIWithRetry(step3Prompt, 1000);
     intensiveData.raw += result3 + '\n';
 
     const qSection = extractSection(result3, '===思考问题===');
@@ -8156,8 +8181,7 @@ A1: <第一个问题的答案>
 A2: <第二个问题的答案>
 A3: <第三个问题的答案>`;
 
-    const result4 = await callAI(step4Prompt, 1500);
-    if (!result4) throw new Error('第4步 AI 返回为空');
+    const result4 = await callAIWithRetry(step4Prompt, 1500);
     intensiveData.raw += result4 + '\n';
 
     const answerSection = extractSection(result4, '===思考问题答案===');
@@ -8173,7 +8197,7 @@ A3: <第三个问题的答案>`;
     showToast('精读完成！');
   } catch (e) {
     showToast('精读失败: ' + (e.message || '未知错误'));
-    console.error(e);
+    console.error('[精读] 完整错误:', e);
   } finally {
     $('btnIntensiveRead').disabled = false;
     stopProgress('intensiveProgress');
