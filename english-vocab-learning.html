@@ -8274,9 +8274,27 @@ function extractSection(text, startLabel, endLabel) {
 }
 
 function extractLabeled(text, label) {
-  const regex = new RegExp(label + '[:：]\\s*([\\s\\S]+?)(?=\\n(?:原文|译文)[:：]|\\n---|\\n===|$)', 's');
-  const m = text.match(regex);
-  return m ? m[1].trim() : '';
+  // 用字符串查找代替正则，更可靠（避免最后一个段落匹配不到的问题）
+  const searchStr = label + ':';
+  const searchStr2 = label + '：';
+  let idx = text.indexOf(searchStr);
+  if (idx === -1) idx = text.indexOf(searchStr2);
+  if (idx === -1) return '';
+  const sepLen = (idx !== -1 && text.indexOf(searchStr, idx) === idx) ? searchStr.length : searchStr2.length;
+
+  let rest = text.substring(idx + sepLen).trimStart();
+
+  if (label === '原文') {
+    // 原文遇到下一个"译文:"就停止
+    const endIdx = rest.search(/\n译文[:：]/);
+    if (endIdx !== -1) return rest.substring(0, endIdx).trim();
+    return rest.trim();
+  } else {
+    // 译文取到块末尾（遇到下一个"原文:"或结束）
+    const endIdx = rest.search(/\n原文[:：]/);
+    if (endIdx !== -1) return rest.substring(0, endIdx).trim();
+    return rest.trim();
+  }
 }
 
 function renderIntensiveResult() {
@@ -8533,6 +8551,7 @@ td { padding: 8px 10px; border-bottom: 1px solid #eee; }
   html += '</body></html>';
 
   // 用 html2pdf 生成 PDF
+  // 注意：容器必须在可视区域内且可见，html2canvas 才能正确渲染
   const container = document.createElement('div');
   container.style.position = 'fixed';
   container.style.top = '0';
@@ -8540,7 +8559,6 @@ td { padding: 8px 10px; border-bottom: 1px solid #eee; }
   container.style.width = '800px';
   container.style.background = '#fff';
   container.style.zIndex = '-9999';
-  container.style.visibility = 'hidden';
   container.style.pointerEvents = 'none';
   container.innerHTML = html;
   document.body.appendChild(container);
@@ -8549,12 +8567,11 @@ td { padding: 8px 10px; border-bottom: 1px solid #eee; }
     margin:        [10, 10, 10, 10],
     filename:      (intensiveData.title || '文章精读报告') + '_' + new Date().toISOString().slice(0, 10) + '.pdf',
     image:         { type: 'jpeg', quality: 0.95 },
-    html2canvas:   { scale: 2, useCORS: true, letterRendering: true },
+    html2canvas:   { scale: 2, useCORS: true, letterRendering: true, backgroundColor: '#fff' },
     jsPDF:         { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
 
   showToast('正在生成 PDF...');
-  container.style.visibility = 'visible';
   html2pdf().set(opt).from(container).save().then(() => {
     document.body.removeChild(container);
     showToast('导出成功！');
