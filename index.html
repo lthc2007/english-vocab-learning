@@ -1545,7 +1545,10 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
     <div class="card">
       <div class="card-header">
         <span>批改记录</span>
-        <button class="btn btn-danger btn-sm" onclick="clearAllCorrections()" id="btnClearHistory" style="display:none;">清空全部记录</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-accent btn-sm" onclick="cloudUploadCorrections()" id="btnCloudUploadCorrections" style="background:var(--gold);color:#fff;font-size:0.78rem;padding:3px 10px;">☁️ 上传到云端</button>
+          <button class="btn btn-danger btn-sm" onclick="clearAllCorrections()" id="btnClearHistory" style="display:none;">清空全部记录</button>
+        </div>
       </div>
       <div id="historyEmpty" class="empty-state">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -2950,7 +2953,7 @@ async function cloudUpload() {
         .from('user_words')
         .upsert({
           user_id: userId,
-          words: { words: appData.words, sentences: appData.sentences || [] },
+          words: { words: appData.words, sentences: appData.sentences || [], corrections: loadHistory() },
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' });
     });
@@ -2963,6 +2966,58 @@ async function cloudUpload() {
   } catch (e) {
     showToast('上传失败: ' + (e.message || '网络错误'));
     $('cloudStatusDot').className = 'cloud-status offline';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '☁️ 上传到云端';
+  }
+}
+
+// Upload corrections only to cloud
+async function cloudUploadCorrections() {
+  const history = loadHistory();
+  if (history.length === 0) { showToast('没有批改记录可上传'); return; }
+  if (!sbClient || !initSupabase()) { showToast('请先登录'); return; }
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (!session) { showToast('登录已过期，请重新登录'); updateCloudUI(false); return; }
+
+  const btn = $('btnCloudUploadCorrections');
+  btn.disabled = true;
+  btn.textContent = '⏳ 上传中...';
+
+  try {
+    const userId = session.user.id;
+    // 先获取现有数据
+    const { data: existing } = await withRetry(function() {
+      return sbClient
+        .from('user_words')
+        .select('words')
+        .eq('user_id', userId)
+        .single();
+    });
+
+    let existingData = {};
+    if (existing && existing.words) {
+      existingData = Array.isArray(existing.words) ? { words: existing.words } : existing.words;
+    }
+
+    const { error } = await withRetry(function() {
+      return sbClient
+        .from('user_words')
+        .upsert({
+          user_id: userId,
+          words: {
+            words: existingData.words || appData.words,
+            sentences: existingData.sentences || appData.sentences || [],
+            corrections: history
+          },
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' });
+    });
+
+    if (error) throw error;
+    showToast('批改记录已上传到云端 ✓ (' + history.length + ' 条)');
+  } catch (e) {
+    showToast('上传失败: ' + (e.message || '网络错误'));
   } finally {
     btn.disabled = false;
     btn.textContent = '☁️ 上传到云端';
@@ -2996,17 +3051,19 @@ async function cloudDownload() {
       return;
     }
 
-    // Parse cloud data: support both old format (array) and new format ({words, sentences})
+    // Parse cloud data: support both old format (array) and new format ({words, sentences, corrections})
     const cloudWords = Array.isArray(data.words) ? data.words : (data.words.words || []);
     const cloudSentences = Array.isArray(data.words) ? [] : (data.words.sentences || []);
+    const cloudCorrections = Array.isArray(data.words) ? [] : (data.words.corrections || []);
 
     // 云端数据完全替换本地（云端是唯一真相来源）
     appData.words = cloudWords;
     appData.sentences = cloudSentences;
     persist();
     renderWordTable();
+    if (cloudCorrections.length > 0) { saveHistory(cloudCorrections); renderHistory(); }
     $('cloudSyncTime').textContent = '云端时间: ' + new Date(data.updated_at).toLocaleString('zh-CN');
-    showToast('已从云端下载 ' + cloudWords.length + ' 个单词、' + cloudSentences.length + ' 个好句');
+    showToast('已从云端下载 ' + cloudWords.length + ' 个单词、' + cloudSentences.length + ' 个好句、' + cloudCorrections.length + ' 条批改记录');
     $('cloudStatusDot').className = 'cloud-status synced';
     syncStudyTimeFromCloud();
   } catch (e) {
