@@ -7775,36 +7775,9 @@ td { padding: 8px 10px; border-bottom: 1px solid #eee; }
       }, 300);
     };
   } else {
-    // 弹窗被拦截，尝试 html2pdf 降级
-    showToast('弹窗被拦截，尝试 html2pdf...');
-    const container = document.createElement('div');
-    container.id = 'pdf-export-container';
-    container.style.cssText = 'position:fixed;left:0;top:0;width:800px;background:#fff;z-index:2147483647;';
-    container.innerHTML = htmlContent;
-    document.body.appendChild(container);
-
-    setTimeout(() => {
-      const opt = {
-        margin: [10, 10, 10, 10],
-        filename: '单词列表_' + new Date().toISOString().slice(0, 10) + '.pdf',
-        image: { type: 'jpeg', quality: 0.95 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-      html2pdf().set(opt).from(container).save().then(() => {
-        document.body.removeChild(container);
-        showToast('导出成功！');
-      }).catch(err => {
-        console.error('[PDF导出] 失败:', err);
-        document.body.removeChild(container);
-        showToast('导出失败，请检查控制台');
-      });
-    }, 500);
+    showToast('弹窗被拦截，请允许弹窗后重试');
   }
 }
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<!-- Hidden print area for export -->
-<div id="printArea" style="display:none;"></div>
 </body>
 </html>
