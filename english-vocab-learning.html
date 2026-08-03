@@ -7945,7 +7945,7 @@ A3: <第三个问题的答案>
 
 注意：选择题难度应与六级阅读理解相当。每个选择题必须有4个选项、正确答案字母和解析。重点单词用**加粗**标记。词汇总结每个单词一行，包含音标和中文释义。`;
 
-    const result = await callAI(prompt, 16000);
+    const result = await callAI(prompt, 10000);
     if (!result) { throw new Error('AI 返回为空'); }
 
     intensiveData = { raw: result, title: title, questions: [], paragraphs: [], boldText: '', vocab: [], quiz: [], answers: [] };
@@ -8224,80 +8224,123 @@ function clearIntensive() {
 function exportIntensive() {
   if (!intensiveData) { showToast('没有可导出的内容'); return; }
 
-  let content = '';
-
-  // 标题
+  // 构建导出用的 HTML
   const title = intensiveData.title || '文章精读报告';
-  content += title + '\n';
-  content += '='.repeat(Math.min(title.length * 2, 50)) + '\n\n';
+  let html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+body { font-family: "Noto Serif SC", "SimSun", serif; font-size: 14px; line-height: 1.8; color: #222; padding: 30px; max-width: 800px; margin: 0 auto; }
+h1 { font-size: 22px; text-align: center; color: #2d5a5a; margin-bottom: 24px; border-bottom: 2px solid #c9a96e; padding-bottom: 12px; }
+h2 { font-size: 17px; color: #2d5a5a; margin-top: 24px; margin-bottom: 12px; border-left: 4px solid #c9a96e; padding-left: 10px; }
+.section { margin-bottom: 20px; }
+.q-item { background: #f5f3f0; padding: 10px 14px; margin-bottom: 8px; border-left: 4px solid #2d5a5a; border-radius: 4px; }
+.para-block { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ddd; }
+.para-en { font-size: 14px; line-height: 1.8; margin-bottom: 6px; }
+.para-cn { font-size: 13px; color: #666; background: #f8f6f4; padding: 8px 12px; border-radius: 4px; }
+.vocab-bold { font-weight: 700; color: #2d5a5a; border-bottom: 2px solid #c9a96e; padding: 0 2px; }
+table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+th { background: #f0eeeb; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #ddd; }
+td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+.quiz-item { margin-bottom: 16px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+.quiz-q { font-weight: 600; margin-bottom: 6px; }
+.quiz-opt { margin: 3px 0; padding: 4px 8px; }
+.answer { color: #2d5a5a; font-weight: 600; }
+.explain { color: #555; font-size: 13px; margin-top: 4px; }
+.a-item { background: #f0faf2; padding: 10px 14px; margin-bottom: 8px; border-left: 4px solid #5a8f6e; border-radius: 4px; }
+.footer { text-align: center; font-size: 11px; color: #999; margin-top: 30px; border-top: 1px solid #eee; padding-top: 12px; }
+</style></head><body>
+<h1>${escapeHtml(title)}</h1>`;
 
   // 思考问题
   if (intensiveData.questions.length >= 3) {
-    content += '【思考问题】\n';
+    html += '<div class="section"><h2>思考问题</h2>';
     intensiveData.questions.forEach((q, i) => {
-      content += `问题 ${i + 1}: ${q}\n`;
+      html += `<div class="q-item"><strong>问题 ${i + 1}.</strong> ${escapeHtml(q)}</div>`;
     });
-    content += '\n';
+    html += '</div>';
   }
 
   // 段落对照
   if (intensiveData.paragraphs.length > 0) {
-    content += '【原文 & 译文】\n';
+    html += '<div class="section"><h2>原文 & 译文</h2>';
     intensiveData.paragraphs.forEach((p, i) => {
-      content += `\n--- 段落 ${i + 1} ---\n`;
-      content += `原文: ${p.original}\n`;
-      content += `译文: ${p.translation}\n`;
+      let enHtml = escapeHtml(p.original).replace(/\*\*(.+?)\*\*/g, '<strong class="vocab-bold">$1</strong>');
+      html += `<div class="para-block">
+        <div class="para-en"><strong>Paragraph ${i + 1}</strong><br>${enHtml}</div>
+        <div class="para-cn"><strong>译文：</strong>${escapeHtml(p.translation)}</div>
+      </div>`;
     });
-    content += '\n';
+    html += '</div>';
   }
 
   // 词汇总结
   if (intensiveData.vocab.length > 0) {
-    content += '【重点词汇总结】\n';
-    content += '单词\t音标\t释义\n';
-    content += '-'.repeat(50) + '\n';
+    html += '<div class="section"><h2>重点词汇总结</h2><table><thead><tr><th>单词</th><th>音标</th><th>释义</th></tr></thead><tbody>';
     intensiveData.vocab.forEach(v => {
-      content += `${v.word}\t${v.phonetic}\t${v.definition}\n`;
+      html += `<tr><td><strong>${escapeHtml(v.word)}</strong></td><td><em>${escapeHtml(v.phonetic)}</em></td><td>${escapeHtml(v.definition)}</td></tr>`;
     });
-    content += '\n';
+    html += '</tbody></table></div>';
   }
 
   // 选择题
   if (intensiveData.quiz.length >= 5) {
-    content += '【阅读理解选择题】\n\n';
+    html += '<div class="section"><h2>阅读理解选择题</h2>';
     const labels = ['A', 'B', 'C', 'D'];
     intensiveData.quiz.forEach((q, i) => {
-      content += `第 ${i + 1} 题: ${q.question}\n`;
+      html += `<div class="quiz-item">
+        <div class="quiz-q">${i + 1}. ${escapeHtml(q.question)}</div>`;
       q.options.forEach((opt, j) => {
-        content += `  ${labels[j]}. ${opt}\n`;
+        html += `<div class="quiz-opt">${labels[j]}. ${escapeHtml(opt)}</div>`;
       });
-      content += `  答案: ${q.answer}\n`;
-      content += `  解析: ${q.explanation}\n\n`;
+      html += `<div class="answer">答案：${q.answer}</div>
+        <div class="explain">解析：${escapeHtml(q.explanation)}</div>
+      </div>`;
     });
+    html += '</div>';
   }
 
   // 思考问题答案
   if (intensiveData.answers.length >= 3) {
-    content += '【思考问题答案】\n';
+    html += '<div class="section"><h2>思考问题答案</h2>';
     intensiveData.answers.forEach((a, i) => {
-      content += `答案 ${i + 1}: ${a}\n`;
+      html += `<div class="a-item"><strong>答案 ${i + 1}.</strong> ${escapeHtml(a)}</div>`;
     });
+    html += '</div>';
   }
 
-  // 创建下载
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  const fileName = (intensiveData.title || '文章精读报告') + '_' + new Date().toISOString().slice(0, 10) + '.txt';
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showToast('导出成功！');
+  html += `<div class="footer">由英语学习助手生成 · ${new Date().toLocaleDateString('zh-CN')}</div>`;
+  html += '</body></html>';
+
+  // 用 html2pdf 生成 PDF
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '-9999px';
+  container.style.top = '0';
+  container.style.width = '800px';
+  container.style.background = '#fff';
+  container.style.zIndex = '-1';
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  const opt = {
+    margin:        [10, 10, 10, 10],
+    filename:      (intensiveData.title || '文章精读报告') + '_' + new Date().toISOString().slice(0, 10) + '.pdf',
+    image:         { type: 'jpeg', quality: 0.95 },
+    html2canvas:   { scale: 2, useCORS: true, letterRendering: true },
+    jsPDF:         { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  showToast('正在生成 PDF...');
+  html2pdf().set(opt).from(container).save().then(() => {
+    document.body.removeChild(container);
+    showToast('导出成功！');
+  }).catch(err => {
+    document.body.removeChild(container);
+    showToast('导出失败: ' + (err.message || '未知错误'));
+    console.error(err);
+  });
 }
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <!-- Hidden print area for export -->
 <div id="printArea" style="display:none;"></div>
 </body>
