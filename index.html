@@ -8025,17 +8025,52 @@ ${text}
     // 解析第1步结果
     const paraSection = extractSection(result1, '===段落对照===', '===词汇总结===');
     if (paraSection) {
-      let blocks = paraSection.split(/\n---\n?/).filter(b => b.trim());
-      if (blocks.length <= 1 && paraSection.includes('原文')) {
-        blocks = paraSection.split(/(?=\n?原文[:：])/).filter(b => b.trim());
+      // 用正则匹配所有 "原文:" 出现的位置来分割段落
+      const paraBlocks = [];
+      const lines = paraSection.split('\n');
+      let currentOrig = '';
+      let currentTrans = '';
+      let currentField = ''; // 当前正在读 '原文' 还是 '译文'
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed === '---' || trimmed === '') {
+          if (trimmed === '---' && (currentOrig || currentTrans)) {
+            paraBlocks.push({ original: currentOrig.trim(), translation: currentTrans.trim() });
+            currentOrig = '';
+            currentTrans = '';
+            currentField = '';
+          }
+          continue;
+        }
+
+        if (/^原文[:：]/.test(trimmed)) {
+          // 如果已有内容，先保存上一段
+          if (currentOrig && currentField === '译文') {
+            paraBlocks.push({ original: currentOrig.trim(), translation: currentTrans.trim() });
+            currentOrig = '';
+            currentTrans = '';
+          }
+          currentField = '原文';
+          currentOrig = trimmed.replace(/^原文[:：]\s*/, '');
+        } else if (/^译文[:：]/.test(trimmed)) {
+          currentField = '译文';
+          currentTrans = trimmed.replace(/^译文[:：]\s*/, '');
+        } else {
+          // 续行
+          if (currentField === '原文') {
+            currentOrig += '\n' + trimmed;
+          } else if (currentField === '译文') {
+            currentTrans += '\n' + trimmed;
+          }
+        }
+      }
+      // 保存最后一段
+      if (currentOrig || currentTrans) {
+        paraBlocks.push({ original: currentOrig.trim(), translation: currentTrans.trim() });
       }
 
-      intensiveData.paragraphs = blocks.map(b => {
-        const orig = extractLabeled(b, '原文');
-        const trans = extractLabeled(b, '译文');
-        return { original: orig, translation: trans };
-      }).filter(p => p.original || p.translation);
-
+      intensiveData.paragraphs = paraBlocks.filter(p => p.original || p.translation);
       intensiveData.boldText = intensiveData.paragraphs.map(p => p.original).join('\n');
     }
 
@@ -8298,27 +8333,31 @@ function extractSection(text, startLabel, endLabel) {
 }
 
 function extractLabeled(text, label) {
-  // 用字符串查找代替正则，更可靠（避免最后一个段落匹配不到的问题）
-  const searchStr = label + ':';
-  const searchStr2 = label + '：';
-  let idx = text.indexOf(searchStr);
-  if (idx === -1) idx = text.indexOf(searchStr2);
-  if (idx === -1) return '';
-  const sepLen = (idx !== -1 && text.indexOf(searchStr, idx) === idx) ? searchStr.length : searchStr2.length;
-
-  let rest = text.substring(idx + sepLen).trimStart();
-
-  if (label === '原文') {
-    // 原文遇到下一个"译文:"就停止
-    const endIdx = rest.search(/\n译文[:：]/);
-    if (endIdx !== -1) return rest.substring(0, endIdx).trim();
-    return rest.trim();
-  } else {
-    // 译文取到块末尾（遇到下一个"原文:"或结束）
-    const endIdx = rest.search(/\n原文[:：]/);
-    if (endIdx !== -1) return rest.substring(0, endIdx).trim();
-    return rest.trim();
+  // 先找 "原文:" 或 "原文：" 的位置
+  const patterns = [label + ':', label + '：'];
+  let startIdx = -1;
+  for (const p of patterns) {
+    const idx = text.indexOf(p);
+    if (idx !== -1) {
+      startIdx = idx + p.length;
+      break;
+    }
   }
+  if (startIdx === -1) return '';
+
+  // 从 startIdx 开始，找到下一个 "原文:" / "译文:" / "---" / 文本末尾
+  const rest = text.substring(startIdx);
+  const endPatterns = [/\n原文[:：]/, /\n译文[:：]/, /\n---/, /\n===/];
+  let endIdx = rest.length; // 默认到末尾
+
+  for (const ep of endPatterns) {
+    const m = rest.match(ep);
+    if (m && m.index < endIdx) {
+      endIdx = m.index;
+    }
+  }
+
+  return rest.substring(0, endIdx).trim();
 }
 
 function renderIntensiveResult() {
@@ -8488,122 +8527,107 @@ function clearIntensive() {
 function exportIntensive() {
   if (!intensiveData) { showToast('没有可导出的内容'); return; }
 
-  // 构建导出用的 HTML
   const title = intensiveData.title || '文章精读报告';
-  let html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<style>
-body { font-family: "Noto Serif SC", "SimSun", serif; font-size: 14px; line-height: 1.8; color: #222; padding: 30px; max-width: 800px; margin: 0 auto; }
-h1 { font-size: 22px; text-align: center; color: #2d5a5a; margin-bottom: 24px; border-bottom: 2px solid #c9a96e; padding-bottom: 12px; }
-h2 { font-size: 17px; color: #2d5a5a; margin-top: 24px; margin-bottom: 12px; border-left: 4px solid #c9a96e; padding-left: 10px; }
-.section { margin-bottom: 20px; }
-.q-item { background: #f5f3f0; padding: 10px 14px; margin-bottom: 8px; border-left: 4px solid #2d5a5a; border-radius: 4px; }
-.para-block { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ddd; }
-.para-en { font-size: 14px; line-height: 1.8; margin-bottom: 6px; }
-.para-cn { font-size: 13px; color: #666; background: #f8f6f4; padding: 8px 12px; border-radius: 4px; }
-.vocab-bold { font-weight: 700; color: #2d5a5a; border-bottom: 2px solid #c9a96e; padding: 0 2px; }
-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
-th { background: #f0eeeb; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #ddd; }
-td { padding: 8px 10px; border-bottom: 1px solid #eee; }
-.quiz-item { margin-bottom: 16px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
-.quiz-q { font-weight: 600; margin-bottom: 6px; }
-.quiz-opt { margin: 3px 0; padding: 4px 8px; }
-.answer { color: #2d5a5a; font-weight: 600; }
-.explain { color: #555; font-size: 13px; margin-top: 4px; }
-.a-item { background: #f0faf2; padding: 10px 14px; margin-bottom: 8px; border-left: 4px solid #5a8f6e; border-radius: 4px; }
-.footer { text-align: center; font-size: 11px; color: #999; margin-top: 30px; border-top: 1px solid #eee; padding-top: 12px; }
-</style></head><body>
-<h1>${escapeHtml(title)}</h1>`;
 
-  // 思考问题
+  // 构建纯文本 HTML（不依赖外部 CSS 变量）
+  let html = `
+<div style="font-family: 'Noto Serif SC', 'SimSun', serif; font-size: 14px; line-height: 1.8; color: #222; max-width: 800px; margin: 0 auto; padding: 20px;">
+<h1 style="font-size: 22px; text-align: center; color: #2d5a5a; margin-bottom: 24px; border-bottom: 2px solid #c9a96e; padding-bottom: 12px;">${escapeHtml(title)}</h1>`;
+
   if (intensiveData.questions.length >= 3) {
-    html += '<div class="section"><h2>思考问题</h2>';
+    html += '<h2 style="font-size: 17px; color: #2d5a5a; margin-top: 24px; margin-bottom: 12px; border-left: 4px solid #c9a96e; padding-left: 10px;">思考问题</h2>';
     intensiveData.questions.forEach((q, i) => {
-      html += `<div class="q-item"><strong>问题 ${i + 1}.</strong> ${escapeHtml(q)}</div>`;
+      html += `<div style="background: #f5f3f0; padding: 10px 14px; margin-bottom: 8px; border-left: 4px solid #2d5a5a; border-radius: 4px;"><strong>问题 ${i + 1}.</strong> ${escapeHtml(q)}</div>`;
     });
-    html += '</div>';
   }
 
-  // 段落对照
   if (intensiveData.paragraphs.length > 0) {
-    html += '<div class="section"><h2>原文 & 译文</h2>';
+    html += '<h2 style="font-size: 17px; color: #2d5a5a; margin-top: 24px; margin-bottom: 12px; border-left: 4px solid #c9a96e; padding-left: 10px;">原文 & 译文</h2>';
     intensiveData.paragraphs.forEach((p, i) => {
-      let enHtml = escapeHtml(p.original).replace(/\*\*(.+?)\*\*/g, '<strong class="vocab-bold">$1</strong>');
-      html += `<div class="para-block">
-        <div class="para-en"><strong>Paragraph ${i + 1}</strong><br>${enHtml}</div>
-        <div class="para-cn"><strong>译文：</strong>${escapeHtml(p.translation)}</div>
+      let enHtml = escapeHtml(p.original).replace(/\*\*(.+?)\*\*/g, '<strong style="color: #2d5a5a; border-bottom: 2px solid #c9a96e;">$1</strong>');
+      html += `<div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
+        <div style="font-weight: 600; margin-bottom: 4px; color: #2d5a5a;">Paragraph ${i + 1}</div>
+        <div style="font-size: 14px; line-height: 1.8; margin-bottom: 6px;">${enHtml}</div>
+        <div style="font-size: 13px; color: #666; background: #f8f6f4; padding: 8px 12px; border-radius: 4px;"><strong>译文：</strong>${escapeHtml(p.translation)}</div>
       </div>`;
     });
-    html += '</div>';
   }
 
-  // 词汇总结
   if (intensiveData.vocab.length > 0) {
-    html += '<div class="section"><h2>重点词汇总结</h2><table><thead><tr><th>单词</th><th>音标</th><th>释义</th></tr></thead><tbody>';
+    html += '<h2 style="font-size: 17px; color: #2d5a5a; margin-top: 24px; margin-bottom: 12px; border-left: 4px solid #c9a96e; padding-left: 10px;">重点词汇总结</h2>';
+    html += '<table style="width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px;"><thead><tr><th style="background: #f0eeeb; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #ddd;">单词</th><th style="background: #f0eeeb; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #ddd;">音标</th><th style="background: #f0eeeb; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid #ddd;">释义</th></tr></thead><tbody>';
     intensiveData.vocab.forEach(v => {
-      html += `<tr><td><strong>${escapeHtml(v.word)}</strong></td><td><em>${escapeHtml(v.phonetic)}</em></td><td>${escapeHtml(v.definition)}</td></tr>`;
+      html += `<tr><td style="padding: 8px 10px; border-bottom: 1px solid #eee;"><strong>${escapeHtml(v.word)}</strong></td><td style="padding: 8px 10px; border-bottom: 1px solid #eee;"><em>${escapeHtml(v.phonetic)}</em></td><td style="padding: 8px 10px; border-bottom: 1px solid #eee;">${escapeHtml(v.definition)}</td></tr>`;
     });
-    html += '</tbody></table></div>';
+    html += '</tbody></table>';
   }
 
-  // 选择题
-  if (intensiveData.quiz.length >= 5) {
-    html += '<div class="section"><h2>阅读理解选择题</h2>';
+  if (intensiveData.quiz.length >= 3) {
+    html += '<h2 style="font-size: 17px; color: #2d5a5a; margin-top: 24px; margin-bottom: 12px; border-left: 4px solid #c9a96e; padding-left: 10px;">阅读理解选择题</h2>';
     const labels = ['A', 'B', 'C', 'D'];
     intensiveData.quiz.forEach((q, i) => {
-      html += `<div class="quiz-item">
-        <div class="quiz-q">${i + 1}. ${escapeHtml(q.question)}</div>`;
+      html += `<div style="margin-bottom: 16px; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+        <div style="font-weight: 600; margin-bottom: 6px;">${i + 1}. ${escapeHtml(q.question)}</div>`;
       q.options.forEach((opt, j) => {
-        html += `<div class="quiz-opt">${labels[j]}. ${escapeHtml(opt)}</div>`;
+        html += `<div style="margin: 3px 0; padding: 4px 8px;">${labels[j]}. ${escapeHtml(opt)}</div>`;
       });
-      html += `<div class="answer">答案：${q.answer}</div>
-        <div class="explain">解析：${escapeHtml(q.explanation)}</div>
+      html += `<div style="color: #2d5a5a; font-weight: 600; margin-top: 4px;">答案：${q.answer}</div>
+        <div style="color: #555; font-size: 13px; margin-top: 4px;">解析：${escapeHtml(q.explanation)}</div>
       </div>`;
     });
-    html += '</div>';
   }
 
-  // 思考问题答案
   if (intensiveData.answers.length >= 3) {
-    html += '<div class="section"><h2>思考问题答案</h2>';
+    html += '<h2 style="font-size: 17px; color: #2d5a5a; margin-top: 24px; margin-bottom: 12px; border-left: 4px solid #c9a96e; padding-left: 10px;">思考问题答案</h2>';
     intensiveData.answers.forEach((a, i) => {
-      html += `<div class="a-item"><strong>答案 ${i + 1}.</strong> ${escapeHtml(a)}</div>`;
+      html += `<div style="background: #f0faf2; padding: 10px 14px; margin-bottom: 8px; border-left: 4px solid #5a8f6e; border-radius: 4px;"><strong>答案 ${i + 1}.</strong> ${escapeHtml(a)}</div>`;
     });
-    html += '</div>';
   }
 
-  html += `<div class="footer">由英语学习助手生成 · ${new Date().toLocaleDateString('zh-CN')}</div>`;
-  html += '</body></html>';
+  html += `<div style="text-align: center; font-size: 11px; color: #999; margin-top: 30px; border-top: 1px solid #eee; padding-top: 12px;">由英语学习助手生成 · ${new Date().toLocaleDateString('zh-CN')}</div>`;
+  html += '</div>';
 
-  // 用 html2pdf 生成 PDF
-  // 注意：容器必须在可视区域内且可见，html2canvas 才能正确渲染
+  // 创建容器 — 放在可视区域内，用 z-index 隐藏
   const container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.top = '0';
-  container.style.left = '0';
-  container.style.width = '800px';
-  container.style.background = '#fff';
-  container.style.zIndex = '-9999';
-  container.style.pointerEvents = 'none';
+  container.id = 'pdf-export-container';
+  container.style.cssText = 'position:fixed; top:0; left:0; width:800px; background:#fff; z-index:-9999;';
   container.innerHTML = html;
   document.body.appendChild(container);
 
-  const opt = {
-    margin:        [10, 10, 10, 10],
-    filename:      (intensiveData.title || '文章精读报告') + '_' + new Date().toISOString().slice(0, 10) + '.pdf',
-    image:         { type: 'jpeg', quality: 0.95 },
-    html2canvas:   { scale: 2, useCORS: true, letterRendering: true, backgroundColor: '#fff' },
-    jsPDF:         { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  };
-
   showToast('正在生成 PDF...');
-  html2pdf().set(opt).from(container).save().then(() => {
-    document.body.removeChild(container);
-    showToast('导出成功！');
-  }).catch(err => {
-    document.body.removeChild(container);
-    showToast('导出失败: ' + (err.message || '未知错误'));
-    console.error(err);
-  });
+
+  // 等待 DOM 渲染完成
+  setTimeout(() => {
+    const opt = {
+      margin: [10, 10, 10, 10],
+      filename: (intensiveData.title || '文章精读报告') + '_' + new Date().toISOString().slice(0, 10) + '.pdf',
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(container).save().then(() => {
+      document.body.removeChild(container);
+      showToast('导出成功！');
+    }).catch(err => {
+      console.error('[PDF导出] html2pdf 失败:', err);
+      // 降级方案：用 window.print()
+      document.body.removeChild(container);
+
+      const printWin = window.open('', '_blank');
+      if (printWin) {
+        printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escapeHtml(title)}</title></head><body>${html}</body></html>`);
+        printWin.document.close();
+        printWin.onload = () => {
+          printWin.print();
+          printWin.close();
+        };
+        showToast('已打开打印窗口，请选择"另存为 PDF"');
+      } else {
+        showToast('导出失败，请允许弹窗后重试');
+      }
+    });
+  }, 500);
 }
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
