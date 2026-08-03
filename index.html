@@ -1256,6 +1256,44 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
 }
 .intensive-score span { font-size: 1rem; color: var(--muted); font-weight: 400; }
 
+/* ── 词汇总结表格 ── */
+.vocab-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.vocab-table th {
+  background: var(--bg);
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1.5px solid var(--rule);
+  font-family: var(--font-body);
+}
+.vocab-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.vocab-table tr:last-child td { border-bottom: none; }
+.vocab-table tr:hover td { background: rgba(201,169,110,0.06); }
+.vocab-word {
+  font-weight: 600;
+  color: var(--accent);
+  font-family: var(--font-display);
+}
+.vocab-phonetic {
+  color: var(--muted);
+  font-style: italic;
+  font-size: 0.85rem;
+}
+.vocab-def {
+  color: var(--ink);
+}
+
 .diff-selector { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .diff-btn {
   padding: 8px 22px;
@@ -2131,8 +2169,15 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <span>文章精读</span>
         <span style="font-size:0.75rem;color:var(--muted);">粘贴文章，AI 精读分析</span>
       </div>
-      <textarea id="intensiveText" placeholder="在此粘贴英文文章..." style="width:100%;height:220px;font-family:var(--font-body);font-size:0.9rem;line-height:1.6;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink);resize:vertical;"></textarea>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;">
+      <div class="form-group">
+        <label class="form-label">文章标题</label>
+        <input class="form-input" id="intensiveTitle" type="text" placeholder="输入文章标题（可选）" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">文章内容</label>
+        <textarea id="intensiveText" placeholder="在此粘贴英文文章..." style="width:100%;height:200px;font-family:var(--font-body);font-size:0.9rem;line-height:1.6;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink);resize:vertical;"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <button class="btn btn-primary btn-lg" id="btnIntensiveRead" onclick="startIntensiveRead()">🤖 AI 精读</button>
         <button class="btn btn-secondary" id="btnIntensiveClear" onclick="clearIntensive()">🗑 清除</button>
         <span id="intensiveStatus" style="font-size:0.8rem;color:var(--muted);"></span>
@@ -2163,7 +2208,15 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <div id="intensiveParagraphs" class="intensive-paragraphs"></div>
       </div>
 
-      <!-- 3. 选择题 -->
+      <!-- 3. 重点词汇总结 -->
+      <div class="card" id="intensiveVocabCard" style="display:none;">
+        <div class="card-header">
+          <span>📚 重点词汇总结</span>
+        </div>
+        <div id="intensiveVocab" class="intensive-vocab"></div>
+      </div>
+
+      <!-- 4. 选择题 -->
       <div class="card" id="intensiveQuizCard">
         <div class="card-header">
           <span>📝 阅读理解选择题</span>
@@ -2176,7 +2229,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <div id="intensiveQuizResult" style="display:none;margin-top:16px;"></div>
       </div>
 
-      <!-- 4. 思考问题答案 -->
+      <!-- 5. 思考问题答案（在选择题下方） -->
       <div class="card" id="intensiveAnswersCard" style="display:none;">
         <div class="card-header">
           <span>💡 思考问题答案</span>
@@ -2184,7 +2237,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <div id="intensiveAnswers" class="intensive-answers"></div>
       </div>
 
-      <!-- 5. 导出 -->
+      <!-- 6. 导出 -->
       <div class="card" style="text-align:center;">
         <button class="btn btn-accent btn-lg" onclick="exportIntensive()">📥 导出全部内容</button>
       </div>
@@ -7807,6 +7860,7 @@ document.addEventListener('keydown', function(e) {
 let intensiveData = null;
 
 async function startIntensiveRead() {
+  const title = $('intensiveTitle').value.trim();
   const text = $('intensiveText').value.trim();
   if (!text) { showToast('请先粘贴文章内容'); return; }
   if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
@@ -7820,6 +7874,7 @@ async function startIntensiveRead() {
   try {
     const prompt = `你是一位专业的英语阅读教师。请对以下英文文章进行精读分析，并严格按照下面的格式输出，每个部分用明确的标签分隔，不要添加额外说明。
 
+文章标题: ${title || '（无标题）'}
 文章内容：
 ${text}
 
@@ -7837,6 +7892,10 @@ Q3: <第三个思考问题，基于文章评价/批判性思考的问题>
 
 ===重点单词===
 <在原文中，对四六级考研常考重点单词用**加粗**标记，输出完整原文，单词用**单词**包裹>
+
+===词汇总结===
+<对文章中标注的重点单词，按以下格式逐一列出，每个单词一行>
+单词: <英文单词> | 音标: <国际音标> | 释义: <中文释义>
 
 ===选择题===
 Q1: <选择题题干>
@@ -7884,12 +7943,12 @@ A1: <第一个问题的答案>
 A2: <第二个问题的答案>
 A3: <第三个问题的答案>
 
-注意：选择题难度应与六级阅读理解相当。每个选择题必须有4个选项、正确答案字母和解析。重点单词用**加粗**标记。`;
+注意：选择题难度应与六级阅读理解相当。每个选择题必须有4个选项、正确答案字母和解析。重点单词用**加粗**标记。词汇总结每个单词一行，包含音标和中文释义。`;
 
     const result = await callAI(prompt, 16000);
     if (!result) { throw new Error('AI 返回为空'); }
 
-    intensiveData = { raw: result, questions: [], paragraphs: [], boldText: '', quiz: [], answers: [] };
+    intensiveData = { raw: result, title: title, questions: [], paragraphs: [], boldText: '', vocab: [], quiz: [], answers: [] };
     parseIntensiveResult(result);
     renderIntensiveResult();
     $('intensiveResult').style.display = '';
@@ -7927,9 +7986,24 @@ function parseIntensiveResult(text) {
   }
 
   // 提取重点单词加粗后的原文
-  const boldSection = extractSection(text, '===重点单词===', '===选择题===');
+  const boldSection = extractSection(text, '===重点单词===', '===词汇总结===');
   if (boldSection) {
     intensiveData.boldText = boldSection.trim();
+  }
+
+  // 提取词汇总结
+  const vocabSection = extractSection(text, '===词汇总结===', '===选择题===');
+  if (vocabSection) {
+    intensiveData.vocab = vocabSection.split(/\n/).filter(l => l.trim()).map(l => {
+      const word = l.match(/单词[:：]\s*(\S+)/);
+      const phonetic = l.match(/音标[:：]\s*(\S+)/);
+      const def = l.match(/释义[:：]\s*(.+)/);
+      return {
+        word: word ? word[1] : '',
+        phonetic: phonetic ? phonetic[1] : '',
+        definition: def ? def[1].trim() : ''
+      };
+    }).filter(v => v.word);
   }
 
   // 提取选择题
@@ -8006,7 +8080,6 @@ function renderIntensiveResult() {
       let enHtml = escapeHtml(p.original);
       // 应用加粗标记
       if (intensiveData.boldText) {
-        // 对每个段落中的重点单词加粗
         enHtml = enHtml.replace(/\*\*(.+?)\*\*/g, '<strong class="vocab-bold">$1</strong>');
       }
       div.innerHTML = `
@@ -8019,7 +8092,22 @@ function renderIntensiveResult() {
     });
   }
 
-  // 3. 渲染选择题
+  // 3. 渲染词汇总结
+  const vocabContainer = $('intensiveVocab');
+  vocabContainer.innerHTML = '';
+  if (intensiveData.vocab.length > 0) {
+    $('intensiveVocabCard').style.display = '';
+    let html = '<table class="vocab-table"><thead><tr><th>单词</th><th>音标</th><th>释义</th></tr></thead><tbody>';
+    intensiveData.vocab.forEach(v => {
+      html += `<tr><td class="vocab-word">${escapeHtml(v.word)}</td><td class="vocab-phonetic">${escapeHtml(v.phonetic)}</td><td class="vocab-def">${escapeHtml(v.definition)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    vocabContainer.innerHTML = html;
+  } else {
+    $('intensiveVocabCard').style.display = 'none';
+  }
+
+  // 4. 渲染选择题
   const quizContainer = $('intensiveQuiz');
   quizContainer.innerHTML = '';
   $('intensiveQuizResult').style.display = 'none';
@@ -8107,7 +8195,7 @@ function submitIntensiveQuiz() {
     <div class="intensive-score">${correct} / ${total} <span>正确</span></div>
   `;
 
-  // 显示思考问题答案
+  // 显示思考问题答案（在选择题下方）
   if (intensiveData.answers.length >= 3) {
     $('intensiveAnswersCard').style.display = '';
     const aContainer = $('intensiveAnswers');
@@ -8122,6 +8210,7 @@ function submitIntensiveQuiz() {
 }
 
 function clearIntensive() {
+  $('intensiveTitle').value = '';
   $('intensiveText').value = '';
   $('intensiveResult').style.display = 'none';
   $('intensiveLoading').style.display = 'none';
@@ -8138,8 +8227,9 @@ function exportIntensive() {
   let content = '';
 
   // 标题
-  content += '文章精读报告\n';
-  content += '='.repeat(40) + '\n\n';
+  const title = intensiveData.title || '文章精读报告';
+  content += title + '\n';
+  content += '='.repeat(Math.min(title.length * 2, 50)) + '\n\n';
 
   // 思考问题
   if (intensiveData.questions.length >= 3) {
@@ -8157,6 +8247,17 @@ function exportIntensive() {
       content += `\n--- 段落 ${i + 1} ---\n`;
       content += `原文: ${p.original}\n`;
       content += `译文: ${p.translation}\n`;
+    });
+    content += '\n';
+  }
+
+  // 词汇总结
+  if (intensiveData.vocab.length > 0) {
+    content += '【重点词汇总结】\n';
+    content += '单词\t音标\t释义\n';
+    content += '-'.repeat(50) + '\n';
+    intensiveData.vocab.forEach(v => {
+      content += `${v.word}\t${v.phonetic}\t${v.definition}\n`;
     });
     content += '\n';
   }
@@ -8188,7 +8289,8 @@ function exportIntensive() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = '文章精读报告_' + new Date().toISOString().slice(0, 10) + '.txt';
+  const fileName = (intensiveData.title || '文章精读报告') + '_' + new Date().toISOString().slice(0, 10) + '.txt';
+  a.download = fileName;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
