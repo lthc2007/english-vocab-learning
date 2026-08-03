@@ -3639,8 +3639,19 @@ async function testAiConnection() {
       signal: AbortSignal.timeout(15000)
     });
     if (resp.ok) {
-      result.textContent = 'AI 连接成功！模型: ' + reqModel;
-      result.style.color = '#27ae60';
+      const testData = await resp.json().catch(() => null);
+      if (testData && testData.choices?.[0]?.message?.content) {
+        result.textContent = 'AI 连接成功！模型: ' + reqModel + ' — 响应: "' + testData.choices[0].message.content.substring(0, 50) + '"';
+      } else if (testData && testData.error) {
+        const errMsg = typeof testData.error === 'string' ? testData.error : (testData.error.message || JSON.stringify(testData.error));
+        result.textContent = 'API 返回错误: ' + errMsg;
+        result.style.color = '#e74c3c';
+      } else {
+        result.textContent = 'AI 连接成功（HTTP 200），但响应格式异常，请检查代理状态';
+        result.style.color = '#f39c12';
+        console.warn('[testAi] 异常响应:', testData);
+      }
+      result.style.color = result.style.color || '#27ae60';
     } else {
       const err = await resp.text().catch(() => '');
       const short = err.substring(0, 200);
@@ -4363,17 +4374,19 @@ function enqueueAI(prompt, maxTokens) {
 
 async function executeAI(prompt, maxTokens, attempt = 0) {
   const maxAttempts = 4;
+  // 空内容重试时逐步降低 max_tokens，防止模型因 token 限制返回空
+  const tokensForAttempt = Math.min(maxTokens, Math.max(4000, maxTokens >> attempt));
   try {
-    const result = await doCallAI(prompt, maxTokens);
+    const result = await doCallAI(prompt, tokensForAttempt);
     // 检查返回内容是否为空，为空则重试
     if (!result) {
       if (attempt >= maxAttempts - 1) {
         console.warn('[executeAI] 重试耗尽，AI 返回为空');
-        showToast('AI 多次请求均返回空，请检查文章是否过长或 API 状态');
+        showToast('AI 多次请求均返回空，请检查文章是否过长或 API 服务状态');
         return null;
       }
       const delay = Math.min(1000 * Math.pow(2, attempt), 16000);
-      showToast(`AI 返回为空，${delay / 1000}秒后重试 (${attempt + 1}/${maxAttempts})`);
+      showToast(`AI 返回为空，${delay / 1000}秒后自动重试 (${attempt + 1}/${maxAttempts})`);
       await new Promise(r => setTimeout(r, delay));
       return executeAI(prompt, maxTokens, attempt + 1);
     }
@@ -4390,6 +4403,19 @@ async function executeAI(prompt, maxTokens, attempt = 0) {
   }
 }
 const callAI = enqueueAI;
+
+// 各模型最大输出 token 上限（防止设置过高导致 API 返回空）
+function modelMaxOutputTokens(model) {
+  const m = (model || '').toLowerCase();
+  if (m.includes('glm')) return 4096;       // 智谱 GLM 系列（含 Flash/Plus/Air）
+  if (m.includes('deepseek')) return 8192;  // DeepSeek 系列
+  if (m.includes('gpt-4')) return 16384;    // GPT-4 系列
+  if (m.includes('gpt-3.5')) return 4096;   // GPT-3.5
+  if (m.includes('moonshot') || m.includes('kimi')) return 4096;
+  if (m.includes('groq')) return 8192;
+  if (m.includes('doubao') || m.includes('bytedance')) return 4096;
+  return 8192; // 默认安全值
+}
 
 async function doCallAI(prompt, maxTokens = 1500) {
   const isProxy = appData.provider === 'zhipu_free';
@@ -4440,7 +4466,8 @@ async function doCallAI(prompt, maxTokens = 1500) {
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
-        max_tokens: maxTokens,
+        // 不同模型有不同输出上限，GLM 系列最大 4096，DeepSeek 最大 8192，OpenAI 视模型而定
+        max_tokens: Math.min(maxTokens, modelMaxOutputTokens(tryModel)),
       };
       if (appData.provider === 'deepseek') reqBody.thinking = { type: 'disabled' };
 
@@ -4469,11 +4496,42 @@ async function doCallAI(prompt, maxTokens = 1500) {
         throw new Error(fullErr);
       }
       const data = await resp.json();
-      // 安全获取内容：处理 choices 为空或 content 为 null 的情况
-      const content = data.choices?.[0]?.message?.content;
-      if (!content) {
-        console.warn('[doCallAI] 返回内容为空，响应结构:', JSON.stringify(data).slice(0, 500));
+      // 检查 API 返回的错误信息
+      if (data.error) {
+        const errMsg = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
+        console.warn('[doCallAI] API 返回错误:', errMsg);
+        if (attempt < maxAttempts - 1) {
+          lastError = errMsg;
+          await new Promise(r => setTimeout(r, 1000));
+          continue;
+        }
+        throw new Error(errMsg);
+      }
+      // 检查 choices 是否存在
+      const choices = data.choices;
+      if (!choices || choices.length === 0) {
+        console.warn('[doCallAI] choices 为空，响应:', JSON.stringify(data).slice(0, 300));
         return null;
+      }
+      const msg = choices[0].message;
+      const content = msg?.content;
+      const finishReason = choices[0].finish_reason;
+      if (!content) {
+        console.warn(
+          '[doCallAI] content 为空, finish_reason:', finishReason,
+          '响应:', JSON.stringify(data).slice(0, 300)
+        );
+        // 如果 finish_reason 是 length（模型输出 token 上限不足），降低 token 后重试
+        if (finishReason === 'length' && attempt < maxAttempts - 1) {
+          lastError = 'finish_reason=length';
+          await new Promise(r => setTimeout(r, 1000));
+          continue;
+        }
+        return null;
+      }
+      // 输出被截断但仍有内容，返回内容并记录警告
+      if (finishReason === 'length') {
+        console.warn('[doCallAI] 输出被截断 (finish_reason=length)，内容可能不完整');
       }
       return content.trim();
     } catch (err) {
