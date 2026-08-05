@@ -1287,6 +1287,160 @@ body.focus-mode .header,
 body.focus-mode .nav-tabs { display: none; }
 body.focus-mode .main { max-width: 100%; padding: 16px; }
 
+/* ── 语境学词 ── */
+.context-word-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  min-height: 40px;
+  align-items: flex-start;
+}
+.context-word-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-weight: 600;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  color: var(--ink);
+}
+.context-word-chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+.context-word-chip.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.context-word-chip .chip-remove {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-left: 2px;
+  line-height: 1;
+}
+.context-word-chip:hover .chip-remove { color: var(--danger); }
+.context-article {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 20px 24px;
+  font-size: 1rem;
+  line-height: 2;
+  color: var(--ink);
+  margin-bottom: 16px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.context-article .context-word-bold {
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.context-word-summary {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+}
+.context-word-summary-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.context-word-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.context-word-table th {
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  border-bottom: 2px solid var(--rule);
+  font-weight: 600;
+}
+.context-word-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+.context-word-table td:first-child { font-weight: 600; color: var(--accent); }
+.context-word-table .phonetic { color: var(--muted); font-style: italic; font-size: 0.85rem; }
+.context-word-table .phonetic-clickable { cursor: pointer; color: #5a8f6e; font-style: italic; font-size: 0.85rem; transition: color 0.2s; }
+.context-word-table .phonetic-clickable:hover { color: var(--accent); text-decoration: underline; }
+.context-word-table .phonetic-clickable.speaking-phonetic { color: var(--accent); animation: pulse 0.6s infinite; }
+.context-article .context-word-bold {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 1px 4px;
+  border-radius: 3px;
+  transition: background 0.2s;
+  position: relative;
+}
+.context-article .context-word-bold:hover {
+  background: rgba(45,90,90,0.15);
+}
+.context-word-popup {
+  position: fixed;
+  background: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  z-index: 9999;
+  max-width: 240px;
+  pointer-events: none;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+.context-word-popup .popup-word {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 0.95rem;
+}
+.context-word-popup .popup-phonetic {
+  color: var(--muted);
+  font-style: italic;
+  font-size: 0.78rem;
+  margin-left: 6px;
+}
+.context-word-popup .popup-def {
+  color: var(--ink);
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+.context-translation {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  font-size: 0.92rem;
+  line-height: 1.8;
+  color: var(--ink);
+}
+.context-translation::before {
+  content: "📝 中文翻译";
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1347,6 +1501,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
   <div class="nav-inner">
     <button class="nav-tab active" data-tab="lookup">单词查询</button>
     <button class="nav-tab" data-tab="manage">单词管理</button>
+    <button class="nav-tab" data-tab="context">语境学词</button>
     <button class="nav-tab" data-tab="learn">单词卡片</button>
     <button class="nav-tab" data-tab="spell">拼写练习</button>
     <button class="nav-tab" data-tab="quiz">看英选中</button>
@@ -2006,6 +2161,52 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       </div>
     </div>
     </section>
+
+  <!-- Tab: 语境学词 -->
+  <section class="tab-panel" id="panel-context">
+    <div class="card">
+      <div class="card-header">
+        <span>语境学词</span>
+        <span style="font-size:0.75rem;color:var(--muted);">选择单词，AI 生成包含这些词汇的短文</span>
+      </div>
+      <!-- 单词选择区（生成后隐藏） -->
+      <div id="contextSelectArea">
+        <div class="form-group">
+          <label class="form-label">从单词列表中选择（最多 10 个，已选 <span id="contextSelectedCount">0</span> 个）</label>
+          <div class="context-word-chips" id="contextWordChips">
+            <span style="color:var(--muted);font-size:0.85rem;">单词列表为空，请先添加单词</span>
+          </div>
+        </div>
+        <div class="form-group" style="text-align:center;">
+          <button class="btn btn-primary btn-lg" id="btnContextGenerate" onclick="generateContextArticle()" disabled>✨ AI 生成文章</button>
+        </div>
+      </div>
+      <div id="contextLoading" style="display:none;">
+        <div class="ai-progress-wrap">
+          <div class="ai-progress-text">AI 正在生成语境短文，请稍候...</div>
+          <div class="ai-progress-bar"><div class="ai-progress-fill" id="contextProgress" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div id="contextResult" style="display:none;margin-top:16px;">
+        <div class="context-article" id="contextArticle"></div>
+        <div class="context-translation" id="contextTranslation" style="display:none;"></div>
+        <div class="context-word-summary">
+          <div class="context-word-summary-title">📖 文中词汇</div>
+          <table class="context-word-table">
+            <thead>
+              <tr><th style="width:22%;">单词</th><th style="width:18%;">音标</th><th>释义</th></tr>
+            </thead>
+            <tbody id="contextWordTableBody"></tbody>
+          </table>
+        </div>
+        <div class="form-group" style="text-align:center;margin-top:16px;">
+          <button class="btn btn-secondary" onclick="resetContextWords()">🔄 重新选择单词</button>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- 单词点击释义弹窗 -->
+  <div id="contextWordPopup" class="context-word-popup" style="display:none;"></div>
 
 </main>
 
@@ -3634,6 +3835,7 @@ function onTabSwitch(tab) {
   if (tab === 'read') { lazyInitTab('read', updateArticleEstimate); loadCloudAudioList(); }
   if (tab === 'history') lazyInitTab('history', renderHistory);
   if (tab === 'recite') switchReciteTab('add');
+  if (tab === 'context') renderContextWords();
 }
 
 // ═══════════════════════════════════════
@@ -7875,6 +8077,335 @@ td { padding: 8px 10px; border-bottom: 1px solid #eee; }
     };
   } else {
     showToast('弹窗被拦截，请允许弹窗后重试');
+  }
+}
+// ═══════════════════════════════════════
+// 语境学词
+// ═══════════════════════════════════════
+let contextSelectedWords = [];
+
+function renderContextWords() {
+  contextSelectedWords = [];
+  const container = $('contextWordChips');
+  const words = appData.words || [];
+  
+  // 重置为选择状态
+  $('contextSelectArea').style.display = '';
+  $('contextLoading').style.display = 'none';
+  $('contextResult').style.display = 'none';
+  
+  if (words.length === 0) {
+    container.innerHTML = '<span style="color:var(--muted);font-size:0.85rem;">单词列表为空，请先添加单词</span>';
+    $('btnContextGenerate').disabled = true;
+    return;
+  }
+
+  container.innerHTML = words.map(w => {
+    const escaped = escapeHtml(w.english);
+    return `<span class="context-word-chip" data-word="${escaped}" onclick="toggleContextWord(this)" title="${escapeHtml(w.chinese || '')}">${escaped}</span>`;
+  }).join('');
+  
+  $('btnContextGenerate').disabled = true;
+  $('contextSelectedCount').textContent = '0';
+  $('contextResult').style.display = 'none';
+}
+
+function toggleContextWord(chip) {
+  const word = chip.getAttribute('data-word');
+  const idx = contextSelectedWords.indexOf(word);
+  
+  if (idx >= 0) {
+    // 取消选择
+    contextSelectedWords.splice(idx, 1);
+    chip.classList.remove('selected');
+  } else {
+    // 选择
+    if (contextSelectedWords.length >= 10) {
+      showToast('最多选择 10 个单词');
+      return;
+    }
+    contextSelectedWords.push(word);
+    chip.classList.add('selected');
+  }
+  
+  $('contextSelectedCount').textContent = contextSelectedWords.length;
+  $('btnContextGenerate').disabled = contextSelectedWords.length === 0;
+}
+
+async function generateContextArticle() {
+  try {
+    if (contextSelectedWords.length === 0) { showToast('请先选择至少 1 个单词'); return; }
+    if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
+
+    // 隐藏选择区，显示加载
+    $('contextSelectArea').style.display = 'none';
+    $('btnContextGenerate').disabled = true;
+    $('contextLoading').style.display = '';
+    startProgress('contextProgress');
+    $('contextResult').style.display = 'none';
+
+    // 获取选中单词的完整信息
+    const selectedWordData = contextSelectedWords.map(w => {
+      const found = appData.words.find(item => item.english === w);
+      return found || { english: w, chinese: '', phonetic: '', pos: '' };
+    });
+
+    const wordList = selectedWordData.map(w => w.english + (w.chinese ? '（' + w.chinese + '）' : '')).join('、');
+
+    const prompt = `请根据以下单词，生成一篇适合四六级难度的英语短文。
+
+要求：
+1. 文章长度约100词左右
+2. 必须使用以下所有单词，每个单词至少出现一次
+3. 文章主题自然连贯，不要生硬堆砌词汇
+4. 文章中需要加粗的单词用 **单词** 格式标记
+
+需要使用的单词：${wordList}
+
+请按以下格式输出：
+文章：
+<英文文章内容，用 ** 标记需要加粗的单词>
+
+翻译：
+<文章的中文翻译，其中对应选择单词的中文释义也用 ** 标记加粗>
+
+单词表：
+英语单词 | 音标 | 中文释义
+（每行一个单词，用 | 分隔）`;
+
+    const result = await doCallAI(prompt, 3000);
+    $('btnContextGenerate').disabled = false;
+    stopProgress('contextProgress');
+    $('contextLoading').style.display = 'none';
+
+    if (!result) {
+      // 失败时恢复选择区
+      $('contextSelectArea').style.display = '';
+      return;
+    }
+
+    // 解析结果
+    const articleMatch = result.match(/文章[:：]\s*([\s\S]+?)(?=\n\s*(?:翻译|单词表)[:：]|$)/);
+    const translationMatch = result.match(/翻译[:：]\s*([\s\S]+?)(?=\n\s*单词表[:：]|$)/);
+    const wordTableMatch = result.match(/单词表[:：]\s*([\s\S]+)$/);
+
+    const articleText = articleMatch ? articleMatch[1].trim() : '';
+    const translationText = translationMatch ? translationMatch[1].trim() : '';
+    const wordTableText = wordTableMatch ? wordTableMatch[1].trim() : '';
+
+    // 渲染文章：将 **word** 转换为可点击加粗标记
+    let articleHtml = escapeHtml(articleText);
+    // 用 data-word 属性标记每个加粗词，点击时弹出释义
+    articleHtml = articleHtml.replace(/\*\*(.+?)\*\*/g, function(match, word) {
+      const escapedWord = escapeHtml(word);
+      return '<span class="context-word-bold" onclick="showContextWordPopup(event, \'' + escapedWord + '\')">' + escapedWord + '</span>';
+    });
+    $('contextArticle').innerHTML = articleHtml;
+
+    // 渲染翻译
+    if (translationText) {
+      let transHtml = escapeHtml(translationText);
+      transHtml = transHtml.replace(/\*\*(.+?)\*\*/g, '<span class="context-word-bold" style="cursor:default;">$1</span>');
+      $('contextTranslation').innerHTML = transHtml.replace(/\n/g, '<br>');
+      $('contextTranslation').style.display = '';
+    } else {
+      $('contextTranslation').style.display = 'none';
+    }
+
+    // 渲染单词表
+    const wordLines = wordTableText.split('\n').filter(line => line.trim().length > 0);
+    let tableHtml = '';
+    wordLines.forEach(line => {
+      const parts = line.split('|').map(p => p.trim());
+      if (parts.length >= 3) {
+        const eng = parts[0];
+        const phonetic = parts[1];
+        const chinese = parts.slice(2).join(' | ');
+        tableHtml += '<tr>' +
+          '<td>' + escapeHtml(eng) + '</td>' +
+          '<td class="phonetic-clickable" onclick="contextSpeakWord(event, \'' + escapeHtml(eng) + '\')" title="点击朗读">' + escapeHtml(phonetic) + '</td>' +
+          '<td>' + escapeHtml(chinese) + '</td>' +
+        '</tr>';
+      } else if (parts.length >= 1) {
+        const word = parts[0].trim();
+        const local = appData.words.find(w => w.english.toLowerCase() === word.toLowerCase());
+        const phonetic = local ? (local.phonetic || '') : '';
+        const chinese = parts.length >= 2 ? parts[1] : (local ? (local.chinese || '') : '');
+        const phoneticHtml = phonetic ? '<span class="phonetic-clickable" onclick="contextSpeakWord(event, \'' + escapeHtml(word) + '\')" title="点击朗读">' + escapeHtml(phonetic) + '</span>' : '<span class="phonetic">-</span>';
+        tableHtml += '<tr>' +
+          '<td>' + escapeHtml(word) + '</td>' +
+          '<td>' + phoneticHtml + '</td>' +
+          '<td>' + escapeHtml(chinese) + '</td>' +
+        '</tr>';
+      }
+    });
+
+    // 如果 AI 没返回单词表，用本地数据补充
+    if (!tableHtml) {
+      selectedWordData.forEach(w => {
+        const phoneticHtml = w.phonetic ? '<span class="phonetic-clickable" onclick="contextSpeakWord(event, \'' + escapeHtml(w.english) + '\')" title="点击朗读">' + escapeHtml(w.phonetic) + '</span>' : '<span class="phonetic">-</span>';
+        tableHtml += '<tr>' +
+          '<td>' + escapeHtml(w.english) + '</td>' +
+          '<td>' + phoneticHtml + '</td>' +
+          '<td>' + escapeHtml(w.chinese || '') + '</td>' +
+        '</tr>';
+      });
+    }
+
+    $('contextWordTableBody').innerHTML = tableHtml;
+    $('contextResult').style.display = '';
+
+  } catch (e) {
+    showToast('操作失败: ' + (e.message || '未知错误'));
+    console.error(e);
+    $('btnContextGenerate').disabled = false;
+    stopProgress('contextProgress');
+    $('contextLoading').style.display = 'none';
+    $('contextSelectArea').style.display = '';
+  }
+}
+
+// 重新选择单词
+function resetContextWords() {
+  contextSelectedWords = [];
+  $('contextSelectArea').style.display = '';
+  $('contextResult').style.display = 'none';
+  $('btnContextGenerate').disabled = true;
+  $('contextSelectedCount').textContent = '0';
+  // 取消所有 chip 的选中状态
+  const chips = document.querySelectorAll('.context-word-chip');
+  chips.forEach(c => c.classList.remove('selected'));
+}
+
+// 点击文章中的加粗单词，弹出释义
+function showContextWordPopup(event, word) {
+  event.stopPropagation();
+  const popup = $('contextWordPopup');
+  
+  // 如果弹窗已经显示且是同一个单词，则关闭弹窗
+  if (popup.style.display === 'block' && popup.getAttribute('data-word') === word) {
+    popup.style.display = 'none';
+    popup.removeAttribute('data-word');
+    return;
+  }
+  
+  // 查找单词释义
+  const found = appData.words.find(w => w.english.toLowerCase() === word.toLowerCase());
+  const phonetic = found && found.phonetic ? found.phonetic : '';
+  const chinese = found && found.chinese ? found.chinese : '';
+  
+  if (!chinese) {
+    popup.style.display = 'none';
+    popup.removeAttribute('data-word');
+    return;
+  }
+  
+  popup.innerHTML = '<span class="popup-word">' + escapeHtml(word) + '</span>' +
+    (phonetic ? '<span class="popup-phonetic">' + escapeHtml(phonetic) + '</span>' : '') +
+    '<div class="popup-def">' + escapeHtml(chinese) + '</div>';
+  popup.setAttribute('data-word', word);
+  
+  // 定位弹窗在点击位置附近
+  const rect = event.target.getBoundingClientRect();
+  let left = rect.left + window.scrollX;
+  let top = rect.bottom + window.scrollY + 4;
+  
+  // 防止超出屏幕右侧
+  if (left + 240 > window.innerWidth) {
+    left = window.innerWidth - 250;
+  }
+  // 防止超出屏幕下方
+  if (top + 80 > window.innerHeight + window.scrollY) {
+    top = rect.top + window.scrollY - 80;
+  }
+  
+  popup.style.left = left + 'px';
+  popup.style.top = top + 'px';
+  popup.style.display = 'block';
+  
+  // 点击其他地方关闭
+  setTimeout(() => {
+    const closeHandler = function(e) {
+      if (e.target !== popup && !popup.contains(e.target)) {
+        popup.style.display = 'none';
+        popup.removeAttribute('data-word');
+        document.removeEventListener('click', closeHandler);
+      }
+    };
+    document.addEventListener('click', closeHandler);
+  }, 10);
+}
+
+// 点击音标朗读单词
+async function contextSpeakWord(event, word) {
+  event.stopPropagation();
+  const td = event.target.closest('td');
+  if (td) td.classList.add('speaking-phonetic');
+  
+  try {
+    // 尝试 TTS API
+    const ttsProvider = appData.ttsProvider || 'none';
+    const ttsCfg = TTS_PROVIDERS[ttsProvider];
+    let played = false;
+    
+    if (ttsProvider !== 'none' && appData.ttsKey && ttsCfg) {
+      try {
+        const ttsUrl = (appData.ttsUrl || ttsCfg.url).replace(/\/$/, '');
+        const ttsKey = appData.ttsKey;
+        const ttsModel = appData.ttsModel || ttsCfg.models[0];
+        const ttsVoice = appData.ttsVoice || ttsCfg.voices[0];
+
+        if (ttsCfg.ttsType === 'minimax') {
+          const resp = await fetch(ttsUrl + '/v1/t2a_v2', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+            body: JSON.stringify({
+              model: ttsModel, text: word, stream: false, language_boost: 'English', output_format: 'hex',
+              voice_setting: { voice_id: ttsVoice, speed: 0.85, vol: 1, pitch: 0 },
+              audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
+            }),
+            signal: AbortSignal.timeout(15000)
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            const audioHex = data.data?.audio;
+            if (audioHex) {
+              const bytes = new Uint8Array(audioHex.length / 2);
+              for (let i = 0; i < audioHex.length; i += 2) bytes[i / 2] = parseInt(audioHex.substring(i, i + 2), 16);
+              const blob = new Blob([bytes], { type: 'audio/mp3' });
+              const audio = playTTSBlob(blob, () => { if (td) td.classList.remove('speaking-phonetic'); });
+              await audio.play();
+              played = true;
+            }
+          }
+        } else if (ttsCfg.ttsType === 'openai') {
+          const resp = await fetch(ttsUrl + '/v1/audio/speech', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
+            body: JSON.stringify({ model: 'tts-1-hd', input: word, voice: 'alloy', response_format: 'mp3' }),
+            signal: AbortSignal.timeout(15000)
+          });
+          if (resp.ok) {
+            const blob = await resp.blob();
+            const audio = playTTSBlob(blob, () => { if (td) td.classList.remove('speaking-phonetic'); });
+            await audio.play();
+            played = true;
+          }
+        }
+      } catch (e) { /* API TTS failed, fallback to browser */ }
+    }
+    
+    // 浏览器 TTS 回退
+    if (!played) {
+      const utter = new SpeechSynthesisUtterance(word);
+      utter.lang = 'en-US';
+      utter.rate = 0.85;
+      utter.onend = () => { if (td) td.classList.remove('speaking-phonetic'); };
+      utter.onerror = () => { if (td) td.classList.remove('speaking-phonetic'); };
+      speechSynthesis.speak(utter);
+    }
+  } catch (e) {
+    if (td) td.classList.remove('speaking-phonetic');
   }
 }
 </script>
