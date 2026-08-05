@@ -1440,6 +1440,13 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
   color: var(--accent);
   margin-bottom: 8px;
 }
+.context-translation .context-word-bold {
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
 
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -8167,7 +8174,7 @@ async function generateContextArticle() {
 <英文文章内容，用 ** 标记需要加粗的单词>
 
 翻译：
-<文章的中文翻译，其中对应选择单词的中文释义也用 ** 标记加粗>
+<文章的中文翻译>
 
 单词表：
 英语单词 | 音标 | 中文释义
@@ -8205,6 +8212,31 @@ async function generateContextArticle() {
     // 渲染翻译
     if (translationText) {
       let transHtml = escapeHtml(translationText);
+      // 手动后处理：在翻译中查找选中单词的中文释义并加粗
+      const meaningsToBold = [];
+      selectedWordData.forEach(w => {
+        if (w.chinese) {
+          const parts = w.chinese.split(/[;；/，,]\s*/);
+          parts.forEach(p => {
+            const trimmed = p.trim();
+            if (trimmed && trimmed.length >= 1) {
+              meaningsToBold.push({ text: trimmed });
+            }
+          });
+        }
+      });
+      // 按长度降序排列，避免短词覆盖长词
+      meaningsToBold.sort((a, b) => b.text.length - a.text.length);
+      // 去重 + 转义
+      const seen = new Set();
+      meaningsToBold.forEach(m => {
+        const escaped = escapeHtml(m.text);
+        if (seen.has(escaped) || escaped.length < 1) return;
+        seen.add(escaped);
+        const regex = escaped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        transHtml = transHtml.replace(new RegExp(regex, 'g'), '<span class="context-word-bold">' + escaped + '</span>');
+      });
+      // 再处理 AI 可能返回的 ** 标记
       transHtml = transHtml.replace(/\*\*(.+?)\*\*/g, '<span class="context-word-bold" style="cursor:default;">$1</span>');
       $('contextTranslation').innerHTML = transHtml.replace(/\n/g, '<br>');
       $('contextTranslation').style.display = '';
