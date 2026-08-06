@@ -1310,7 +1310,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
   background: var(--bg);
   color: var(--ink);
 }
-.context-word-chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+.context-word-chip:hover { border-color: var(--accent); }
 .context-word-chip.selected {
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -1394,7 +1394,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
   background: rgba(45,90,90,0.15);
 }
 .context-word-popup {
-  position: fixed;
+  position: absolute;
   background: #fff;
   border: 1px solid var(--accent);
   border-radius: 10px;
@@ -2195,7 +2195,8 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         </div>
       </div>
       <div id="contextResult" style="display:none;margin-top:16px;">
-        <div class="context-article" id="contextArticle"></div>
+        <div class="context-article" id="contextArticle" style="position:relative;"></div>
+        <div id="contextWordPopup" class="context-word-popup" style="display:none;"></div>
         <div class="context-translation" id="contextTranslation" style="display:none;"></div>
         <div class="context-word-summary">
           <div class="context-word-summary-title">📖 文中词汇</div>
@@ -2212,8 +2213,6 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       </div>
     </div>
   </section>
-  <!-- 单词点击释义弹窗 -->
-  <div id="contextWordPopup" class="context-word-popup" style="display:none;"></div>
 
 </main>
 
@@ -4293,6 +4292,12 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML.replace(/'/g, '&#39;');
+}
+
+// 去除字符串首尾的双引号/单引号/中文引号
+function stripQuotes(str) {
+  if (!str) return str;
+  return str.replace(/^[""''「」『』]+/, '').replace(/[""''「」『』]+$/, '');
 }
 
 // 将 AI 返回的错误批改文本解析为结构化的 HTML 显示
@@ -8109,7 +8114,7 @@ function renderContextWords() {
 
   container.innerHTML = words.map(w => {
     const escaped = escapeHtml(w.english);
-    return `<span class="context-word-chip" data-word="${escaped}" onclick="toggleContextWord(this)" title="${escapeHtml(w.chinese || '')}">${escaped}</span>`;
+    return `<span class="context-word-chip" data-word="${escaped}" onclick="toggleContextWord(this)" title="${escapeHtml(stripQuotes(w.chinese || ''))}">${escaped}</span>`;
   }).join('');
   
   $('btnContextGenerate').disabled = true;
@@ -8259,7 +8264,7 @@ async function generateContextArticle() {
         tableHtml += '<tr>' +
           '<td>' + escapeHtml(eng) + '</td>' +
           '<td class="phonetic-clickable" onclick="contextSpeakWord(event, \'' + escapeHtml(eng) + '\')" title="点击朗读">' + escapeHtml(phonetic) + '</td>' +
-          '<td>' + escapeHtml(chinese) + '</td>' +
+          '<td>' + escapeHtml(stripQuotes(chinese)) + '</td>' +
         '</tr>';
       } else if (parts.length >= 1) {
         const word = parts[0].trim();
@@ -8270,7 +8275,7 @@ async function generateContextArticle() {
         tableHtml += '<tr>' +
           '<td>' + escapeHtml(word) + '</td>' +
           '<td>' + phoneticHtml + '</td>' +
-          '<td>' + escapeHtml(chinese) + '</td>' +
+          '<td>' + escapeHtml(stripQuotes(chinese)) + '</td>' +
         '</tr>';
       }
     });
@@ -8282,7 +8287,7 @@ async function generateContextArticle() {
         tableHtml += '<tr>' +
           '<td>' + escapeHtml(w.english) + '</td>' +
           '<td>' + phoneticHtml + '</td>' +
-          '<td>' + escapeHtml(w.chinese || '') + '</td>' +
+          '<td>' + escapeHtml(stripQuotes(w.chinese || '')) + '</td>' +
         '</tr>';
       });
     }
@@ -8337,29 +8342,31 @@ function showContextWordPopup(event, word) {
   
   popup.innerHTML = '<span class="popup-word">' + escapeHtml(word) + '</span>' +
     (phonetic ? '<span class="popup-phonetic">' + escapeHtml(phonetic) + '</span>' : '') +
-    '<div class="popup-def">' + escapeHtml(chinese) + '</div>';
+    '<div class="popup-def">' + escapeHtml(stripQuotes(chinese)) + '</div>';
   popup.setAttribute('data-word', word);
   
-  // 定位弹窗在点击位置附近（position:fixed 使用 viewport 坐标）
+  // 定位弹窗：相对于文章容器（position: absolute），跟随滚动
   const rect = event.target.getBoundingClientRect();
-  let left = rect.left;
-  let top = rect.bottom + 4;
+  const articleContainer = $('contextArticle');
+  const articleRect = articleContainer.getBoundingClientRect();
+  let left = rect.left - articleRect.left;
+  let top = rect.bottom - articleRect.top + 4;
   
-  // 防止超出屏幕右侧
-  if (left + 240 > window.innerWidth) {
-    left = window.innerWidth - 250;
+  // 防止超出文章容器右侧
+  if (left + 240 > articleRect.width) {
+    left = articleRect.width - 250;
   }
-  // 防止超出屏幕左侧
-  if (left < 4) {
-    left = 4;
+  // 防止超出左侧
+  if (left < 0) {
+    left = 0;
   }
-  // 防止超出屏幕下方
-  if (top + 80 > window.innerHeight) {
-    top = rect.top - 80;
+  // 防止超出下方
+  if (top + 80 > articleContainer.scrollHeight) {
+    top = rect.top - articleRect.top - 80;
   }
-  // 防止超出屏幕上方
-  if (top < 4) {
-    top = 4;
+  // 防止超出上方
+  if (top < 0) {
+    top = 0;
   }
   
   popup.style.left = left + 'px';
