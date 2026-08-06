@@ -8166,6 +8166,7 @@ async function generateContextArticle() {
 2. 必须使用以下所有单词，每个单词至少出现一次
 3. 文章主题自然连贯，不要生硬堆砌词汇
 4. 文章中需要加粗的单词用 **单词** 格式标记
+5. 翻译中上述单词对应的中文释义也请用 **中文释义** 格式标记
 
 需要使用的单词：${wordList}
 
@@ -8174,7 +8175,7 @@ async function generateContextArticle() {
 <英文文章内容，用 ** 标记需要加粗的单词>
 
 翻译：
-<文章的中文翻译>
+<文章的中文翻译，文中上述单词对应的中文释义用 ** 标记>
 
 单词表：
 英语单词 | 音标 | 中文释义
@@ -8212,11 +8213,13 @@ async function generateContextArticle() {
     // 渲染翻译
     if (translationText) {
       let transHtml = escapeHtml(translationText);
-      // 手动后处理：在翻译中查找选中单词的中文释义并加粗
+      // 优先处理 AI 返回的 ** 标记（AI 主动标记的中文释义）
+      transHtml = transHtml.replace(/\*\*(.+?)\*\*/g, '<span class="context-word-bold" style="cursor:default;">$1</span>');
+      // 手动后处理：在翻译中查找选中单词的中文释义并加粗（兜底，避免 AI 漏标）
       const meaningsToBold = [];
       selectedWordData.forEach(w => {
         if (w.chinese) {
-          const parts = w.chinese.split(/[;；/，,]\s*/);
+          const parts = w.chinese.split(/[;；/，,、]\s*/);
           parts.forEach(p => {
             const trimmed = p.trim();
             if (trimmed && trimmed.length >= 1) {
@@ -8227,17 +8230,17 @@ async function generateContextArticle() {
       });
       // 按长度降序排列，避免短词覆盖长词
       meaningsToBold.sort((a, b) => b.text.length - a.text.length);
-      // 去重 + 转义
+      // 去重 + 转义 + 匹配（避免匹配已有标签内的文本）
       const seen = new Set();
       meaningsToBold.forEach(m => {
         const escaped = escapeHtml(m.text);
         if (seen.has(escaped) || escaped.length < 1) return;
         seen.add(escaped);
         const regex = escaped.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        transHtml = transHtml.replace(new RegExp(regex, 'g'), '<span class="context-word-bold">' + escaped + '</span>');
+        // 使用负向前瞻/后顾避免匹配 HTML 标签内的文本
+        const safeRegex = new RegExp('(?<!<[^>]{0,200})' + regex + '(?![^<]*>)', 'g');
+        transHtml = transHtml.replace(safeRegex, '<span class="context-word-bold">' + escaped + '</span>');
       });
-      // 再处理 AI 可能返回的 ** 标记
-      transHtml = transHtml.replace(/\*\*(.+?)\*\*/g, '<span class="context-word-bold" style="cursor:default;">$1</span>');
       $('contextTranslation').innerHTML = transHtml.replace(/\n/g, '<br>');
       $('contextTranslation').style.display = '';
     } else {
@@ -8337,18 +8340,26 @@ function showContextWordPopup(event, word) {
     '<div class="popup-def">' + escapeHtml(chinese) + '</div>';
   popup.setAttribute('data-word', word);
   
-  // 定位弹窗在点击位置附近
+  // 定位弹窗在点击位置附近（position:fixed 使用 viewport 坐标）
   const rect = event.target.getBoundingClientRect();
-  let left = rect.left + window.scrollX;
-  let top = rect.bottom + window.scrollY + 4;
+  let left = rect.left;
+  let top = rect.bottom + 4;
   
   // 防止超出屏幕右侧
   if (left + 240 > window.innerWidth) {
     left = window.innerWidth - 250;
   }
+  // 防止超出屏幕左侧
+  if (left < 4) {
+    left = 4;
+  }
   // 防止超出屏幕下方
-  if (top + 80 > window.innerHeight + window.scrollY) {
-    top = rect.top + window.scrollY - 80;
+  if (top + 80 > window.innerHeight) {
+    top = rect.top - 80;
+  }
+  // 防止超出屏幕上方
+  if (top < 4) {
+    top = 4;
   }
   
   popup.style.left = left + 'px';
