@@ -6507,16 +6507,54 @@ let lookupData = null; // { word, phonetic, definition, examples, derived }
 async function doLookup() {
   const word = $('lookupWord').value.trim();
   if (!word) { showToast('请输入单词'); return; }
+  if (!/^[a-zA-Z\s\-']+$/.test(word)) { showToast('请输入英文单词'); return; }
   if (!hasValidApiConfig()) { showToast('请先在 API 设置中配置 AI API Key'); return; }
 
   $('lookupResult').style.display = 'none';
   $('lookupError').style.display = 'none';
   $('lookupLoading').style.display = '';
+  $('lookupLoading').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;"><div class="spinner" style="width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div><span>正在校验单词拼写...</span></div>';
   $('btnLookup').disabled = true;
   lookupData = null;
 
   try {
-    const prompt = `请为英语单词 "${word}" 生成以下学习内容，严格按照格式输出：
+    // Step 1: 使用 Free Dictionary API 校验单词拼写
+    let validatedWord = word;
+    let suggestion = null;
+    try {
+      const checkResp = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
+      if (checkResp.status === 404) {
+        // 单词未找到，尝试获取建议
+        const notFoundData = await checkResp.json();
+        const suggestions = notFoundData.title === 'No Definitions Found' ? [] : [];
+        // 有些404响应会带message但没有suggestions，尝试用AI获取建议
+        suggestion = `"${word}" 未在词典中找到，请检查拼写是否正确`;
+      } else if (checkResp.ok) {
+        const data = await checkResp.json();
+        // 验证成功，使用API返回的规范单词（可能大小写不同）
+        if (data && data.length > 0 && data[0].word) {
+          validatedWord = data[0].word;
+        }
+      } else {
+        // 其他错误，可能是网络问题，跳过校验直接查询
+        console.warn('Dictionary API error:', checkResp.status);
+      }
+    } catch (e) {
+      // 网络错误，跳过校验
+      console.warn('Dictionary API unreachable:', e.message);
+    }
+
+    if (suggestion) {
+      $('lookupLoading').style.display = 'none';
+      $('lookupError').innerHTML = `<span style="color:#e74c3c;">⚠️ ${suggestion}</span>`;
+      $('lookupError').style.display = '';
+      $('btnLookup').disabled = false;
+      return;
+    }
+
+    // Step 2: 拼写校验通过，使用AI查询
+    $('lookupLoading').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;"><div class="spinner" style="width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div><span>AI 正在查询中，请稍候...</span></div>';
+    const prompt = `请为英语单词 "${validatedWord}" 生成以下学习内容，严格按照格式输出：
 
 音标: <该单词的国际音标 IPA，例如 /ˈeksəmpəl/>
 释义: <精简的中文释义，只列出1-2个最常用的义项，不要加序号。词性用英文缩写。例如：n. 放弃、遗弃；v. 放纵>
@@ -6559,7 +6597,7 @@ async function doLookup() {
         : '暂无派生词';
 
       // Populate UI
-      $('luWord').textContent = word;
+      $('luWord').textContent = validatedWord;
       // Difficulty tag
       if (difficulty) {
         $('luDifficulty').innerHTML = `<span class="diff-tag diff-${difficulty}">${difficulty}</span>`;
@@ -6577,7 +6615,7 @@ async function doLookup() {
       $('luAddedMsg').style.display = 'none';
 
       // Check if already in word list
-      const exists = appData.words.find(w => w.english.toLowerCase() === word.toLowerCase());
+      const exists = appData.words.find(w => w.english.toLowerCase() === validatedWord.toLowerCase());
       if (exists) {
         $('luAddBtn').style.display = 'none';
         $('luAddedMsg').textContent = '已在单词列表中 ✓';
@@ -6588,7 +6626,7 @@ async function doLookup() {
 
       // Store lookup data
       lookupData = {
-        word: word,
+        word: validatedWord,
         phonetic: phonetic,
         definition: definition,
         examples: examplesRaw,
