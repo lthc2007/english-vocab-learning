@@ -2756,6 +2756,16 @@ let studyActive = false;         // 是否正在计时
 // Hardcoded Supabase credentials (already configured)
 const SUPABASE_URL = 'https://mmdhtyuyirukvtmfzeby.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_rPnHnnwRKm-fi14h_zWE6w_SJVMO61c';
+const VOLCANO_TTS_PROXY = SUPABASE_URL + '/functions/v1/volcano-tts-proxy';
+
+// 获取火山引擎 TTS 代理地址：本地用 Python 代理，线上用 Supabase Edge Function
+function getVolcanoProxyUrl() {
+  const host = location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.')) {
+    return '/api/proxy-volcano-tts';
+  }
+  return VOLCANO_TTS_PROXY;
+}
 
 // 网络请求重试工具：指数退避，最多 retries 次
 async function withRetry(fn, retries, delay) {
@@ -3746,7 +3756,7 @@ async function testTtsConnection() {
         result.style.color = '#e74c3c';
       }
     } else if (cfg.ttsType === 'volcano') {
-      const resp = await fetch('/api/proxy-volcano-tts', {
+      const resp = await fetch(getVolcanoProxyUrl(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -5115,7 +5125,7 @@ async function speakWord(e) {
         }
       } else if (ttsCfg.ttsType === 'volcano') {
         const ttsAppId = appData.ttsAppId || '';
-        const resp = await fetch('/api/proxy-volcano-tts', {
+        const resp = await fetch(getVolcanoProxyUrl(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
