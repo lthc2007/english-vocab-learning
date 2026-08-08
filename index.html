@@ -2704,9 +2704,9 @@ const TTS_PROVIDERS = {
   },
   volcano: {
     name: '火山引擎 TTS', url: 'https://openspeech.bytedance.com',
-    models: ['seed-tts-1.1', 'default'],
-    voices: ['zh_female_cancan_mars_bigtts', 'zh_male_M392_conversation_wvae_bigtts', 'zh_female_shuangkuaisisi_moon_bigtts', 'zh_male_wennuanahu_moon_bigtts'],
-    keyHint: '获取 App ID & Access Token: <a href="https://console.volcengine.com/ark/region:ark+cn-beijing/tts" target="_blank" style="color:var(--accent);">console.volcengine.com</a>',
+    models: ['seed-tts-2.0', 'seed-tts-1.0'],
+    voices: ['zh_female_cancan_mars_bigtts', 'zh_male_M392_conversation_wvae_bigtts', 'zh_female_shuangkuaisisi_moon_bigtts', 'zh_male_wennuanahu_moon_bigtts', 'zh_female_vv_mars_bigtts', 'en_female_tina_instruction_bigtts'],
+    keyHint: '新版控制台只需 API Key；旧版需填 App ID + Access Token。获取: <a href="https://console.volcengine.com/speech/new" target="_blank" style="color:var(--accent);">console.volcengine.com</a>',
     ttsType: 'volcano'
   }
 };
@@ -3769,22 +3769,20 @@ async function testTtsConnection() {
         method: 'POST',
         headers: getVolcanoProxyHeaders(),
         body: JSON.stringify({
-          ttsUrl: url,
           ttsKey: key,
           ttsAppId: appId,
           ttsVoice: cfg.voices[0],
-          ttsModel: 'default',
           text: 'Hello'
         }),
         signal: AbortSignal.timeout(20000)
       });
       if (resp.ok) {
         const data = await resp.json();
-        if (data.data?.audio) {
-          result.textContent = 'TTS 连接成功！(火山引擎)';
+        if (data.audio) {
+          result.textContent = 'TTS 连接成功！(火山引擎 v3)';
           result.style.color = '#27ae60';
         } else {
-          result.textContent = '连接失败: ' + (data.message || data.code || data.error || '未知错误');
+          result.textContent = '连接失败: ' + (data.message || data.error || '未知错误');
           result.style.color = '#e74c3c';
         }
       } else {
@@ -5138,18 +5136,16 @@ async function speakWord(e) {
           method: 'POST',
           headers: getVolcanoProxyHeaders(),
           body: JSON.stringify({
-            ttsUrl: ttsUrl,
             ttsKey: ttsKey,
             ttsAppId: ttsAppId,
             ttsVoice: ttsVoice,
-            ttsModel: ttsModel,
             text: speakText
           }),
           signal: AbortSignal.timeout(20000)
         });
         if (resp.ok) {
           const data = await resp.json();
-          const audioBase64 = data.data?.audio;
+          const audioBase64 = data.audio;
           if (audioBase64) {
             const byteChars = atob(audioBase64);
             const bytes = new Uint8Array(byteChars.length);
@@ -5159,7 +5155,7 @@ async function speakWord(e) {
             await audio.play();
             played = true;
           } else {
-            ttsError = '火山引擎返回空音频 (code=' + (data.code || '?') + ')';
+            ttsError = '火山引擎返回空音频: ' + (data.error || '');
           }
         } else {
           const errData = await resp.json().catch(() => ({}));
@@ -6049,33 +6045,30 @@ async function callMiniMaxTTS(text, speed = 1.0) {
     return { blob: null, error: 'OpenAI TTS HTTP ' + resp.status };
   } else if (ttsCfg.ttsType === 'volcano') {
     const ttsAppId = appData.ttsAppId || '';
-    const reqId = crypto.randomUUID ? crypto.randomUUID() : 'tts-' + Date.now();
-    const reqBody = {
-      app: { appid: ttsAppId, token: ttsKey, cluster: 'volcano_tts' },
-      user: { uid: 'article-user' },
-      audio: { voice_type: ttsVoice, encoding: 'mp3', speed_ratio: speed },
-      request: { reqid: reqId, text: text, operation: 'query' }
-    };
-    if (ttsModel && ttsModel !== 'default') reqBody.request.model = ttsModel;
-    const resp = await fetch(ttsUrl + '/api/v1/tts', {
+    const resp = await fetch(getVolcanoProxyUrl(), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
-      body: JSON.stringify(reqBody),
-      signal: AbortSignal.timeout(15000)
+      headers: getVolcanoProxyHeaders(),
+      body: JSON.stringify({
+        ttsKey: ttsKey,
+        ttsAppId: ttsAppId,
+        ttsVoice: ttsVoice,
+        text: text
+      }),
+      signal: AbortSignal.timeout(30000)
     });
     if (resp.ok) {
       const data = await resp.json();
-      const audioBase64 = data.data?.audio;
+      const audioBase64 = data.audio;
       if (audioBase64) {
         const byteChars = atob(audioBase64);
         const bytes = new Uint8Array(byteChars.length);
         for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
         return { blob: new Blob([bytes], { type: 'audio/mp3' }), error: null };
       }
-      return { blob: null, error: '火山引擎返回空音频 (code=' + (data.code || '?') + ')' };
+      return { blob: null, error: '火山引擎返回空音频: ' + (data.error || '') };
     }
-    const errBody = await resp.text().catch(() => '');
-    return { blob: null, error: '火山引擎 HTTP ' + resp.status + ': ' + errBody.substring(0, 100) };
+    const errData = await resp.json().catch(() => ({}));
+    return { blob: null, error: '火山引擎 HTTP ' + resp.status + ': ' + (errData.error || '') };
   }
   return { blob: null, error: '未知 TTS 类型' };
 }
@@ -6719,23 +6712,20 @@ async function speakExample(e) {
         }
       } else if (ttsCfg.ttsType === 'volcano') {
         const ttsAppId = appData.ttsAppId || '';
-        const reqId = crypto.randomUUID ? crypto.randomUUID() : 'ex-' + Date.now();
-        const reqBody = {
-          app: { appid: ttsAppId, token: ttsKey, cluster: 'volcano_tts' },
-          user: { uid: 'vocab-user' },
-          audio: { voice_type: ttsVoice, encoding: 'mp3', speed_ratio: 0.85 },
-          request: { reqid: reqId, text: speakText, operation: 'query' }
-        };
-        if (ttsModel && ttsModel !== 'default') reqBody.request.model = ttsModel;
-        const resp = await fetch(ttsUrl + '/api/v1/tts', {
+        const resp = await fetch(getVolcanoProxyUrl(), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
-          body: JSON.stringify(reqBody),
-          signal: AbortSignal.timeout(15000)
+          headers: getVolcanoProxyHeaders(),
+          body: JSON.stringify({
+            ttsKey: ttsKey,
+            ttsAppId: ttsAppId,
+            ttsVoice: ttsVoice,
+            text: speakText
+          }),
+          signal: AbortSignal.timeout(20000)
         });
         if (resp.ok) {
           const data = await resp.json();
-          const audioBase64 = data.data?.audio;
+          const audioBase64 = data.audio;
           if (audioBase64) {
             const byteChars = atob(audioBase64);
             const bytes = new Uint8Array(byteChars.length);
@@ -6744,11 +6734,11 @@ async function speakExample(e) {
             const audio = playTTSBlob(blob, removeSpeaking);
             await audio.play(); played = true;
           } else {
-            ttsError = '火山引擎返回空音频 (code=' + (data.code || '?') + ')';
+            ttsError = '火山引擎返回空音频: ' + (data.error || '');
           }
         } else {
-          const errBody = await resp.text().catch(() => '');
-          ttsError = '火山引擎 HTTP ' + resp.status + ': ' + errBody.substring(0, 100);
+          const errData = await resp.json().catch(() => ({}));
+          ttsError = '火山引擎 HTTP ' + resp.status + ': ' + (errData.error || '');
         }
       }
     } catch (e) {
@@ -7100,23 +7090,20 @@ async function speakText(text, onDone) {
         }
       } else if (ttsCfg.ttsType === 'volcano') {
         const ttsAppId = appData.ttsAppId || '';
-        const reqId = crypto.randomUUID ? crypto.randomUUID() : 'st-' + Date.now();
-        const reqBody = {
-          app: { appid: ttsAppId, token: ttsKey, cluster: 'volcano_tts' },
-          user: { uid: 'vocab-user' },
-          audio: { voice_type: ttsVoice, encoding: 'mp3', speed_ratio: 0.85 },
-          request: { reqid: reqId, text: text, operation: 'query' }
-        };
-        if (ttsModel && ttsModel !== 'default') reqBody.request.model = ttsModel;
-        const resp = await fetch(ttsUrl + '/api/v1/tts', {
+        const resp = await fetch(getVolcanoProxyUrl(), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
-          body: JSON.stringify(reqBody),
-          signal: AbortSignal.timeout(15000)
+          headers: getVolcanoProxyHeaders(),
+          body: JSON.stringify({
+            ttsKey: ttsKey,
+            ttsAppId: ttsAppId,
+            ttsVoice: ttsVoice,
+            text: text
+          }),
+          signal: AbortSignal.timeout(20000)
         });
         if (resp.ok) {
           const data = await resp.json();
-          const audioBase64 = data.data?.audio;
+          const audioBase64 = data.audio;
           if (audioBase64) {
             const byteChars = atob(audioBase64);
             const bytes = new Uint8Array(byteChars.length);
@@ -8771,6 +8758,32 @@ async function contextSpeakWord(event, word) {
             const audio = playTTSBlob(blob, () => { if (td) td.classList.remove('speaking-phonetic'); });
             await audio.play();
             played = true;
+          }
+        } else if (ttsCfg.ttsType === 'volcano') {
+          const ttsAppId = appData.ttsAppId || '';
+          const resp = await fetch(getVolcanoProxyUrl(), {
+            method: 'POST',
+            headers: getVolcanoProxyHeaders(),
+            body: JSON.stringify({
+              ttsKey: ttsKey,
+              ttsAppId: ttsAppId,
+              ttsVoice: ttsVoice,
+              text: word
+            }),
+            signal: AbortSignal.timeout(15000)
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            const audioBase64 = data.audio;
+            if (audioBase64) {
+              const byteChars = atob(audioBase64);
+              const bytes = new Uint8Array(byteChars.length);
+              for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+              const blob = new Blob([bytes], { type: 'audio/mp3' });
+              const audio = playTTSBlob(blob, () => { if (td) td.classList.remove('speaking-phonetic'); });
+              await audio.play();
+              played = true;
+            }
           }
         }
       } catch (e) { /* API TTS failed, fallback to browser */ }
