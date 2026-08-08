@@ -3746,30 +3746,31 @@ async function testTtsConnection() {
         result.style.color = '#e74c3c';
       }
     } else if (cfg.ttsType === 'volcano') {
-      const reqId = crypto.randomUUID ? crypto.randomUUID() : 'test-' + Date.now();
-      const resp = await fetch(url + '/api/v1/tts', {
+      const resp = await fetch('/api/proxy-volcano-tts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          app: { appid: appId, token: key, cluster: 'volcano_tts' },
-          user: { uid: 'test-user' },
-          audio: { voice_type: cfg.voices[0], encoding: 'mp3', speed_ratio: 1.0 },
-          request: { reqid: reqId, text: 'Hello', operation: 'query' }
+          ttsUrl: url,
+          ttsKey: key,
+          ttsAppId: appId,
+          ttsVoice: cfg.voices[0],
+          ttsModel: 'default',
+          text: 'Hello'
         }),
-        signal: AbortSignal.timeout(15000)
+        signal: AbortSignal.timeout(20000)
       });
       if (resp.ok) {
         const data = await resp.json();
-        if (data.code === 3000 || data.data?.audio) {
+        if (data.data?.audio) {
           result.textContent = 'TTS 连接成功！(火山引擎)';
           result.style.color = '#27ae60';
         } else {
-          result.textContent = '连接失败: ' + (data.message || data.code || '未知错误');
+          result.textContent = '连接失败: ' + (data.message || data.code || data.error || '未知错误');
           result.style.color = '#e74c3c';
         }
       } else {
-        const err = await resp.text().catch(() => '');
-        result.textContent = '连接失败: HTTP ' + resp.status + (err ? ' — ' + err.substring(0, 200) : '');
+        const errData = await resp.json().catch(() => ({}));
+        result.textContent = '连接失败: ' + (errData.error || 'HTTP ' + resp.status);
         result.style.color = '#e74c3c';
       }
     }
@@ -5114,19 +5115,18 @@ async function speakWord(e) {
         }
       } else if (ttsCfg.ttsType === 'volcano') {
         const ttsAppId = appData.ttsAppId || '';
-        const reqId = crypto.randomUUID ? crypto.randomUUID() : 'tts-' + Date.now();
-        const reqBody = {
-          app: { appid: ttsAppId, token: ttsKey, cluster: 'volcano_tts' },
-          user: { uid: 'vocab-user' },
-          audio: { voice_type: ttsVoice, encoding: 'mp3', speed_ratio: 0.85 },
-          request: { reqid: reqId, text: speakText, operation: 'query' }
-        };
-        if (ttsModel && ttsModel !== 'default') reqBody.request.model = ttsModel;
-        const resp = await fetch(ttsUrl + '/api/v1/tts', {
+        const resp = await fetch('/api/proxy-volcano-tts', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ttsKey },
-          body: JSON.stringify(reqBody),
-          signal: AbortSignal.timeout(15000)
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ttsUrl: ttsUrl,
+            ttsKey: ttsKey,
+            ttsAppId: ttsAppId,
+            ttsVoice: ttsVoice,
+            ttsModel: ttsModel,
+            text: speakText
+          }),
+          signal: AbortSignal.timeout(20000)
         });
         if (resp.ok) {
           const data = await resp.json();
@@ -5143,8 +5143,8 @@ async function speakWord(e) {
             ttsError = '火山引擎返回空音频 (code=' + (data.code || '?') + ')';
           }
         } else {
-          const errBody = await resp.text().catch(() => '');
-          ttsError = '火山引擎 HTTP ' + resp.status + ': ' + errBody.substring(0, 100);
+          const errData = await resp.json().catch(() => ({}));
+          ttsError = '火山引擎 TTS 失败: ' + (errData.error || 'HTTP ' + resp.status);
         }
       }
     } catch (e) {
