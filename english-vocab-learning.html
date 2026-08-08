@@ -2767,6 +2767,15 @@ function getVolcanoProxyUrl() {
   return VOLCANO_TTS_PROXY;
 }
 
+// 构建火山引擎 TTS 代理请求的 headers
+function getVolcanoProxyHeaders() {
+  const url = getVolcanoProxyUrl();
+  if (url === '/api/proxy-volcano-tts') {
+    return { 'Content-Type': 'application/json' };
+  }
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_KEY };
+}
+
 // 网络请求重试工具：指数退避，最多 retries 次
 async function withRetry(fn, retries, delay) {
   retries = retries || 3;
@@ -3758,7 +3767,7 @@ async function testTtsConnection() {
     } else if (cfg.ttsType === 'volcano') {
       const resp = await fetch(getVolcanoProxyUrl(), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getVolcanoProxyHeaders(),
         body: JSON.stringify({
           ttsUrl: url,
           ttsKey: key,
@@ -5127,7 +5136,7 @@ async function speakWord(e) {
         const ttsAppId = appData.ttsAppId || '';
         const resp = await fetch(getVolcanoProxyUrl(), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getVolcanoProxyHeaders(),
           body: JSON.stringify({
             ttsUrl: ttsUrl,
             ttsKey: ttsKey,
