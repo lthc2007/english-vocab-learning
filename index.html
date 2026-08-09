@@ -2300,7 +2300,18 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       </div>
       <div class="form-group" id="ttsAppIdGroup" style="display:none;">
         <label class="form-label">App ID</label>
-        <input class="form-input" id="ttsAppIdInput" type="text" placeholder="火山引擎 App ID..." autocomplete="off">
+        <input class="form-input" id="ttsAppIdInput" type="text" placeholder="旧版 App ID (新版控制台留空)..." autocomplete="off">
+      </div>
+      <div class="form-group" id="volcanoConsoleType" style="display:none;">
+        <label class="form-label">控制台版本</label>
+        <div style="display:flex;gap:16px;padding:6px 0;">
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:0.9rem;">
+            <input type="radio" name="volcanoConsole" value="new" checked onchange="onVolcanoConsoleChange()"> 新版控制台 (仅 API Key)
+          </label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:0.9rem;">
+            <input type="radio" name="volcanoConsole" value="old" onchange="onVolcanoConsoleChange()"> 旧版控制台 (App ID + Token)
+          </label>
+        </div>
       </div>
       <div class="form-group" id="ttsModelGroup">
         <label class="form-label">TTS 模型</label>
@@ -3585,12 +3596,19 @@ function onProviderChange() {
 function onTtsProviderChange() {
   const provider = $('ttsProviderSelect').value;
   const cfg = TTS_PROVIDERS[provider];
+  const allGroups = ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup', 'ttsAppIdGroup', 'volcanoConsoleType'];
   if (provider === 'none') {
-    ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup', 'ttsAppIdGroup'].forEach(id => $(id).style.display = 'none');
+    allGroups.forEach(id => $(id).style.display = 'none');
     return;
   }
   ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup'].forEach(id => $(id).style.display = '');
-  $('ttsAppIdGroup').style.display = provider === 'volcano' ? '' : 'none';
+  if (provider === 'volcano') {
+    $('volcanoConsoleType').style.display = '';
+    onVolcanoConsoleChange(); // sync App ID visibility
+  } else {
+    $('ttsAppIdGroup').style.display = 'none';
+    $('volcanoConsoleType').style.display = 'none';
+  }
   $('ttsUrlInput').value = cfg.url;
   $('ttsKeyHint').innerHTML = cfg.keyHint;
   const sel = $('ttsModelSelect');
@@ -3609,6 +3627,15 @@ function onTtsProviderChange() {
     opt.textContent = v;
     vsel.appendChild(opt);
   });
+}
+
+// 火山引擎控制台版本切换：新版只需 API Key，旧版需要 App ID
+function onVolcanoConsoleChange() {
+  const isNew = document.querySelector('input[name="volcanoConsole"]:checked')?.value === 'new';
+  $('ttsAppIdGroup').style.display = isNew ? 'none' : '';
+  $('ttsKeyHint').innerHTML = isNew
+    ? '获取 API Key: <a href="https://console.volcengine.com/speech/new" target="_blank" style="color:var(--accent);">console.volcengine.com/speech</a>'
+    : '获取 App ID & Access Token: <a href="https://console.volcengine.com/speech/app" target="_blank" style="color:var(--accent);">console.volcengine.com/speech</a>';
 }
 
 function closeSettings() {
@@ -3717,12 +3744,15 @@ async function testTtsConnection() {
     return;
   }
 
-  if (provider === 'volcano' && !appId) {
-    result.textContent = '请先填写 App ID';
-    result.style.color = '#e74c3c';
-    btn.disabled = false;
-    btn.textContent = '🔍 测试 TTS 连接';
-    return;
+  if (provider === 'volcano') {
+    const isNewConsole = document.querySelector('input[name="volcanoConsole"]:checked')?.value === 'new';
+    if (!isNewConsole && !appId) {
+      result.textContent = '旧版控制台请填写 App ID，或切换为"新版控制台"';
+      result.style.color = '#e74c3c';
+      btn.disabled = false;
+      btn.textContent = '🔍 测试 TTS 连接';
+      return;
+    }
   }
 
   try {
