@@ -2628,6 +2628,7 @@ function loadData() {
   } catch (e) { /* ignore */ }
   return { apiKey: '', apiUrl: BUILTIN_ZHIPU_PROXY, model: 'glm-4.7-flash', provider: 'zhipu_free',
     ttsKey: '', ttsAppId: '', ttsProvider: 'minimax', ttsUrl: 'https://api.minimaxi.com', ttsModel: 'speech-2.8-hd', ttsVoice: 'English_Graceful_Lady',
+    providerConfigs: {}, ttsProviderConfigs: {},
     words: [], sentences: [] };
 }
 
@@ -2872,6 +2873,27 @@ let appData = loadData();
 // Ensure sentences array exists for users upgrading from older versions
 if (!appData.sentences) appData.sentences = [];
 if (!appData.viewCounts) appData.viewCounts = {};
+// 为旧数据迁移：旧版扁平 API 配置迁移到 per-provider 结构
+if (!appData.providerConfigs) appData.providerConfigs = {};
+if (!appData.ttsProviderConfigs) appData.ttsProviderConfigs = {};
+(function _migrateProviderConfigs() {
+  const p = appData.provider || 'zhipu_free';
+  if (appData.apiKey || appData.apiUrl || appData.model) {
+    if (!appData.providerConfigs[p]) appData.providerConfigs[p] = {};
+    if (appData.apiKey) { appData.providerConfigs[p].apiKey = appData.apiKey; }
+    if (appData.apiUrl) { appData.providerConfigs[p].apiUrl = appData.apiUrl; }
+    if (appData.model) { appData.providerConfigs[p].model = appData.model; }
+  }
+  const tp = appData.ttsProvider || 'minimax';
+  if (appData.ttsKey || appData.ttsUrl || appData.ttsModel || appData.ttsVoice) {
+    if (!appData.ttsProviderConfigs[tp]) appData.ttsProviderConfigs[tp] = {};
+    if (appData.ttsKey) { appData.ttsProviderConfigs[tp].ttsKey = appData.ttsKey; }
+    if (appData.ttsUrl) { appData.ttsProviderConfigs[tp].ttsUrl = appData.ttsUrl; }
+    if (appData.ttsModel) { appData.ttsProviderConfigs[tp].ttsModel = appData.ttsModel; }
+    if (appData.ttsVoice) { appData.ttsProviderConfigs[tp].ttsVoice = appData.ttsVoice; }
+    if (appData.ttsAppId) { appData.ttsProviderConfigs[tp].ttsAppId = appData.ttsAppId; }
+  }
+})();
 // 为旧数据迁移：确保每个单词和句子都有 updatedAt
 let _migrated = false;
 (appData.words || []).forEach(w => {
@@ -3381,7 +3403,7 @@ async function cloudUpload() {
         .from('user_words')
         .upsert({
           user_id: userId,
-          words: { words: appData.words, sentences: appData.sentences || [], corrections: loadHistory(), viewCounts: appData.viewCounts || {} },
+          words: { words: appData.words, sentences: appData.sentences || [], corrections: loadHistory(), viewCounts: appData.viewCounts || {}, providerConfigs: appData.providerConfigs || {}, ttsProviderConfigs: appData.ttsProviderConfigs || {} },
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' });
     });
@@ -3432,11 +3454,15 @@ async function cloudDownload() {
     const cloudSentences = Array.isArray(data.words) ? [] : (data.words.sentences || []);
     const cloudCorrections = Array.isArray(data.words) ? [] : (data.words.corrections || []);
     const cloudViewCounts = Array.isArray(data.words) ? {} : (data.words.viewCounts || {});
+    const cloudProviderConfigs = Array.isArray(data.words) ? {} : (data.words.providerConfigs || {});
+    const cloudTtsProviderConfigs = Array.isArray(data.words) ? {} : (data.words.ttsProviderConfigs || {});
 
     // 云端数据完全替换本地（云端是唯一真相来源）
     appData.words = cloudWords;
     appData.sentences = cloudSentences;
     appData.viewCounts = cloudViewCounts;
+    if (Object.keys(cloudProviderConfigs).length > 0) appData.providerConfigs = cloudProviderConfigs;
+    if (Object.keys(cloudTtsProviderConfigs).length > 0) appData.ttsProviderConfigs = cloudTtsProviderConfigs;
     persist();
     renderWordTable();
     if (cloudCorrections.length > 0) { saveHistory(cloudCorrections); renderHistory(); }
@@ -3556,7 +3582,7 @@ function generateId() {
 // ═══════════════════════════════════════
 function exportData() {
   const data = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     words: appData.words,
     sentences: appData.sentences || [],
@@ -3569,7 +3595,9 @@ function exportData() {
     ttsProvider: appData.ttsProvider,
     ttsUrl: appData.ttsUrl,
     ttsModel: appData.ttsModel,
-    ttsVoice: appData.ttsVoice
+    ttsVoice: appData.ttsVoice,
+    providerConfigs: appData.providerConfigs || {},
+    ttsProviderConfigs: appData.ttsProviderConfigs || {}
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -3633,6 +3661,8 @@ function importData(event) {
         if (data.ttsUrl) appData.ttsUrl = data.ttsUrl;
         if (data.ttsModel) appData.ttsModel = data.ttsModel;
         if (data.ttsVoice) appData.ttsVoice = data.ttsVoice;
+        if (data.providerConfigs && Object.keys(data.providerConfigs).length > 0) appData.providerConfigs = data.providerConfigs;
+        if (data.ttsProviderConfigs && Object.keys(data.ttsProviderConfigs).length > 0) appData.ttsProviderConfigs = data.ttsProviderConfigs;
         showToast('覆盖导入完成: ' + data.words.length + ' 个单词、' + ((data.sentences || []).length) + ' 个好句已导入');
       }
       persist();
@@ -3663,6 +3693,39 @@ function updateApiStatus() {
 // Settings Modal
 // ═══════════════════════════════════════
 function openSettings() {
+  // 辅助函数：从 providerConfigs 加载当前 provider 的配置到 active 字段
+  function _loadProviderConfig() {
+    const p = appData.provider || 'zhipu_free';
+    const cfg = appData.providerConfigs[p];
+    if (cfg) {
+      if (cfg.apiKey !== undefined) appData.apiKey = cfg.apiKey;
+      if (cfg.apiUrl !== undefined) appData.apiUrl = cfg.apiUrl;
+      if (cfg.model !== undefined) appData.model = cfg.model;
+    } else {
+      appData.apiKey = '';
+      appData.apiUrl = PROVIDERS[p] ? PROVIDERS[p].url : '';
+      appData.model = (PROVIDERS[p] && PROVIDERS[p].models) ? PROVIDERS[p].models[0] : '';
+    }
+  }
+  function _loadTtsProviderConfig() {
+    const tp = appData.ttsProvider || 'minimax';
+    const cfg = appData.ttsProviderConfigs[tp];
+    if (cfg) {
+      if (cfg.ttsKey !== undefined) appData.ttsKey = cfg.ttsKey;
+      if (cfg.ttsUrl !== undefined) appData.ttsUrl = cfg.ttsUrl;
+      if (cfg.ttsModel !== undefined) appData.ttsModel = cfg.ttsModel;
+      if (cfg.ttsVoice !== undefined) appData.ttsVoice = cfg.ttsVoice;
+      if (cfg.ttsAppId !== undefined) appData.ttsAppId = cfg.ttsAppId;
+    } else {
+      appData.ttsKey = '';
+      appData.ttsUrl = TTS_PROVIDERS[tp] ? TTS_PROVIDERS[tp].url : '';
+      appData.ttsModel = (TTS_PROVIDERS[tp] && TTS_PROVIDERS[tp].models && TTS_PROVIDERS[tp].models.length) ? TTS_PROVIDERS[tp].models[0] : '';
+      appData.ttsVoice = (TTS_PROVIDERS[tp] && TTS_PROVIDERS[tp].voices && TTS_PROVIDERS[tp].voices.length) ? (typeof TTS_PROVIDERS[tp].voices[0] === 'object' ? TTS_PROVIDERS[tp].voices[0].id : TTS_PROVIDERS[tp].voices[0]) : '';
+      appData.ttsAppId = '';
+    }
+  }
+  _loadProviderConfig();
+  _loadTtsProviderConfig();
   $('providerSelect').value = appData.provider || 'zhipu_free';
   onProviderChange();
   $('apiUrlInput').value = appData.apiUrl || '';
@@ -3694,10 +3757,29 @@ function openSettings() {
 }
 
 function onProviderChange() {
+  // 保存当前 provider 的配置
+  const oldProvider = appData.provider || 'zhipu_free';
+  if (oldProvider !== 'zhipu_free' || appData.apiKey) {
+    appData.providerConfigs[oldProvider] = {
+      apiKey: appData.apiKey || '',
+      apiUrl: appData.apiUrl || '',
+      model: appData.model || ''
+    };
+  }
   const provider = $('providerSelect').value;
   const cfg = PROVIDERS[provider];
   $('apiUrlInput').value = cfg.url;
   $('apiKeyHint').innerHTML = cfg.keyHint;
+  // 加载新 provider 的已保存配置
+  const savedCfg = appData.providerConfigs[provider];
+  if (savedCfg) {
+    if (savedCfg.apiKey !== undefined) $('apiKeyInput').value = savedCfg.apiKey;
+    if (savedCfg.apiUrl !== undefined) $('apiUrlInput').value = savedCfg.apiUrl;
+  } else if (provider === 'zhipu_free') {
+    $('apiKeyInput').value = '';
+  } else {
+    $('apiKeyInput').value = '';
+  }
   const sel = $('modelSelect');
   sel.innerHTML = '';
   cfg.models.forEach(m => {
@@ -3718,6 +3800,17 @@ function onProviderChange() {
   sel.onchange = function() {
     $('modelCustomInput').style.display = sel.value === '__custom__' ? '' : 'none';
   };
+  // 恢复新 provider 保存的模型
+  if (savedCfg && savedCfg.model) {
+    const modelOpt = sel.querySelector(`option[value="${savedCfg.model}"]`);
+    if (modelOpt) {
+      sel.value = savedCfg.model;
+    } else {
+      sel.value = '__custom__';
+      $('modelCustomInput').style.display = '';
+      $('modelCustomInput').value = savedCfg.model;
+    }
+  }
   // 内置模型：隐藏 Key 输入框
   const keyRow = $('apiKeyInput').parentElement;
   const keyBtns = keyRow.querySelector('.input-btns');
@@ -3731,6 +3824,17 @@ function onProviderChange() {
 }
 
 function onTtsProviderChange() {
+  // 保存当前 TTS provider 的配置
+  const oldTp = appData.ttsProvider || 'minimax';
+  if (oldTp !== 'none') {
+    appData.ttsProviderConfigs[oldTp] = {
+      ttsKey: $('ttsKeyInput').value.trim(),
+      ttsUrl: $('ttsUrlInput').value.trim(),
+      ttsModel: $('ttsModelSelect').value,
+      ttsVoice: $('ttsVoiceSelect').value,
+      ttsAppId: $('ttsAppIdInput').value.trim()
+    };
+  }
   const provider = $('ttsProviderSelect').value;
   const cfg = TTS_PROVIDERS[provider];
   const allGroups = ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup', 'ttsAppIdGroup', 'volcanoConsoleType'];
@@ -3748,6 +3852,16 @@ function onTtsProviderChange() {
   }
   $('ttsUrlInput').value = cfg.url;
   $('ttsKeyHint').innerHTML = cfg.keyHint;
+  // 加载新 TTS provider 的已保存配置
+  const savedTtsCfg = appData.ttsProviderConfigs[provider];
+  if (savedTtsCfg) {
+    if (savedTtsCfg.ttsKey !== undefined) $('ttsKeyInput').value = savedTtsCfg.ttsKey;
+    if (savedTtsCfg.ttsUrl !== undefined) $('ttsUrlInput').value = savedTtsCfg.ttsUrl;
+    if (savedTtsCfg.ttsAppId !== undefined) $('ttsAppIdInput').value = savedTtsCfg.ttsAppId;
+  } else {
+    $('ttsKeyInput').value = '';
+    $('ttsAppIdInput').value = '';
+  }
 
   // Model dropdown: hide for volcano (auto-determined by voice)
   $('ttsModelGroup').style.display = provider === 'volcano' ? 'none' : '';
@@ -3798,6 +3912,15 @@ function onTtsProviderChange() {
       opt.textContent = v;
       vsel.appendChild(opt);
     });
+  }
+  // 恢复新 TTS provider 保存的模型和音色
+  if (provider !== 'volcano' && savedTtsCfg && savedTtsCfg.ttsModel) {
+    const modelOpt = sel.querySelector(`option[value="${savedTtsCfg.ttsModel}"]`);
+    if (modelOpt) sel.value = savedTtsCfg.ttsModel;
+  }
+  if (savedTtsCfg && savedTtsCfg.ttsVoice) {
+    const voiceOpt = vsel.querySelector(`option[value="${savedTtsCfg.ttsVoice}"]`);
+    if (voiceOpt) vsel.value = savedTtsCfg.ttsVoice;
   }
 }
 
@@ -4013,6 +4136,12 @@ function saveSettings() {
   appData.apiKey = $('apiKeyInput').value.trim();
   const modelVal = $('modelSelect').value;
   appData.model = modelVal === '__custom__' ? $('modelCustomInput').value.trim() : modelVal;
+  // 保存到 per-provider config
+  appData.providerConfigs[provider] = {
+    apiKey: appData.apiKey,
+    apiUrl: appData.apiUrl,
+    model: appData.model
+  };
   // TTS
   appData.ttsProvider = $('ttsProviderSelect').value;
   appData.ttsUrl = $('ttsUrlInput').value.trim();
@@ -4020,6 +4149,16 @@ function saveSettings() {
   appData.ttsAppId = $('ttsAppIdInput').value.trim();
   appData.ttsModel = $('ttsModelSelect').value;
   appData.ttsVoice = $('ttsVoiceSelect').value;
+  // 保存到 per-TTS-provider config
+  if (appData.ttsProvider !== 'none') {
+    appData.ttsProviderConfigs[appData.ttsProvider] = {
+      ttsKey: appData.ttsKey,
+      ttsUrl: appData.ttsUrl,
+      ttsModel: appData.ttsModel,
+      ttsVoice: appData.ttsVoice,
+      ttsAppId: appData.ttsAppId
+    };
+  }
   persist();
   updateApiStatus();
   closeSettings();
