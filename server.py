@@ -15,10 +15,10 @@ PORT = 8080
 WORKSPACE = os.path.dirname(os.path.abspath(__file__))
 
 def resolve_resource_id(voice):
-    """Detect voice model version: _uranus_bigtts → seed-tts-2.0, _mars_bigtts → seed-tts-1.0"""
-    if voice and (voice.endswith("_uranus_bigtts") or "_uranus_" in voice):
-        return "seed-tts-2.0"
-    return "seed-tts-1.0"
+    """Detect voice model version: _mars_bigtts → seed-tts-1.0, everything else → seed-tts-2.0"""
+    if voice and voice.endswith("_mars_bigtts"):
+        return "seed-tts-1.0"
+    return "seed-tts-2.0"
 
 class ProxyHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -93,8 +93,10 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
             print(f"[TTS] Response len={len(resp_text)}, first 300: {resp_text[:300]}")
 
-            # Parse SSE stream response
+            # Parse SSE / Chunked stream response
             audio_chunks = []
+            has_sse_audio = False
+
             for line in resp_text.split("\n"):
                 line = line.strip()
                 if line.startswith("data:"):
@@ -103,12 +105,33 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                         continue
                     try:
                         data = json.loads(data_str)
-                        if data.get("audio"):
-                            audio_chunks.append(data["audio"])
-                        # Check for error: v3 API returns code + message
-                        if data.get("error") or data.get("code"):
-                            err_msg = data.get("message") or json.dumps(data.get("error") or data)
-                            self._send_json(500, {"error": f"火山引擎错误(code={data.get('code', '?')}): {err_msg}"})
+                        # v3 API returns audio in the "data" field (not "audio")
+                        if isinstance(data.get("data"), str) and len(data["data"]) > 100:
+                            audio_chunks.append(data["data"])
+                            has_sse_audio = True
+                        # Error: non-zero code that is not 20000000 (OK)
+                        code = data.get("code")
+                        if code and code != 0 and code != 20000000:
+                            err_msg = data.get("message") or f"code={code}"
+                            self._send_json(500, {"error": f"火山引擎错误(code={code}): {err_msg}"})
+                            return
+                    except json.JSONDecodeError:
+                        pass
+
+            # Fallback: try Chunked format (newline-delimited JSON)
+            if not has_sse_audio and not audio_chunks:
+                for line in resp_text.split("\n"):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                        if isinstance(data.get("data"), str) and len(data["data"]) > 100:
+                            audio_chunks.append(data["data"])
+                        code = data.get("code")
+                        if code and code != 0 and code != 20000000:
+                            err_msg = data.get("message") or f"code={code}"
+                            self._send_json(500, {"error": f"火山引擎错误(code={code}): {err_msg}"})
                             return
                     except json.JSONDecodeError:
                         pass

@@ -10,12 +10,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-// Detect voice model version: _uranus_bigtts → seed-tts-2.0, _mars_bigtts → seed-tts-1.0
+// Detect voice model version: _mars_bigtts → seed-tts-1.0, everything else → seed-tts-2.0
 function resolveResourceId(voice: string): string {
-  if (voice && (voice.endsWith("_uranus_bigtts") || voice.includes("_uranus_"))) {
-    return "seed-tts-2.0";
+  if (voice && voice.endsWith("_mars_bigtts")) {
+    return "seed-tts-1.0";
   }
-  return "seed-tts-1.0";
+  return "seed-tts-2.0";
 }
 
 serve(async (req) => {
@@ -93,16 +93,14 @@ serve(async (req) => {
     console.log("Volcano TTS raw response (last 500 chars):", respText.substring(Math.max(0, respText.length - 500)));
 
     const audioChunks: string[] = [];
-    let currentEvent = "";
 
+    // Handle both SSE format (event:/data:) and Chunked format (newline-delimited JSON)
     const lines = respText.split("\n");
+
+    // First try to parse as SSE format
+    let hasSseAudio = false;
     for (const line of lines) {
       const trimmed = line.trim();
-
-      if (trimmed.startsWith("event:")) {
-        currentEvent = trimmed.substring(6).trim();
-        continue;
-      }
 
       if (trimmed.startsWith("data:")) {
         const dataStr = trimmed.substring(5).trim();
@@ -110,14 +108,16 @@ serve(async (req) => {
 
         try {
           const data = JSON.parse(dataStr);
-          if (data.audio) {
-            audioChunks.push(data.audio);
+          // v3 API returns audio in the "data" field (not "audio")
+          if (data.data && typeof data.data === "string" && data.data.length > 100) {
+            audioChunks.push(data.data);
+            hasSseAudio = true;
           }
-          // Check for error: v3 API returns code + message in the data
-          if (data.error || data.code) {
-            const errMsg = data.message || JSON.stringify(data.error || data);
+          // Error: non-zero code that is not 20000000 (OK)
+          if (data.code && data.code !== 0 && data.code !== 20000000) {
+            const errMsg = data.message || `code=${data.code}`;
             console.error("Volcano TTS API error:", errMsg);
-            return new Response(JSON.stringify({ error: `火山引擎错误(code=${data.code || '?'}): ${errMsg}` }), {
+            return new Response(JSON.stringify({ error: `火山引擎错误(code=${data.code}): ${errMsg}` }), {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
               status: 500,
             });
@@ -126,9 +126,28 @@ serve(async (req) => {
           // skip unparseable data lines
         }
       }
-      // blank line resets event
-      if (trimmed === "") {
-        currentEvent = "";
+    }
+
+    // Fallback: try Chunked format (newline-delimited JSON)
+    if (!hasSseAudio && audioChunks.length === 0) {
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const data = JSON.parse(trimmed);
+          if (data.data && typeof data.data === "string" && data.data.length > 100) {
+            audioChunks.push(data.data);
+          }
+          if (data.code && data.code !== 0 && data.code !== 20000000) {
+            const errMsg = data.message || `code=${data.code}`;
+            return new Response(JSON.stringify({ error: `火山引擎错误(code=${data.code}): ${errMsg}` }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 500,
+            });
+          }
+        } catch {
+          // skip
+        }
       }
     }
 
