@@ -2262,7 +2262,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       </div>
       <div class="form-group">
         <label class="form-label">API 地址</label>
-        <input class="form-input" id="apiUrlInput" type="text" placeholder="https://api.deepseek.com/v1" autocomplete="off">
+        <input class="form-input" id="apiUrlInput" type="text" placeholder="https://api.deepseek.com/v1" autocomplete="off" readonly style="background:#1a1a2e;color:#8892b0;cursor:not-allowed;">
       </div>
       <div class="form-group">
         <label class="form-label">模型名称</label>
@@ -2296,7 +2296,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       </div>
       <div class="form-group" id="ttsUrlGroup">
         <label class="form-label">TTS API 地址</label>
-        <input class="form-input" id="ttsUrlInput" type="text" placeholder="https://api.minimaxi.com/v1" autocomplete="off">
+        <input class="form-input" id="ttsUrlInput" type="text" placeholder="https://api.minimaxi.com/v1" autocomplete="off" readonly style="background:#1a1a2e;color:#8892b0;cursor:not-allowed;">
       </div>
       <div class="form-group" id="ttsAppIdGroup" style="display:none;">
         <label class="form-label">App ID</label>
@@ -3697,29 +3697,26 @@ function openSettings() {
   function _loadProviderConfig() {
     const p = appData.provider || 'zhipu_free';
     const cfg = appData.providerConfigs[p];
+    appData.apiUrl = PROVIDERS[p] ? PROVIDERS[p].url : '';
     if (cfg) {
       if (cfg.apiKey !== undefined) appData.apiKey = cfg.apiKey;
-      if (cfg.apiUrl !== undefined) appData.apiUrl = cfg.apiUrl;
       if (cfg.model !== undefined) appData.model = cfg.model;
     } else {
       appData.apiKey = '';
-      appData.apiUrl = PROVIDERS[p] ? PROVIDERS[p].url : '';
       appData.model = (PROVIDERS[p] && PROVIDERS[p].models) ? PROVIDERS[p].models[0] : '';
     }
   }
   function _loadTtsProviderConfig() {
     const tp = appData.ttsProvider || 'minimax';
     const cfg = appData.ttsProviderConfigs[tp];
+    appData.ttsUrl = TTS_PROVIDERS[tp] ? TTS_PROVIDERS[tp].url : '';
     if (cfg) {
       if (cfg.ttsKey !== undefined) appData.ttsKey = cfg.ttsKey;
-      if (cfg.ttsUrl !== undefined) appData.ttsUrl = cfg.ttsUrl;
-      else appData.ttsUrl = TTS_PROVIDERS[tp] ? TTS_PROVIDERS[tp].url : '';
       if (cfg.ttsModel !== undefined) appData.ttsModel = cfg.ttsModel;
       if (cfg.ttsVoice !== undefined) appData.ttsVoice = cfg.ttsVoice;
       if (cfg.ttsAppId !== undefined) appData.ttsAppId = cfg.ttsAppId;
     } else {
       appData.ttsKey = '';
-      appData.ttsUrl = TTS_PROVIDERS[tp] ? TTS_PROVIDERS[tp].url : '';
       appData.ttsModel = (TTS_PROVIDERS[tp] && TTS_PROVIDERS[tp].models && TTS_PROVIDERS[tp].models.length) ? TTS_PROVIDERS[tp].models[0] : '';
       appData.ttsVoice = (TTS_PROVIDERS[tp] && TTS_PROVIDERS[tp].voices && TTS_PROVIDERS[tp].voices.length) ? (typeof TTS_PROVIDERS[tp].voices[0] === 'object' ? TTS_PROVIDERS[tp].voices[0].id : TTS_PROVIDERS[tp].voices[0]) : '';
       appData.ttsAppId = '';
@@ -3729,7 +3726,6 @@ function openSettings() {
   _loadTtsProviderConfig();
   $('providerSelect').value = appData.provider || 'zhipu_free';
   onProviderChange();
-  $('apiUrlInput').value = appData.apiUrl || '';
   $('apiKeyInput').value = appData.apiKey || '';
   if (appData.model) {
     const modelOpt = $('modelSelect').querySelector(`option[value="${appData.model}"]`);
@@ -3744,12 +3740,6 @@ function openSettings() {
   // TTS section
   $('ttsProviderSelect').value = appData.ttsProvider || 'minimax';
   onTtsProviderChange();
-  // Auto-correct old MiniMax URLs
-  if (appData.ttsUrl && appData.ttsUrl.includes('api.minimax.io')) {
-    appData.ttsUrl = 'https://api.minimaxi.com';
-    persist();
-  }
-  $('ttsUrlInput').value = appData.ttsUrl || '';
   $('ttsKeyInput').value = appData.ttsKey || '';
   $('ttsAppIdInput').value = appData.ttsAppId || '';
   if (appData.ttsModel) $('ttsModelSelect').value = appData.ttsModel;
@@ -3764,12 +3754,12 @@ function onProviderChange() {
   if (oldProvider !== provider && (oldProvider !== 'zhipu_free' || appData.apiKey)) {
     appData.providerConfigs[oldProvider] = {
       apiKey: appData.apiKey || '',
-      apiUrl: appData.apiUrl || '',
       model: appData.model || ''
     };
   }
   // 立即更新当前 provider，防止多次切换时配置保存到错误的 key
   appData.provider = provider;
+  appData.apiUrl = PROVIDERS[provider] ? PROVIDERS[provider].url : '';
   const cfg = PROVIDERS[provider];
   $('apiUrlInput').value = cfg.url;
   $('apiKeyHint').innerHTML = cfg.keyHint;
@@ -3777,7 +3767,6 @@ function onProviderChange() {
   const savedCfg = appData.providerConfigs[provider];
   if (savedCfg) {
     if (savedCfg.apiKey !== undefined) $('apiKeyInput').value = savedCfg.apiKey;
-    if (savedCfg.apiUrl !== undefined) $('apiUrlInput').value = savedCfg.apiUrl;
   } else if (provider === 'zhipu_free') {
     $('apiKeyInput').value = '';
   } else {
@@ -3833,7 +3822,6 @@ function onTtsProviderChange() {
   if (oldTp !== provider && oldTp !== 'none') {
     appData.ttsProviderConfigs[oldTp] = {
       ttsKey: $('ttsKeyInput').value.trim(),
-      ttsUrl: $('ttsUrlInput').value.trim(),
       ttsModel: $('ttsModelSelect').value,
       ttsVoice: $('ttsVoiceSelect').value,
       ttsAppId: $('ttsAppIdInput').value.trim()
@@ -3841,6 +3829,7 @@ function onTtsProviderChange() {
   }
   // 立即更新当前 TTS provider，防止多次切换时配置保存到错误的 key
   appData.ttsProvider = provider;
+  appData.ttsUrl = TTS_PROVIDERS[provider] ? TTS_PROVIDERS[provider].url : '';
   const cfg = TTS_PROVIDERS[provider];
   const allGroups = ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup', 'ttsAppIdGroup', 'volcanoConsoleType'];
   if (provider === 'none') {
@@ -3861,7 +3850,6 @@ function onTtsProviderChange() {
   const savedTtsCfg = appData.ttsProviderConfigs[provider];
   if (savedTtsCfg) {
     if (savedTtsCfg.ttsKey !== undefined) $('ttsKeyInput').value = savedTtsCfg.ttsKey;
-    if (savedTtsCfg.ttsUrl !== undefined) $('ttsUrlInput').value = savedTtsCfg.ttsUrl;
     if (savedTtsCfg.ttsAppId !== undefined) $('ttsAppIdInput').value = savedTtsCfg.ttsAppId;
   } else {
     $('ttsKeyInput').value = '';
@@ -3969,7 +3957,7 @@ async function testAiConnection() {
   // 直连模式：POST apiUrl + /chat/completions，带 Bearer Key
   const reqUrl = isProxy
     ? BUILTIN_ZHIPU_PROXY
-    : ($('apiUrlInput').value.trim() || 'https://api.deepseek.com/v1').replace(/\/$/, '') + '/chat/completions';
+    : (appData.apiUrl || 'https://api.deepseek.com/v1').replace(/\/$/, '') + '/chat/completions';
   const reqModel = isProxy ? (model || BUILTIN_ZHIPU_MODEL) : model;
   const reqHeaders = { 'Content-Type': 'application/json' };
   if (!isProxy) reqHeaders['Authorization'] = 'Bearer ' + key;
@@ -4033,7 +4021,7 @@ async function testTtsConnection() {
 
   const key = $('ttsKeyInput').value.trim();
   const appId = $('ttsAppIdInput').value.trim();
-  const url = ($('ttsUrlInput').value.trim() || TTS_PROVIDERS[provider].url).replace(/\/$/, '');
+  const url = (appData.ttsUrl || TTS_PROVIDERS[provider].url).replace(/\/$/, '');
   const cfg = TTS_PROVIDERS[provider];
 
   if (!key) {
@@ -4137,28 +4125,26 @@ function getModalModel() {
 function saveSettings() {
   const provider = $('providerSelect').value;
   appData.provider = provider;
-  appData.apiUrl = $('apiUrlInput').value.trim();
+  appData.apiUrl = PROVIDERS[provider] ? PROVIDERS[provider].url : '';
   appData.apiKey = $('apiKeyInput').value.trim();
   const modelVal = $('modelSelect').value;
   appData.model = modelVal === '__custom__' ? $('modelCustomInput').value.trim() : modelVal;
-  // 保存到 per-provider config
+  // 保存到 per-provider config（URL 不保存，始终从服务商配置读取）
   appData.providerConfigs[provider] = {
     apiKey: appData.apiKey,
-    apiUrl: appData.apiUrl,
     model: appData.model
   };
   // TTS
   appData.ttsProvider = $('ttsProviderSelect').value;
-  appData.ttsUrl = $('ttsUrlInput').value.trim();
+  appData.ttsUrl = TTS_PROVIDERS[appData.ttsProvider] ? TTS_PROVIDERS[appData.ttsProvider].url : '';
   appData.ttsKey = $('ttsKeyInput').value.trim();
   appData.ttsAppId = $('ttsAppIdInput').value.trim();
   appData.ttsModel = $('ttsModelSelect').value;
   appData.ttsVoice = $('ttsVoiceSelect').value;
-  // 保存到 per-TTS-provider config
+  // 保存到 per-TTS-provider config（URL 不保存，始终从服务商配置读取）
   if (appData.ttsProvider !== 'none') {
     appData.ttsProviderConfigs[appData.ttsProvider] = {
       ttsKey: appData.ttsKey,
-      ttsUrl: appData.ttsUrl,
       ttsModel: appData.ttsModel,
       ttsVoice: appData.ttsVoice,
       ttsAppId: appData.ttsAppId
