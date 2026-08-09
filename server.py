@@ -105,8 +105,10 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                         data = json.loads(data_str)
                         if data.get("audio"):
                             audio_chunks.append(data["audio"])
-                        if data.get("error"):
-                            self._send_json(500, {"error": f"火山引擎返回错误: {json.dumps(data['error'])}"})
+                        # Check for error: v3 API returns code + message
+                        if data.get("error") or data.get("code"):
+                            err_msg = data.get("message") or json.dumps(data.get("error") or data)
+                            self._send_json(500, {"error": f"火山引擎错误(code={data.get('code', '?')}): {err_msg}"})
                             return
                     except json.JSONDecodeError:
                         pass

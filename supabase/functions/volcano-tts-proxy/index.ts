@@ -113,9 +113,11 @@ serve(async (req) => {
           if (data.audio) {
             audioChunks.push(data.audio);
           }
-          if (data.error) {
-            console.error("Volcano TTS event error:", JSON.stringify(data.error));
-            return new Response(JSON.stringify({ error: `火山引擎返回错误: ${JSON.stringify(data.error)}` }), {
+          // Check for error: v3 API returns code + message in the data
+          if (data.error || data.code) {
+            const errMsg = data.message || JSON.stringify(data.error || data);
+            console.error("Volcano TTS API error:", errMsg);
+            return new Response(JSON.stringify({ error: `火山引擎错误(code=${data.code || '?'}): ${errMsg}` }), {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
               status: 500,
             });
