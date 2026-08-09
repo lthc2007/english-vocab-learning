@@ -12,7 +12,7 @@ const corsHeaders = {
 
 // Detect voice model version: _mars_bigtts / _moon_bigtts / _wvae_bigtts → seed-tts-1.0, everything else → seed-tts-2.0
 function resolveResourceId(voice: string): string {
-  if (voice && (voice.endsWith("_mars_bigtts") || voice.endsWith("_moon_bigtts") || voice.endsWith("_wvae_bigtts"))) {
+  if (typeof voice === 'string' && voice && (voice.endsWith("_mars_bigtts") || voice.endsWith("_moon_bigtts") || voice.endsWith("_wvae_bigtts"))) {
     return "seed-tts-1.0";
   }
   return "seed-tts-2.0";

@@ -16,7 +16,7 @@ WORKSPACE = os.path.dirname(os.path.abspath(__file__))
 
 def resolve_resource_id(voice):
     """Detect voice model version: _mars_bigtts / _moon_bigtts / _wvae_bigtts → seed-tts-1.0, everything else → seed-tts-2.0"""
-    if voice and (voice.endswith("_mars_bigtts") or voice.endswith("_moon_bigtts") or voice.endswith("_wvae_bigtts")):
+    if isinstance(voice, str) and voice and (voice.endswith("_mars_bigtts") or voice.endswith("_moon_bigtts") or voice.endswith("_wvae_bigtts")):
         return "seed-tts-1.0"
     return "seed-tts-2.0"
 
