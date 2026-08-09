@@ -1488,6 +1488,29 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
 }
 .article-para .word-clickable:hover { background: var(--accent-soft); color: var(--accent); }
 .article-para .word-clickable.active { background: var(--accent-soft); color: var(--accent); }
+/* ── 单词行内释义 ── */
+.word-inline-meaning {
+  display: inline; vertical-align: middle;
+  margin-left: 4px; padding: 1px 8px;
+  background: #eef6f6; border: 1px solid var(--accent);
+  border-radius: 10px; font-size: 0.8rem; color: var(--accent);
+  white-space: nowrap; cursor: default; line-height: 1.5;
+  animation: fadeIn 0.2s ease-out;
+}
+.word-inline-meaning .wim-text {
+  margin-right: 6px;
+}
+.word-inline-meaning .wim-add {
+  display: inline-block; cursor: pointer; color: var(--accent2);
+  font-weight: 700; font-size: 0.85rem; padding: 0 3px;
+  border-radius: 50%; transition: all 0.15s;
+}
+.word-inline-meaning .wim-add:hover { background: var(--gold-soft); color: var(--accent); }
+.word-inline-meaning .wim-close {
+  cursor: pointer; color: var(--muted); font-size: 0.8rem;
+  margin-left: 2px; padding: 0 2px;
+}
+.word-inline-meaning .wim-close:hover { color: var(--danger); }
 .article-para-actions { margin-top: 6px; margin-bottom: 4px; }
 .article-para-translation {
   background: #f8f9fa; border-left: 3px solid var(--accent);
@@ -1523,6 +1546,31 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
 .article-word-popup .popup-meaning { font-size: 0.9rem; color: var(--ink); margin-bottom: 6px; line-height: 1.5; }
 .article-word-popup .popup-lemma { font-size: 0.82rem; color: var(--accent2); margin-bottom: 6px; }
 .article-word-popup .popup-lemma-meaning { font-size: 0.85rem; color: #555; margin-bottom: 10px; line-height: 1.4; }
+/* ── 句子选择弹窗 ── */
+.article-sentence-popup {
+  position: fixed; background: #fff; border: 1.5px solid var(--accent);
+  border-radius: var(--radius-sm); padding: 16px 20px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.18); z-index: 1001;
+  max-width: 400px; min-width: 240px; display: none;
+}
+.article-sentence-popup .asp-en {
+  font-size: 0.95rem; color: var(--ink); line-height: 1.7; margin-bottom: 10px;
+  padding: 10px 12px; background: var(--bg); border-radius: 6px;
+  border-left: 3px solid var(--accent);
+}
+.article-sentence-popup .asp-cn {
+  font-size: 0.88rem; color: #555; line-height: 1.7; margin-bottom: 10px;
+  padding: 10px 12px; background: #f8f9fa; border-radius: 6px;
+  display: none; border-left: 3px solid var(--accent2);
+}
+.article-sentence-popup .asp-cn.show { display: block; animation: fadeIn 0.25s ease-out; }
+.article-sentence-popup .asp-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.article-sentence-popup .asp-close {
+  position: absolute; top: 8px; right: 12px; cursor: pointer;
+  font-size: 1.1rem; color: var(--muted); background: none; border: none;
+  line-height: 1; padding: 4px; transition: color 0.15s;
+}
+.article-sentence-popup .asp-close:hover { color: var(--danger); }
 .article-quiz-answer {
   background: #f0fdf4; border: 1px solid #86efac; border-radius: var(--radius-sm);
   padding: 14px 18px; margin-top: 16px; display: none; line-height: 1.8;
@@ -2341,6 +2389,17 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-primary btn-sm" id="btnAWPAddWord" onclick="addArticleWord()">加入单词列表</button>
           <button class="btn btn-secondary btn-sm" onclick="closeArticleWordPopup()">关闭</button>
+        </div>
+      </div>
+      <!-- 句子选择弹窗 -->
+      <div class="article-sentence-popup" id="articleSentencePopup">
+        <button class="asp-close" onclick="closeArticleSentencePopup()" title="关闭">&times;</button>
+        <div class="asp-en" id="aspEn"></div>
+        <div class="asp-cn" id="aspCn"></div>
+        <div class="asp-actions">
+          <button class="btn btn-accent btn-sm" id="btnAspTranslate" onclick="translateSelectedSentence()">🤖 AI 翻译</button>
+          <button class="btn btn-primary btn-sm" id="btnAspSave" onclick="saveSelectedSentence()" style="display:none;">保存到好句背诵</button>
+          <button class="btn btn-secondary btn-sm" onclick="closeArticleSentencePopup()">关闭</button>
         </div>
       </div>
       <!-- 练习题区域 -->
@@ -9279,7 +9338,8 @@ function clearArticle() {
   $('articleQuizAnswers').classList.remove('show');
   $('articleQuizAnswerContent').innerHTML = '';
   $('btnArticleClear').style.display = 'none';
-  closeArticleWordPopup();
+  closeArticleSentencePopup();
+  removeAllInlineMeanings();
 }
 
 async function parseArticle() {
@@ -9363,6 +9423,30 @@ function renderArticle() {
   $('articleQuizAnswerContent').innerHTML = '';
   $('btnArticleQuiz').disabled = false;
   $('articleQuizProgress').style.display = 'none';
+
+  // ── 句子选择检测 ──
+  container.onmouseup = handleArticleSelection;
+  container.addEventListener('touchend', function(e) {
+    // On mobile, selection needs more time to settle after long-press
+    setTimeout(() => handleArticleSelection(e), 300);
+  });
+  // Fallback: also listen to selectionchange for when user adjusts handles after touchend
+  let selectionDebounce = null;
+  document.addEventListener('selectionchange', function() {
+    if (selectionDebounce) clearTimeout(selectionDebounce);
+    selectionDebounce = setTimeout(() => {
+      // Don't interfere if popup is already open
+      if ($('articleSentencePopup').style.display === 'block') return;
+      if (_sentencePopupJustClosed) return;
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+      const range = sel.getRangeAt(0);
+      const c = document.getElementById('articleDisplay');
+      if (c && c.contains(range.commonAncestorContainer)) {
+        handleArticleSelection({});
+      }
+    }, 500);
+  });
 }
 
 async function translateParagraph(idx) {
@@ -9413,40 +9497,30 @@ ${para}`;
 
 async function lookupArticleWord(word, event) {
   event.stopPropagation();
-  const popup = $('articleWordPopup');
-  const rect = event.target.getBoundingClientRect();
 
-  // Position popup near the word
-  let top = rect.bottom + 6;
-  let left = rect.left;
-  if (top + 250 > window.innerHeight) top = rect.top - 250;
-  if (left + 320 > window.innerWidth) left = window.innerWidth - 330;
-  if (left < 10) left = 10;
-
-  popup.style.top = top + 'px';
-  popup.style.left = left + 'px';
-  popup.style.display = 'block';
-
-  $('awpWord').textContent = word;
-  $('awpPhonetic').textContent = '查询中...';
-  $('awpMeaning').textContent = 'AI 正在查询...';
-  $('btnAWPAddWord').style.display = 'none';
+  const clickedEl = event.target;
+  // Remove any existing inline meanings
+  removeAllInlineMeanings();
 
   // Highlight the clicked word
   document.querySelectorAll('.article-para .word-clickable.active').forEach(el => el.classList.remove('active'));
-  event.target.classList.add('active');
+  clickedEl.classList.add('active');
 
-  // Store current word for adding
-  popup.dataset.currentWord = word;
+  // Insert a loading indicator next to the word
+  const loadingEl = document.createElement('span');
+  loadingEl.className = 'word-inline-meaning';
+  loadingEl.id = 'activeInlineMeaning';
+  loadingEl.innerHTML = '<span class="wim-text">查询中...</span>';
+  clickedEl.insertAdjacentElement('afterend', loadingEl);
 
   if (!appData.provider || appData.provider === 'zhipu_free') {
     if (!appData.apiKey) {
-      $('awpMeaning').textContent = '请先在 API 设置中配置 API Key';
+      loadingEl.innerHTML = '<span class="wim-text">请配置 API Key</span><span class="wim-close" onclick="removeAllInlineMeanings();event.stopPropagation();">&times;</span>';
       return;
     }
   }
 
-  // Get context (the paragraph containing this word)
+  // Get context
   let context = '';
   for (const para of articleData.paragraphs) {
     if (para.toLowerCase().includes(word.toLowerCase())) {
@@ -9473,44 +9547,58 @@ Context: ${context}`;
     let jsonStr = result.content || result;
     jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
     const parsed = JSON.parse(jsonStr);
-    $('awpPhonetic').textContent = parsed.phonetic ? '/' + parsed.phonetic + '/' : '';
 
     const lemma = parsed.lemma || word;
     const contextMeaning = parsed.context_meaning || parsed.meaning || '';
     const lemmaMeaning = parsed.lemma_meaning || contextMeaning;
 
-    // Primary display: word's general meaning (this is what gets stored)
-    $('awpMeaning').textContent = lemmaMeaning;
+    // Build inline display
+    let innerHTML = `<span class="wim-text">${escapeHtml(lemmaMeaning)}</span>`;
+    innerHTML += `<span class="wim-add" title="加入单词列表" onclick="addArticleWordInline('${escapeHtml(lemma)}','${escapeHtml(lemmaMeaning)}',event)">+</span>`;
+    innerHTML += `<span class="wim-close" onclick="removeAllInlineMeanings();event.stopPropagation();">&times;</span>`;
 
-    // Show lemma info if different from original word
-    if (lemma.toLowerCase() !== word.toLowerCase()) {
-      $('awpLemma').style.display = '';
-      $('awpLemma').textContent = '原型：' + lemma;
-    } else {
-      $('awpLemma').style.display = 'none';
-    }
-
-    // Show context meaning only if different from general meaning
-    if (contextMeaning && contextMeaning !== lemmaMeaning) {
-      $('awpLemmaMeaning').style.display = '';
-      $('awpLemmaMeaning').textContent = '文中：' + contextMeaning;
-    } else {
-      $('awpLemmaMeaning').style.display = 'none';
-    }
-
-    // Store lemma info for adding to word list
-    popup.dataset.lemma = lemma;
-    popup.dataset.lemmaMeaning = lemmaMeaning;
-    $('btnAWPAddWord').style.display = '';
+    loadingEl.innerHTML = innerHTML;
+    loadingEl.dataset.lemma = lemma;
+    loadingEl.dataset.lemmaMeaning = lemmaMeaning;
   } catch (e) {
-    // Fallback: show raw response
-    $('awpPhonetic').textContent = '';
     const raw = (result && (result.content || result)) || '查询失败';
-    $('awpMeaning').textContent = typeof raw === 'string' ? raw.substring(0, 200) : '查询失败';
-    popup.dataset.lemma = word;
-    popup.dataset.lemmaMeaning = typeof raw === 'string' ? raw.substring(0, 200) : '';
-    $('btnAWPAddWord').style.display = '';
+    const fallback = typeof raw === 'string' ? raw.substring(0, 60) : '查询失败';
+    loadingEl.innerHTML = `<span class="wim-text">${escapeHtml(fallback)}</span><span class="wim-close" onclick="removeAllInlineMeanings();event.stopPropagation();">&times;</span>`;
+    loadingEl.dataset.lemma = word;
+    loadingEl.dataset.lemmaMeaning = fallback;
   }
+}
+
+function removeAllInlineMeanings() {
+  document.querySelectorAll('.word-inline-meaning').forEach(el => el.remove());
+  document.querySelectorAll('.article-para .word-clickable.active').forEach(el => el.classList.remove('active'));
+}
+
+function addArticleWordInline(lemma, meaning, event) {
+  if (event) event.stopPropagation();
+  const word = lemma;
+  const parsedMeaning = meaning;
+
+  if (!word) return;
+
+  const existing = appData.words.find(w => w.english.toLowerCase() === word.toLowerCase());
+  if (existing) {
+    showToast(`"${word}" 已在单词列表中`);
+    return;
+  }
+
+  appData.words.push({
+    english: word,
+    chinese: parsedMeaning,
+    pos: '',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    source: articleData.title || '文章陪读'
+  });
+  persist();
+  renderWordTable();
+  showToast(`"${word}" 已加入单词列表`);
+  removeAllInlineMeanings();
 }
 
 function addArticleWord() {
@@ -9550,13 +9638,143 @@ function closeArticleWordPopup() {
   document.querySelectorAll('.article-para .word-clickable.active').forEach(el => el.classList.remove('active'));
 }
 
-// Close popup when clicking elsewhere
+// Close inline meanings when clicking elsewhere in the article
 document.addEventListener('click', function(e) {
-  const popup = $('articleWordPopup');
-  if (popup.style.display === 'block' && !popup.contains(e.target) && !e.target.classList.contains('word-clickable')) {
-    closeArticleWordPopup();
+  const sPopup = $('articleSentencePopup');
+  if (sPopup.style.display === 'block' && !sPopup.contains(e.target) && !e.target.closest('#articleDisplay')) {
+    closeArticleSentencePopup();
+  }
+  // Close inline word meaning if clicking outside the word area
+  if (!e.target.closest('.word-clickable') && !e.target.closest('.word-inline-meaning')) {
+    removeAllInlineMeanings();
   }
 });
+
+// ═══════════════════════════════════════
+// 句子选择弹窗
+// ═══════════════════════════════════════
+let selectedSentenceText = '';
+let _sentencePopupJustClosed = false;
+
+function handleArticleSelection(e) {
+  // Don't interfere with button clicks
+  if (e && e.target && e.target.closest && e.target.closest('button')) return;
+  // Don't reopen if already showing
+  if ($('articleSentencePopup').style.display === 'block') return;
+  // Don't trigger right after closing
+  if (_sentencePopupJustClosed) return;
+
+  setTimeout(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+      return;
+    }
+
+    const text = selection.toString().trim();
+    // Require at least 3 words and at most 600 chars
+    const wordCount = text.split(/\s+/).length;
+    if (wordCount < 3 || text.length > 600) return;
+
+    // Check selection is within article display
+    const range = selection.getRangeAt(0);
+    const container = document.getElementById('articleDisplay');
+    if (!container || !container.contains(range.commonAncestorContainer)) return;
+
+    // Don't show if the selection is exactly one word-clickable (word lookup takes priority)
+    const anc = range.commonAncestorContainer;
+    if (anc.nodeType === 1 && anc.classList && anc.classList.contains('word-clickable')) return;
+    if (anc.parentElement && anc.parentElement.classList && anc.parentElement.classList.contains('word-clickable')) return;
+
+    selectedSentenceText = text;
+
+    // Show popup
+    const popup = $('articleSentencePopup');
+    $('aspEn').textContent = text;
+    $('aspCn').textContent = '';
+    $('aspCn').classList.remove('show');
+    $('btnAspTranslate').disabled = false;
+    $('btnAspTranslate').textContent = '🤖 AI 翻译';
+    $('btnAspSave').style.display = 'none';
+
+    // Position near the selection
+    const selRect = range.getBoundingClientRect();
+    let top = selRect.bottom + 10;
+    let left = selRect.left;
+    if (top + 280 > window.innerHeight) top = selRect.top - 280;
+    if (left + 420 > window.innerWidth) left = window.innerWidth - 430;
+    if (left < 10) left = 10;
+    if (top < 10) top = 10;
+
+    popup.style.top = top + 'px';
+    popup.style.left = left + 'px';
+    popup.style.display = 'block';
+  }, 10);
+}
+
+function closeArticleSentencePopup() {
+  $('articleSentencePopup').style.display = 'none';
+  selectedSentenceText = '';
+  _sentencePopupJustClosed = true;
+  // Clear selection
+  if (window.getSelection) window.getSelection().removeAllRanges();
+  // Reset flag after a short delay
+  setTimeout(() => { _sentencePopupJustClosed = false; }, 600);
+}
+
+async function translateSelectedSentence() {
+  if (!selectedSentenceText) return;
+  if (!hasValidApiConfig()) { showToast('请先在 API 设置中配置 API Key'); return; }
+
+  const btn = $('btnAspTranslate');
+  btn.disabled = true;
+  btn.textContent = '⏳ 翻译中...';
+
+  try {
+    const prompt = `请将以下英文句子翻译成地道的中文，只返回翻译结果，不要加任何解释：\n\n${selectedSentenceText}`;
+    const result = await callAI(prompt, 1024);
+    const cnDiv = $('aspCn');
+    cnDiv.textContent = result.trim();
+    cnDiv.classList.add('show');
+    $('btnAspSave').style.display = '';
+    showToast('翻译完成');
+  } catch (e) {
+    showToast('翻译失败: ' + (e.message || '请检查 API 配置'));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🤖 AI 翻译';
+  }
+}
+
+function saveSelectedSentence() {
+  const english = selectedSentenceText;
+  const chinese = $('aspCn').textContent.trim();
+
+  if (!english) return;
+  if (!chinese) { showToast('请先翻译句子'); return; }
+
+  // Check if already exists
+  const existing = (appData.sentences || []).find(s => s.english === english);
+  if (existing) {
+    showToast('该句子已在好句背诵中');
+    return;
+  }
+
+  const sentence = {
+    id: generateId(),
+    english,
+    chinese,
+    source: articleData.title || '文章陪读',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    aiTranslated: true,
+    practiceCount: 0,
+    lastPracticed: null
+  };
+  appData.sentences.unshift(sentence);
+  persist();
+  showToast('已保存到好句背诵 ✓');
+  closeArticleSentencePopup();
+}
 
 async function generateArticleQuiz() {
   if (articleData.paragraphs.length === 0) { showToast('请先解析文章'); return; }
