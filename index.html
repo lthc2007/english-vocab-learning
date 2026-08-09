@@ -3757,16 +3757,16 @@ function openSettings() {
 }
 
 function onProviderChange() {
-  // 保存当前 provider 的配置
+  const provider = $('providerSelect').value;
   const oldProvider = appData.provider || 'zhipu_free';
-  if (oldProvider !== 'zhipu_free' || appData.apiKey) {
+  // 只在服务商真正切换时才保存旧配置（避免 openSettings 时覆盖已保存配置）
+  if (oldProvider !== provider && (oldProvider !== 'zhipu_free' || appData.apiKey)) {
     appData.providerConfigs[oldProvider] = {
       apiKey: appData.apiKey || '',
       apiUrl: appData.apiUrl || '',
       model: appData.model || ''
     };
   }
-  const provider = $('providerSelect').value;
   const cfg = PROVIDERS[provider];
   $('apiUrlInput').value = cfg.url;
   $('apiKeyHint').innerHTML = cfg.keyHint;
@@ -3824,9 +3824,10 @@ function onProviderChange() {
 }
 
 function onTtsProviderChange() {
-  // 保存当前 TTS provider 的配置
+  const provider = $('ttsProviderSelect').value;
   const oldTp = appData.ttsProvider || 'minimax';
-  if (oldTp !== 'none') {
+  // 只在服务商真正切换时才保存旧配置（避免 openSettings 时用残留 UI 值覆盖已保存配置）
+  if (oldTp !== provider && oldTp !== 'none') {
     appData.ttsProviderConfigs[oldTp] = {
       ttsKey: $('ttsKeyInput').value.trim(),
       ttsUrl: $('ttsUrlInput').value.trim(),
@@ -3835,7 +3836,6 @@ function onTtsProviderChange() {
       ttsAppId: $('ttsAppIdInput').value.trim()
     };
   }
-  const provider = $('ttsProviderSelect').value;
   const cfg = TTS_PROVIDERS[provider];
   const allGroups = ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup', 'ttsAppIdGroup', 'volcanoConsoleType'];
   if (provider === 'none') {
