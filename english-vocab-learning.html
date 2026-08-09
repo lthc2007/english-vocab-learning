@@ -1463,6 +1463,75 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
   border-radius: 3px;
 }
 
+/* ── Article Reader（文章陪读） ── */
+.article-textarea {
+  width: 100%; min-height: 200px; padding: 14px 16px;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 0.92rem; font-family: var(--font-body); line-height: 1.8;
+  resize: vertical; background: var(--bg); color: var(--ink);
+}
+.article-actions { display: flex; gap: 10px; margin-top: 12px; align-items: center; }
+.article-display {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 24px 28px; margin-top: 20px;
+}
+.article-title {
+  font-size: 1.3rem; font-weight: 700; color: var(--accent);
+  margin-bottom: 20px; text-align: center; line-height: 1.5;
+}
+.article-para {
+  margin-bottom: 20px; line-height: 2; font-size: 0.95rem; color: var(--ink);
+  position: relative;
+}
+.article-para .word-clickable {
+  cursor: pointer; padding: 0 1px; transition: all 0.15s; border-radius: 2px;
+}
+.article-para .word-clickable:hover { background: var(--accent-soft); color: var(--accent); }
+.article-para .word-clickable.active { background: var(--accent-soft); color: var(--accent); }
+.article-para-actions { margin-top: 6px; margin-bottom: 4px; }
+.article-para-translation {
+  background: #f8f9fa; border-left: 3px solid var(--accent);
+  padding: 12px 16px; margin-top: 8px; margin-bottom: 8px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 0.88rem; color: #555; line-height: 1.8; display: none;
+}
+.article-para-translation.show { display: block; animation: fadeIn 0.25s ease-out; }
+.article-quiz-section {
+  margin-top: 24px; padding-top: 20px; border-top: 2px dashed var(--border);
+}
+.article-quiz-question {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 16px 20px; margin-bottom: 14px;
+}
+.article-quiz-question .q-stem { font-weight: 600; margin-bottom: 10px; font-size: 0.95rem; line-height: 1.6; }
+.article-quiz-question .q-option {
+  padding: 8px 14px; margin: 4px 0; border-radius: 6px; cursor: pointer;
+  transition: all 0.15s; border: 1.5px solid transparent; font-size: 0.9rem;
+}
+.article-quiz-question .q-option:hover { background: var(--accent-soft); }
+.article-quiz-question .q-option.correct { background: #e8f5e9; border-color: #4caf50; color: #2e7d32; }
+.article-quiz-question .q-option.wrong { background: #fce4ec; border-color: #ef5350; color: #c62828; }
+.article-quiz-question .q-option.reveal { background: #e8f5e9; border-color: #4caf50; color: #2e7d32; font-weight: 600; }
+.article-word-popup {
+  position: fixed; background: #fff; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 16px 20px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.15); z-index: 1000;
+  max-width: 320px; min-width: 200px; display: none;
+}
+.article-word-popup .popup-word { font-size: 1.1rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+.article-word-popup .popup-phonetic { font-size: 0.82rem; color: var(--muted); margin-bottom: 8px; }
+.article-word-popup .popup-meaning { font-size: 0.9rem; color: var(--ink); margin-bottom: 6px; line-height: 1.5; }
+.article-word-popup .popup-lemma { font-size: 0.82rem; color: var(--accent2); margin-bottom: 6px; }
+.article-word-popup .popup-lemma-meaning { font-size: 0.85rem; color: #555; margin-bottom: 10px; line-height: 1.4; }
+.article-quiz-answer {
+  background: #f0fdf4; border: 1px solid #86efac; border-radius: var(--radius-sm);
+  padding: 14px 18px; margin-top: 16px; display: none; line-height: 1.8;
+}
+.article-quiz-answer.show { display: block; animation: fadeIn 0.3s ease-out; }
+.article-quiz-answer h4 { margin: 0 0 8px; font-size: 0.9rem; color: #166534; }
+.article-quiz-answer .answer-item { padding: 4px 0; font-size: 0.88rem; }
+.article-quiz-answer .answer-item strong { color: var(--accent); }
+
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1532,6 +1601,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
     <button class="nav-tab" data-tab="writing">作文练习</button>
     <button class="nav-tab" data-tab="history">批改记录</button>
     <button class="nav-tab" data-tab="recite">好句背诵</button>
+    <button class="nav-tab" data-tab="article">文章陪读</button>
   </div>
 </nav>
 
@@ -2233,6 +2303,57 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         </div>
         <div class="form-group" style="text-align:center;margin-top:16px;">
           <button class="btn btn-secondary" onclick="resetContextWords()">🔄 重新选择单词</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="tab-panel" id="panel-article">
+    <!-- 导入区域 -->
+    <div class="card" id="articleImportCard">
+      <div class="card-header">
+        <span>文章陪读</span>
+        <span style="font-size:0.75rem;color:var(--muted);">导入英文文章，AI 辅助阅读和学习</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">粘贴英文文章</label>
+        <textarea class="article-textarea" id="articleInput" placeholder="在此粘贴英文文章...&#10;AI 将自动识别标题和段落"></textarea>
+      </div>
+      <div class="article-actions">
+        <button class="btn btn-primary" id="btnArticleParse" onclick="parseArticle()">AI 解析文章</button>
+        <button class="btn btn-secondary" id="btnArticleClear" onclick="clearArticle()" style="display:none;">清空</button>
+        <span id="articleProgress" style="display:none;color:var(--muted);font-size:0.85rem;">
+          <span class="spinner" style="border-color:rgba(45,90,90,0.3);border-top-color:var(--accent);"></span> AI 正在解析文章...
+        </span>
+      </div>
+    </div>
+
+    <!-- 文章展示区域 -->
+    <div class="card" id="articleDisplayCard" style="display:none;">
+      <div class="article-display" id="articleDisplay"></div>
+      <!-- 词义弹窗 -->
+      <div class="article-word-popup" id="articleWordPopup">
+        <div class="popup-word" id="awpWord"></div>
+        <div class="popup-phonetic" id="awpPhonetic"></div>
+        <div class="popup-meaning" id="awpMeaning"></div>
+        <div class="popup-lemma" id="awpLemma" style="display:none;"></div>
+        <div class="popup-lemma-meaning" id="awpLemmaMeaning" style="display:none;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" id="btnAWPAddWord" onclick="addArticleWord()">加入单词列表</button>
+          <button class="btn btn-secondary btn-sm" onclick="closeArticleWordPopup()">关闭</button>
+        </div>
+      </div>
+      <!-- 练习题区域 -->
+      <div class="article-quiz-section" id="articleQuizSection" style="display:none;">
+        <div style="text-align:center;margin-bottom:16px;">
+          <button class="btn btn-accent" id="btnArticleQuiz" onclick="generateArticleQuiz()">生成课后练习（六级选择题）</button>
+          <span id="articleQuizProgress" style="display:none;color:var(--muted);font-size:0.85rem;margin-left:10px;">
+            <span class="spinner" style="border-color:rgba(45,90,90,0.3);border-top-color:var(--accent);"></span> AI 正在出题...
+          </span>
+        </div>
+        <div class="article-quiz-answer" id="articleQuizAnswers">
+          <h4>参考答案与解析</h4>
+          <div id="articleQuizAnswerContent"></div>
         </div>
       </div>
     </div>
@@ -9141,6 +9262,412 @@ async function contextSpeakWord(event, word) {
     }
   } catch (e) {
     if (td) td.classList.remove('speaking-phonetic');
+  }
+}
+
+// ═══════════════════════════════════════
+// Article Reader（文章陪读）
+// ═══════════════════════════════════════
+let articleData = { title: '', paragraphs: [], translations: {} };
+
+function clearArticle() {
+  articleData = { title: '', paragraphs: [], translations: {} };
+  $('articleInput').value = '';
+  $('articleDisplay').innerHTML = '';
+  $('articleDisplayCard').style.display = 'none';
+  $('articleQuizSection').style.display = 'none';
+  $('articleQuizAnswers').classList.remove('show');
+  $('articleQuizAnswerContent').innerHTML = '';
+  $('btnArticleClear').style.display = 'none';
+  closeArticleWordPopup();
+}
+
+async function parseArticle() {
+  const text = $('articleInput').value.trim();
+  if (!text) { showToast('请先粘贴文章内容'); return; }
+  if (!appData.provider || appData.provider === 'zhipu_free') {
+    if (!appData.apiKey) { showToast('请先在 API 设置中配置 API Key'); return; }
+  }
+
+  $('btnArticleParse').disabled = true;
+  $('articleProgress').style.display = '';
+
+  const prompt = `You are an English article parser. Analyze the following English article text and return a JSON object with two fields:
+- "title": the article title (extract from text, or summarize if no explicit title)
+- "paragraphs": an array of strings, each string is one paragraph. Split by blank lines or logical paragraph breaks.
+
+Return ONLY valid JSON, no other text. The JSON format:
+{"title": "...", "paragraphs": ["para1 text...", "para2 text...", ...]}
+
+Article text:
+${text}`;
+
+  try {
+    const result = await doCallAI(prompt, 2000);
+    if (!result) throw new Error('AI 返回为空');
+
+    let jsonStr = result.content || result;
+    // Clean up the response
+    jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    const parsed = JSON.parse(jsonStr);
+
+    if (!parsed.title || !parsed.paragraphs || !Array.isArray(parsed.paragraphs) || parsed.paragraphs.length === 0) {
+      throw new Error('AI 解析结果格式不正确');
+    }
+
+    articleData.title = parsed.title;
+    articleData.paragraphs = parsed.paragraphs;
+    articleData.translations = {};
+
+    renderArticle();
+    $('articleDisplayCard').style.display = '';
+    $('btnArticleClear').style.display = '';
+    $('articleQuizSection').style.display = '';
+    showToast('文章解析完成: ' + parsed.paragraphs.length + ' 个段落');
+  } catch (e) {
+    showToast('解析失败: ' + e.message);
+    console.error('Article parse error:', e);
+  } finally {
+    $('btnArticleParse').disabled = false;
+    $('articleProgress').style.display = 'none';
+  }
+}
+
+function renderArticle() {
+  const container = $('articleDisplay');
+  let html = `<div class="article-title">${escapeHtml(articleData.title)}</div>`;
+
+  articleData.paragraphs.forEach((para, idx) => {
+    // Wrap each word in a clickable span
+    const words = para.split(/(\s+)/); // preserve whitespace
+    const wrapped = words.map(part => {
+      if (part.trim() === '') return part;
+      // Only wrap words (letters), not punctuation
+      return part.replace(/([a-zA-Z]+(?:'[a-zA-Z]+)?)/g, '<span class="word-clickable" onclick="lookupArticleWord(\'$1\', event)" data-word="$1">$1</span>');
+    }).join('');
+
+    html += `<div class="article-para" id="articlePara${idx}">
+      <div class="article-para-text">${wrapped}</div>
+      <div class="article-para-actions">
+        <button class="btn btn-secondary btn-sm" onclick="translateParagraph(${idx})" id="btnTrans${idx}">该段翻译</button>
+        <span class="spinner" id="transSpinner${idx}" style="display:none;width:12px;height:12px;border-color:rgba(45,90,90,0.3);border-top-color:var(--accent);vertical-align:middle;margin-left:8px;"></span>
+      </div>
+      <div class="article-para-translation" id="articleTrans${idx}"></div>
+    </div>`;
+  });
+
+  container.innerHTML = html;
+
+  // Reset quiz section
+  $('articleQuizAnswers').classList.remove('show');
+  $('articleQuizAnswerContent').innerHTML = '';
+  $('btnArticleQuiz').disabled = false;
+  $('articleQuizProgress').style.display = 'none';
+}
+
+async function translateParagraph(idx) {
+  const btn = $('btnTrans' + idx);
+  const spinner = $('transSpinner' + idx);
+  const transDiv = $('articleTrans' + idx);
+
+  // Toggle off if already shown
+  if (transDiv.classList.contains('show')) {
+    transDiv.classList.remove('show');
+    return;
+  }
+
+  // Return cached translation
+  if (articleData.translations[idx]) {
+    transDiv.textContent = articleData.translations[idx];
+    transDiv.classList.add('show');
+    return;
+  }
+
+  if (!appData.provider || appData.provider === 'zhipu_free') {
+    if (!appData.apiKey) { showToast('请先在 API 设置中配置 API Key'); return; }
+  }
+
+  btn.disabled = true;
+  spinner.style.display = '';
+
+  const para = articleData.paragraphs[idx];
+  const prompt = `Translate the following English paragraph into natural Chinese. Only return the Chinese translation, no other text.
+
+English paragraph:
+${para}`;
+
+  try {
+    const result = await doCallAI(prompt, 1000);
+    if (!result) throw new Error('AI 返回为空');
+    const translation = result.content || result;
+    articleData.translations[idx] = translation.trim();
+    transDiv.textContent = translation.trim();
+    transDiv.classList.add('show');
+  } catch (e) {
+    showToast('翻译失败: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    spinner.style.display = 'none';
+  }
+}
+
+async function lookupArticleWord(word, event) {
+  event.stopPropagation();
+  const popup = $('articleWordPopup');
+  const rect = event.target.getBoundingClientRect();
+
+  // Position popup near the word
+  let top = rect.bottom + 6;
+  let left = rect.left;
+  if (top + 250 > window.innerHeight) top = rect.top - 250;
+  if (left + 320 > window.innerWidth) left = window.innerWidth - 330;
+  if (left < 10) left = 10;
+
+  popup.style.top = top + 'px';
+  popup.style.left = left + 'px';
+  popup.style.display = 'block';
+
+  $('awpWord').textContent = word;
+  $('awpPhonetic').textContent = '查询中...';
+  $('awpMeaning').textContent = 'AI 正在查询...';
+  $('btnAWPAddWord').style.display = 'none';
+
+  // Highlight the clicked word
+  document.querySelectorAll('.article-para .word-clickable.active').forEach(el => el.classList.remove('active'));
+  event.target.classList.add('active');
+
+  // Store current word for adding
+  popup.dataset.currentWord = word;
+
+  if (!appData.provider || appData.provider === 'zhipu_free') {
+    if (!appData.apiKey) {
+      $('awpMeaning').textContent = '请先在 API 设置中配置 API Key';
+      return;
+    }
+  }
+
+  // Get context (the paragraph containing this word)
+  let context = '';
+  for (const para of articleData.paragraphs) {
+    if (para.toLowerCase().includes(word.toLowerCase())) {
+      context = para.substring(0, 500);
+      break;
+    }
+  }
+
+  const prompt = `The word "${word}" appears in the following English article. Analyze it:
+
+1. "lemma" - the base/dictionary form (e.g. "running" → "run", "went" → "go", "mice" → "mouse"). If already base form, return the same word.
+2. "phonetic" - IPA transcription of the lemma
+3. "lemma_meaning" - the general Chinese meaning of the lemma (standard dictionary definition, NOT context-specific). Must always be filled.
+4. "context_meaning" - the specific Chinese meaning in this article context. If same as lemma_meaning, leave empty.
+
+Return ONLY valid JSON:
+{"lemma": "...", "phonetic": "...", "lemma_meaning": "...", "context_meaning": "..."}
+
+Context: ${context}`;
+
+  try {
+    const result = await doCallAI(prompt, 500);
+    if (!result) throw new Error('AI 返回为空');
+    let jsonStr = result.content || result;
+    jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    const parsed = JSON.parse(jsonStr);
+    $('awpPhonetic').textContent = parsed.phonetic ? '/' + parsed.phonetic + '/' : '';
+
+    const lemma = parsed.lemma || word;
+    const contextMeaning = parsed.context_meaning || parsed.meaning || '';
+    const lemmaMeaning = parsed.lemma_meaning || contextMeaning;
+
+    // Primary display: word's general meaning (this is what gets stored)
+    $('awpMeaning').textContent = lemmaMeaning;
+
+    // Show lemma info if different from original word
+    if (lemma.toLowerCase() !== word.toLowerCase()) {
+      $('awpLemma').style.display = '';
+      $('awpLemma').textContent = '原型：' + lemma;
+    } else {
+      $('awpLemma').style.display = 'none';
+    }
+
+    // Show context meaning only if different from general meaning
+    if (contextMeaning && contextMeaning !== lemmaMeaning) {
+      $('awpLemmaMeaning').style.display = '';
+      $('awpLemmaMeaning').textContent = '文中：' + contextMeaning;
+    } else {
+      $('awpLemmaMeaning').style.display = 'none';
+    }
+
+    // Store lemma info for adding to word list
+    popup.dataset.lemma = lemma;
+    popup.dataset.lemmaMeaning = lemmaMeaning;
+    $('btnAWPAddWord').style.display = '';
+  } catch (e) {
+    // Fallback: show raw response
+    $('awpPhonetic').textContent = '';
+    const raw = (result && (result.content || result)) || '查询失败';
+    $('awpMeaning').textContent = typeof raw === 'string' ? raw.substring(0, 200) : '查询失败';
+    popup.dataset.lemma = word;
+    popup.dataset.lemmaMeaning = typeof raw === 'string' ? raw.substring(0, 200) : '';
+    $('btnAWPAddWord').style.display = '';
+  }
+}
+
+function addArticleWord() {
+  const popup = $('articleWordPopup');
+  const word = popup.dataset.lemma || popup.dataset.currentWord;  // Use lemma (base form) as the word
+  const meaning = popup.dataset.lemmaMeaning || $('awpMeaning').textContent;
+  const contextWord = popup.dataset.currentWord;
+
+  if (!word) return;
+
+  // Check if word already exists
+  const existing = appData.words.find(w => w.english.toLowerCase() === word.toLowerCase());
+  if (existing) {
+    showToast(`"${word}" 已在单词列表中`);
+    return;
+  }
+
+  appData.words.push({
+    english: word,
+    chinese: meaning,
+    pos: '',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    source: articleData.title || '文章陪读'
+  });
+  persist();
+  renderWordTable();
+  const addedMsg = word.toLowerCase() !== contextWord.toLowerCase()
+    ? `"${contextWord}" → 原型 "${word}" 已加入单词列表`
+    : `"${word}" 已加入单词列表`;
+  showToast(addedMsg);
+  closeArticleWordPopup();
+}
+
+function closeArticleWordPopup() {
+  $('articleWordPopup').style.display = 'none';
+  document.querySelectorAll('.article-para .word-clickable.active').forEach(el => el.classList.remove('active'));
+}
+
+// Close popup when clicking elsewhere
+document.addEventListener('click', function(e) {
+  const popup = $('articleWordPopup');
+  if (popup.style.display === 'block' && !popup.contains(e.target) && !e.target.classList.contains('word-clickable')) {
+    closeArticleWordPopup();
+  }
+});
+
+async function generateArticleQuiz() {
+  if (articleData.paragraphs.length === 0) { showToast('请先解析文章'); return; }
+  if (!appData.provider || appData.provider === 'zhipu_free') {
+    if (!appData.apiKey) { showToast('请先在 API 设置中配置 API Key'); return; }
+  }
+
+  const btn = $('btnArticleQuiz');
+  const progress = $('articleQuizProgress');
+  btn.disabled = true;
+  progress.style.display = '';
+
+  const articleText = articleData.title + '\n\n' + articleData.paragraphs.join('\n\n');
+
+  const prompt = `Based on the following English article, create 5 multiple-choice quiz questions suitable for CET-6 (College English Test Band 6) level. Each question should test reading comprehension of the article.
+
+Return a JSON array of question objects. Each question object must have:
+- "question": the question text (in English)
+- "options": array of 4 option strings labeled A, B, C, D (in English)
+- "answer": the correct option letter (A/B/C/D)
+- "explanation": brief explanation of the answer (in Chinese)
+
+Return ONLY the JSON array, no other text:
+[
+  {"question": "...", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "answer": "A", "explanation": "..."},
+  ...
+]
+
+Article:
+${articleText.substring(0, 3000)}`;
+
+  try {
+    const result = await doCallAI(prompt, 3000);
+    if (!result) throw new Error('AI 返回为空');
+    let jsonStr = result.content || result;
+    jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+
+    // Find JSON array
+    const arrMatch = jsonStr.match(/\[[\s\S]*\]/);
+    if (!arrMatch) throw new Error('未找到有效的 JSON 数组');
+    const questions = JSON.parse(arrMatch[0]);
+
+    if (!Array.isArray(questions) || questions.length === 0) throw new Error('题目格式错误');
+
+    renderQuiz(questions);
+    showToast('已生成 ' + questions.length + ' 道练习题');
+  } catch (e) {
+    showToast('出题失败: ' + e.message);
+    console.error('Quiz generation error:', e);
+  } finally {
+    btn.disabled = false;
+    progress.style.display = 'none';
+  }
+}
+
+function renderQuiz(questions) {
+  const answersDiv = $('articleQuizAnswers');
+  const answerContent = $('articleQuizAnswerContent');
+  answersDiv.classList.remove('show');
+
+  let html = '';
+  questions.forEach((q, idx) => {
+    html += `<div class="article-quiz-question" id="quizQ${idx}">
+      <div class="q-stem">${idx + 1}. ${escapeHtml(q.question)}</div>`;
+    q.options.forEach((opt, oi) => {
+      const letter = String.fromCharCode(65 + oi);
+      html += `<div class="q-option" onclick="selectQuizOption(${idx}, '${letter}', '${escapeHtml(q.answer)}', this)" data-q="${idx}" data-opt="${letter}">${escapeHtml(opt)}</div>`;
+    });
+    html += `</div>`;
+  });
+
+  // Insert questions before the quiz section (replace previous questions if any)
+  const existingQuestions = document.querySelectorAll('.article-quiz-question');
+  existingQuestions.forEach(el => el.remove());
+
+  const quizSection = $('articleQuizSection');
+  const firstChild = quizSection.firstElementChild;
+  const questionsContainer = document.createElement('div');
+  questionsContainer.id = 'articleQuizQuestionsContainer';
+  questionsContainer.innerHTML = html;
+  quizSection.insertBefore(questionsContainer, firstChild.nextSibling);
+
+  // Build answer content
+  let answerHtml = '';
+  questions.forEach((q, idx) => {
+    answerHtml += `<div class="answer-item"><strong>${idx + 1}. ${q.answer}</strong> — ${escapeHtml(q.explanation)}</div>`;
+  });
+  answerContent.innerHTML = answerHtml;
+
+  // Store questions for checking
+  articleData._quizQuestions = questions;
+}
+
+function selectQuizOption(qIdx, selected, correct, el) {
+  const question = articleData._quizQuestions[qIdx];
+  if (!question) return;
+  if (question._answered) return; // already answered
+  question._answered = true;
+
+  const container = document.getElementById('quizQ' + qIdx);
+  const options = container.querySelectorAll('.q-option');
+  options.forEach(opt => {
+    opt.style.pointerEvents = 'none';
+    if (opt.dataset.opt === correct) opt.classList.add('correct');
+    else if (opt.dataset.opt === selected && selected !== correct) opt.classList.add('wrong');
+  });
+
+  // Show answer section after first answer
+  if (!articleData._quizAnswersShown) {
+    articleData._quizAnswersShown = true;
+    $('articleQuizAnswers').classList.add('show');
   }
 }
 </script>
