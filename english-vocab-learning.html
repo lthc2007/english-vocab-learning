@@ -5155,7 +5155,12 @@ async function speakWord(e) {
             await audio.play();
             played = true;
           } else {
-            ttsError = '火山引擎返回空音频: ' + (data.error || '');
+            let debugInfo = '';
+            if (data.debug) {
+              debugInfo = ' [model=' + data.debug.resourceId + ', voice=' + data.debug.voice + ', resp=' + data.debug.responseLen + 'B]';
+              console.log('Volcano TTS debug:', data.debug);
+            }
+            ttsError = '火山引擎返回空音频' + debugInfo + ': ' + (data.error || '');
           }
         } else {
           const errData = await resp.json().catch(() => ({}));
@@ -6065,7 +6070,7 @@ async function callMiniMaxTTS(text, speed = 1.0) {
         for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
         return { blob: new Blob([bytes], { type: 'audio/mp3' }), error: null };
       }
-      return { blob: null, error: '火山引擎返回空音频: ' + (data.error || '') };
+      return { blob: null, error: '火山引擎返回空音频: ' + (data.error || '') + (data.debug ? ' [model=' + data.debug.resourceId + ']' : '') };
     }
     const errData = await resp.json().catch(() => ({}));
     return { blob: null, error: '火山引擎 HTTP ' + resp.status + ': ' + (errData.error || '') };
@@ -6734,7 +6739,9 @@ async function speakExample(e) {
             const audio = playTTSBlob(blob, removeSpeaking);
             await audio.play(); played = true;
           } else {
-            ttsError = '火山引擎返回空音频: ' + (data.error || '');
+            let debugInfo2 = '';
+            if (data.debug) { debugInfo2 = ' [model=' + data.debug.resourceId + ', voice=' + data.debug.voice + ']'; }
+            ttsError = '火山引擎返回空音频' + debugInfo2 + ': ' + (data.error || '');
           }
         } else {
           const errData = await resp.json().catch(() => ({}));

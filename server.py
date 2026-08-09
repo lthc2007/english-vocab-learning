@@ -2,6 +2,7 @@
 """Static file server + Volcano Engine TTS proxy (v3 API).
 Avoids CORS issues by proxying TTS requests through the same origin.
 Supports both new console (X-Api-Key) and old console (X-Api-App-Id + X-Api-Access-Key).
+Auto-detects voice model version.
 """
 import http.server
 import json
@@ -13,12 +14,17 @@ import urllib.error
 PORT = 8080
 WORKSPACE = os.path.dirname(os.path.abspath(__file__))
 
+def resolve_resource_id(voice):
+    """Detect voice model version: _uranus_bigtts → seed-tts-2.0, _mars_bigtts → seed-tts-1.0"""
+    if voice and (voice.endswith("_uranus_bigtts") or "_uranus_" in voice):
+        return "seed-tts-2.0"
+    return "seed-tts-1.0"
+
 class ProxyHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=WORKSPACE, **kwargs)
 
     def do_OPTIONS(self):
-        """Handle CORS preflight for the proxy endpoint."""
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
@@ -48,20 +54,18 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
             api_url = "https://openspeech.bytedance.com/api/v3/tts/unidirectional/sse"
             req_id = str(uuid.uuid4())
+            resource_id = resolve_resource_id(tts_voice)
 
-            # Build auth headers: prefer new console (X-Api-Key), fallback to old console
             headers = {
                 "Content-Type": "application/json",
-                "X-Api-Resource-Id": "seed-tts-2.0",
+                "X-Api-Resource-Id": resource_id,
                 "X-Api-Request-Id": req_id,
             }
 
             if tts_app_id:
-                # Old console: use App ID + Access Token
                 headers["X-Api-App-Id"] = tts_app_id
                 headers["X-Api-Access-Key"] = tts_key
             else:
-                # New console: use API Key
                 headers["X-Api-Key"] = tts_key
 
             req_body = {
@@ -75,6 +79,8 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                 },
             }
 
+            print(f"[TTS] Request: resource_id={resource_id}, voice={tts_voice}, text_len={len(speak_text)}")
+
             http_req = urllib.request.Request(
                 api_url,
                 data=json.dumps(req_body).encode("utf-8"),
@@ -85,33 +91,50 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             with urllib.request.urlopen(http_req, timeout=30) as resp:
                 resp_text = resp.read().decode("utf-8")
 
-            # Parse SSE stream response, collect audio chunks
+            print(f"[TTS] Response len={len(resp_text)}, first 300: {resp_text[:300]}")
+
+            # Parse SSE stream response
             audio_chunks = []
             for line in resp_text.split("\n"):
                 line = line.strip()
                 if line.startswith("data:"):
+                    data_str = line[5:].strip()
+                    if data_str == "[DONE]":
+                        continue
                     try:
-                        data = json.loads(line[5:].strip())
+                        data = json.loads(data_str)
                         if data.get("audio"):
                             audio_chunks.append(data["audio"])
                         if data.get("error"):
                             self._send_json(500, {"error": f"火山引擎返回错误: {json.dumps(data['error'])}"})
                             return
                     except json.JSONDecodeError:
-                        pass  # skip unparseable data lines
+                        pass
 
             audio_base64 = "".join(audio_chunks)
+            print(f"[TTS] Audio chunks: {len(audio_chunks)}, base64 len: {len(audio_base64)}")
 
             if not audio_base64:
-                self._send_json(500, {"error": "火山引擎返回空音频"})
+                self._send_json(500, {
+                    "error": "火山引擎返回空音频",
+                    "debug": {
+                        "resourceId": resource_id,
+                        "voice": tts_voice,
+                        "textLen": len(speak_text),
+                        "responseLen": len(resp_text),
+                        "responsePreview": resp_text[:300],
+                    }
+                })
                 return
 
             self._send_json(200, {"audio": audio_base64})
 
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8", errors="replace")
+            print(f"[TTS] HTTP error {e.code}: {err_body[:300]}")
             self._send_json(e.code, {"error": f"火山引擎 HTTP {e.code}: {err_body[:300]}"})
         except Exception as e:
+            print(f"[TTS] Exception: {e}")
             self._send_json(500, {"error": str(e)})
 
     def _send_json(self, status, data):
@@ -122,7 +145,6 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(json.dumps(data).encode())
 
     def log_message(self, format, *args):
-        # Suppress log noise for static files
         if "/api/" in str(args[0]):
             super().log_message(format, *args)
 
