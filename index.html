@@ -3713,6 +3713,7 @@ function openSettings() {
     if (cfg) {
       if (cfg.ttsKey !== undefined) appData.ttsKey = cfg.ttsKey;
       if (cfg.ttsUrl !== undefined) appData.ttsUrl = cfg.ttsUrl;
+      else appData.ttsUrl = TTS_PROVIDERS[tp] ? TTS_PROVIDERS[tp].url : '';
       if (cfg.ttsModel !== undefined) appData.ttsModel = cfg.ttsModel;
       if (cfg.ttsVoice !== undefined) appData.ttsVoice = cfg.ttsVoice;
       if (cfg.ttsAppId !== undefined) appData.ttsAppId = cfg.ttsAppId;
@@ -3767,6 +3768,8 @@ function onProviderChange() {
       model: appData.model || ''
     };
   }
+  // 立即更新当前 provider，防止多次切换时配置保存到错误的 key
+  appData.provider = provider;
   const cfg = PROVIDERS[provider];
   $('apiUrlInput').value = cfg.url;
   $('apiKeyHint').innerHTML = cfg.keyHint;
@@ -3836,6 +3839,8 @@ function onTtsProviderChange() {
       ttsAppId: $('ttsAppIdInput').value.trim()
     };
   }
+  // 立即更新当前 TTS provider，防止多次切换时配置保存到错误的 key
+  appData.ttsProvider = provider;
   const cfg = TTS_PROVIDERS[provider];
   const allGroups = ['ttsUrlGroup', 'ttsModelGroup', 'ttsVoiceGroup', 'ttsKeyGroup', 'ttsAppIdGroup', 'volcanoConsoleType'];
   if (provider === 'none') {
