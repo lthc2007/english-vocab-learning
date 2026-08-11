@@ -7391,6 +7391,119 @@ async function speakExample(e) {
 // Word Lookup
 // ═══════════════════════════════════════
 let lookupData = null; // { word, phonetic, definition, examples, derived }
+let _forceLookupWord = null;
+
+async function doAILookupDirect() {
+  const word = _forceLookupWord || $('lookupWord').value.trim();
+  if (!word) return;
+  $('lookupError').style.display = 'none';
+  $('lookupLoading').style.display = '';
+  $('lookupLoading').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;"><div class="spinner" style="width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div><span>AI 正在查询中，请稍候...</span></div>';
+  $('btnLookup').disabled = true;
+  lookupData = null;
+
+  try {
+    await doAILookupCore(word);
+  } catch (err) {
+    console.error('lookup error:', err);
+    $('lookupError').textContent = '查询失败: ' + (err.message || '未知错误');
+    $('lookupError').style.display = '';
+  }
+
+  $('lookupLoading').style.display = 'none';
+  $('btnLookup').disabled = false;
+}
+
+async function doAILookupCore(validatedWord) {
+  const prompt = `请为英语单词 "${validatedWord}" 生成以下学习内容，严格按照格式输出：
+
+音标: <该单词的国际音标 IPA，例如 /ˈeksəmpəl/>
+释义: <列出不同词性的常用释义，每个词性列出1-3个最常用义项。用英文缩写标注词性，不要加序号。例如：n. 放弃、遗弃、抛弃；v. 放纵、沉溺于；adj. 被遗弃的>
+例句: <1个自然实用的英文例句，附中文翻译。格式：英文例句 | 中文翻译>
+词根词缀: <该单词的词根词缀拆解，例如：ab-（离开）+ bandon（命令）→ 放弃命令→遗弃。如无明确词根写"暂无">
+派生词: <该单词的派生词及其释义，用 | 分隔，例如：abandoned (adj.) 被遗弃的 | abandonment (n.) 放弃>
+难度: <中考/高考/四级/六级/考研/雅思/托福/专八 中选一个最符合的>`;
+
+  const result = await callAI(prompt, 2000);
+  if (result) {
+    const phonetic = parseSection(result, '音标') || '';
+    const definition = parseSection(result, '释义') || '';
+    const examplesRaw = parseSection(result, '例句') || '';
+    const rootAffix = parseSection(result, '词根词缀') || '';
+    const derived = parseSection(result, '派生词') || '';
+    const difficulty = parseSection(result, '难度') || '';
+
+    // Parse definition: remove numbering, bold 【常用】 marks
+    const defHtml = escapeHtml(definition)
+      .replace(/^\d+\.\s*/gm, '')
+      .replace(/【常用】/g, '<strong style="color:#e67e22;">●常用 </strong>')
+      .replace(/\n/g, '<br>');
+
+    // Parse examples (only 1)
+    const exampleLines = examplesRaw.split('\n').filter(l => l.trim());
+    const exampleItem = exampleLines.length > 0
+      ? (() => {
+          const line = exampleLines[0];
+          const parts = line.split('|').map(s => s.trim());
+          return parts.length >= 2
+            ? `<i>"${escapeHtml(parts[0])}"</i> <span style="color:var(--muted);">${escapeHtml(parts[1])}</span>`
+            : `<i>"${escapeHtml(line)}"</i>`;
+        })()
+      : '';
+
+    // Parse derived words
+    const derivedItems = derived.split('|').map(s => s.trim()).filter(s => s);
+    const derivedHtml = derivedItems.length > 0
+      ? derivedItems.map(d => `<span style="display:inline-block;background:var(--bg);padding:3px 8px;border-radius:4px;margin:3px 4px;font-size:0.85rem;">${escapeHtml(d)}</span>`).join('')
+      : '暂无派生词';
+
+    // Populate UI
+    $('luWord').textContent = validatedWord;
+    // Difficulty tag
+    if (difficulty) {
+      $('luDifficulty').innerHTML = `<span class="diff-tag diff-${difficulty}">${difficulty}</span>`;
+      $('luDifficulty').style.display = '';
+    } else {
+      $('luDifficulty').style.display = 'none';
+    }
+    $('luPhonetic').textContent = phonetic;
+    $('luSpeak').style.display = phonetic ? '' : 'none';
+    $('luDefinition').innerHTML = defHtml;
+    $('luExamples').innerHTML = exampleItem || '暂无例句';
+    $('luSpeakExample').style.display = exampleItem ? '' : 'none';
+    $('luRoot').innerHTML = rootAffix && rootAffix !== '暂无' ? escapeHtml(rootAffix) : '暂无';
+    $('luDerived').innerHTML = derivedHtml;
+    $('luAddedMsg').style.display = 'none';
+
+    // Check if already in word list
+    const exists = appData.words.find(w => w.english.toLowerCase() === validatedWord.toLowerCase());
+    if (exists) {
+      $('luAddBtn').style.display = 'none';
+      $('luAddedMsg').textContent = '已在单词列表中 ✓';
+      $('luAddedMsg').style.display = '';
+    } else {
+      $('luAddBtn').style.display = '';
+    }
+
+    // Store lookup data
+    lookupData = {
+      word: validatedWord,
+      phonetic: phonetic,
+      definition: definition,
+      examples: examplesRaw,
+      examplesHtml: exampleItem,
+      rootAffix: rootAffix,
+      derived: derived,
+      derivedHtml: derivedHtml,
+      difficulty: difficulty
+    };
+
+    $('lookupResult').style.display = '';
+  } else {
+    $('lookupError').textContent = '查询失败，请稍后重试';
+    $('lookupError').style.display = '';
+  }
+}
 
 async function doLookup() {
   const word = $('lookupWord').value.trim();
@@ -7434,7 +7547,8 @@ async function doLookup() {
 
     if (suggestion) {
       $('lookupLoading').style.display = 'none';
-      $('lookupError').innerHTML = `<span style="color:#e74c3c;">⚠️ ${suggestion}</span>`;
+      _forceLookupWord = word;
+      $('lookupError').innerHTML = `<div style="margin-bottom:10px;"><span style="color:#e74c3c;">⚠️ ${suggestion}</span></div><button class="btn btn-outline btn-sm" onclick="doAILookupDirect()">我已检查，拼写无误，继续查询</button>`;
       $('lookupError').style.display = '';
       $('btnLookup').disabled = false;
       return;
@@ -7442,94 +7556,7 @@ async function doLookup() {
 
     // Step 2: 拼写校验通过，使用AI查询
     $('lookupLoading').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;"><div class="spinner" style="width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div><span>AI 正在查询中，请稍候...</span></div>';
-    const prompt = `请为英语单词 "${validatedWord}" 生成以下学习内容，严格按照格式输出：
-
-音标: <该单词的国际音标 IPA，例如 /ˈeksəmpəl/>
-释义: <列出不同词性的常用释义，每个词性列出1-3个最常用义项。用英文缩写标注词性，不要加序号。例如：n. 放弃、遗弃、抛弃；v. 放纵、沉溺于；adj. 被遗弃的>
-例句: <1个自然实用的英文例句，附中文翻译。格式：英文例句 | 中文翻译>
-词根词缀: <该单词的词根词缀拆解，例如：ab-（离开）+ bandon（命令）→ 放弃命令→遗弃。如无明确词根写"暂无">
-派生词: <该单词的派生词及其释义，用 | 分隔，例如：abandoned (adj.) 被遗弃的 | abandonment (n.) 放弃>
-难度: <中考/高考/四级/六级/考研/雅思/托福/专八 中选一个最符合的>`;
-
-  const result = await callAI(prompt, 2000);
-    if (result) {
-      const phonetic = parseSection(result, '音标') || '';
-      const definition = parseSection(result, '释义') || '';
-      const examplesRaw = parseSection(result, '例句') || '';
-      const rootAffix = parseSection(result, '词根词缀') || '';
-      const derived = parseSection(result, '派生词') || '';
-      const difficulty = parseSection(result, '难度') || '';
-
-      // Parse definition: remove numbering, bold 【常用】 marks
-      const defHtml = escapeHtml(definition)
-        .replace(/^\d+\.\s*/gm, '')
-        .replace(/【常用】/g, '<strong style="color:#e67e22;">●常用 </strong>')
-        .replace(/\n/g, '<br>');
-
-      // Parse examples (only 1)
-      const exampleLines = examplesRaw.split('\n').filter(l => l.trim());
-      const exampleItem = exampleLines.length > 0
-        ? (() => {
-            const line = exampleLines[0];
-            const parts = line.split('|').map(s => s.trim());
-            return parts.length >= 2
-              ? `<i>"${escapeHtml(parts[0])}"</i> <span style="color:var(--muted);">${escapeHtml(parts[1])}</span>`
-              : `<i>"${escapeHtml(line)}"</i>`;
-          })()
-        : '';
-
-      // Parse derived words
-      const derivedItems = derived.split('|').map(s => s.trim()).filter(s => s);
-      const derivedHtml = derivedItems.length > 0
-        ? derivedItems.map(d => `<span style="display:inline-block;background:var(--bg);padding:3px 8px;border-radius:4px;margin:3px 4px;font-size:0.85rem;">${escapeHtml(d)}</span>`).join('')
-        : '暂无派生词';
-
-      // Populate UI
-      $('luWord').textContent = validatedWord;
-      // Difficulty tag
-      if (difficulty) {
-        $('luDifficulty').innerHTML = `<span class="diff-tag diff-${difficulty}">${difficulty}</span>`;
-        $('luDifficulty').style.display = '';
-      } else {
-        $('luDifficulty').style.display = 'none';
-      }
-      $('luPhonetic').textContent = phonetic;
-      $('luSpeak').style.display = phonetic ? '' : 'none';
-      $('luDefinition').innerHTML = defHtml;
-      $('luExamples').innerHTML = exampleItem || '暂无例句';
-      $('luSpeakExample').style.display = exampleItem ? '' : 'none';
-      $('luRoot').innerHTML = rootAffix && rootAffix !== '暂无' ? escapeHtml(rootAffix) : '暂无';
-      $('luDerived').innerHTML = derivedHtml;
-      $('luAddedMsg').style.display = 'none';
-
-      // Check if already in word list
-      const exists = appData.words.find(w => w.english.toLowerCase() === validatedWord.toLowerCase());
-      if (exists) {
-        $('luAddBtn').style.display = 'none';
-        $('luAddedMsg').textContent = '已在单词列表中 ✓';
-        $('luAddedMsg').style.display = '';
-      } else {
-        $('luAddBtn').style.display = '';
-      }
-
-      // Store lookup data
-      lookupData = {
-        word: validatedWord,
-        phonetic: phonetic,
-        definition: definition,
-        examples: examplesRaw,
-        examplesHtml: exampleItem,
-        rootAffix: rootAffix,
-        derived: derived,
-        derivedHtml: derivedHtml,
-        difficulty: difficulty
-      };
-
-      $('lookupResult').style.display = '';
-    } else {
-      $('lookupError').textContent = '查询失败，请稍后重试';
-      $('lookupError').style.display = '';
-    }
+    await doAILookupCore(validatedWord);
   } catch (err) {
     console.error('lookup error:', err);
     $('lookupError').textContent = '查询失败: ' + (err.message || '未知错误');
