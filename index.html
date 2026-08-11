@@ -9459,12 +9459,12 @@ async function contextSpeakWord(event, word) {
 // Article Reader（文章陪读）
 // ═══════════════════════════════════════
 let articleData = { title: '', paragraphs: [], translations: {} };
-let articleFontSize = 2; // 0-4: 小/较小/标准/较大/大
-const articleFontSizes = [0.75, 0.85, 0.95, 1.1, 1.25];
-const articleFontLabels = ['小', '较小', '标准', '较大', '大'];
+let articleFontSize = 3; // 0-6: 特小/较小/小/标准/大/较大/特大
+const articleFontSizes = [0.6, 0.7, 0.8, 0.95, 1.15, 1.35, 1.6];
+const articleFontLabels = ['特小', '较小', '小', '标准', '大', '较大', '特大'];
 
 function changeArticleFontSize(delta) {
-  articleFontSize = Math.max(0, Math.min(4, articleFontSize + delta));
+  articleFontSize = Math.max(0, Math.min(6, articleFontSize + delta));
   $('articleFontLabel').textContent = articleFontLabels[articleFontSize];
   applyArticleFontSize();
 }
@@ -9480,7 +9480,7 @@ function applyArticleFontSize() {
 
 function clearArticle() {
   articleData = { title: '', paragraphs: [], translations: {} };
-  articleFontSize = 2;
+  articleFontSize = 3;
   $('articleFontLabel').textContent = '标准';
   $('articleInput').value = '';
   $('articleDisplay').innerHTML = '';
@@ -9892,12 +9892,15 @@ function handleArticleSelection(e) {
     $('btnAspTranslate').textContent = '🤖 AI 翻译';
     $('btnAspSave').style.display = 'none';
 
-    // Position near the selection
+    // Position near the selection (account for card's contain: layout)
     const selRect = range.getBoundingClientRect();
+    const card = document.getElementById('articleDisplayCard');
+    const cardRect = card ? card.getBoundingClientRect() : null;
     let top = selRect.bottom + 10;
     let left = selRect.left;
-    if (top + 280 > window.innerHeight) top = selRect.top - 280;
-    if (left + 420 > window.innerWidth) left = window.innerWidth - 430;
+    if (cardRect) { top -= cardRect.top; left -= cardRect.left; }
+    if (top + 280 > window.innerHeight) top = selRect.top - 280 - (cardRect ? cardRect.top : 0);
+    if (left + 420 > window.innerWidth) left = (cardRect ? cardRect.width : window.innerWidth) - 430;
     if (left < 10) left = 10;
     if (top < 10) top = 10;
 
