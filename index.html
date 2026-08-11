@@ -1544,6 +1544,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
 .article-word-popup .popup-word { font-size: 1.1rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
 .article-word-popup .popup-phonetic { font-size: 0.82rem; color: var(--muted); margin-bottom: 8px; }
 .article-word-popup .popup-meaning { font-size: 0.9rem; color: var(--ink); margin-bottom: 6px; line-height: 1.5; }
+.article-word-popup .popup-pos { display: inline-block; font-size: 0.75rem; color: #5a8f6e; background: #edf7f0; padding: 1px 8px; border-radius: 8px; margin-bottom: 6px; }
 .article-word-popup .popup-lemma { font-size: 0.82rem; color: var(--accent2); margin-bottom: 6px; }
 .article-word-popup .popup-lemma-meaning { font-size: 0.85rem; color: #555; margin-bottom: 10px; line-height: 1.4; }
 /* ── 句子选择弹窗 ── */
@@ -2442,6 +2443,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       <div class="article-word-popup" id="articleWordPopup">
         <div class="popup-word" id="awpWord"></div>
         <div class="popup-phonetic" id="awpPhonetic"></div>
+        <div class="popup-pos" id="awpPos" style="display:none;"></div>
         <div class="popup-meaning" id="awpMeaning"></div>
         <div class="popup-lemma" id="awpLemma" style="display:none;"></div>
         <div class="popup-lemma-meaning" id="awpLemmaMeaning" style="display:none;"></div>
@@ -9624,12 +9626,13 @@ async function lookupArticleWord(word, event) {
   const prompt = `The word "${word}" appears in the following English article. Analyze it:
 
 1. "lemma" - the base/dictionary form (e.g. "running" → "run", "went" → "go", "mice" → "mouse"). If already base form, return the same word.
-2. "phonetic" - IPA transcription of the lemma
-3. "lemma_meaning" - the general Chinese meaning of the lemma (standard dictionary definition, NOT context-specific). Must always be filled.
-4. "context_meaning" - the specific Chinese meaning in this article context. If same as lemma_meaning, leave empty.
+2. "pos" - part of speech of the lemma in this context, e.g. "n." (noun), "v." (verb), "adj." (adjective), "adv." (adverb), "prep." (preposition), "conj." (conjunction), "pron." (pronoun). Must always be filled.
+3. "phonetic" - IPA transcription of the lemma
+4. "lemma_meaning" - the general Chinese meaning of the lemma (standard dictionary definition, NOT context-specific). Must always be filled.
+5. "context_meaning" - the specific Chinese meaning in this article context. If same as lemma_meaning, leave empty.
 
 Return ONLY valid JSON:
-{"lemma": "...", "phonetic": "...", "lemma_meaning": "...", "context_meaning": "..."}
+{"lemma": "...", "pos": "...", "phonetic": "...", "lemma_meaning": "...", "context_meaning": "..."}
 
 Context: ${context}`;
 
@@ -9641,16 +9644,18 @@ Context: ${context}`;
     const parsed = JSON.parse(jsonStr);
 
     const lemma = parsed.lemma || word;
+    const pos = parsed.pos || '';
     const contextMeaning = parsed.context_meaning || parsed.meaning || '';
     const lemmaMeaning = parsed.lemma_meaning || contextMeaning;
 
     // Build inline display
     let innerHTML = `<span class="wim-text">${escapeHtml(lemmaMeaning)}</span>`;
-    innerHTML += `<span class="wim-add" title="加入单词列表" onclick="addArticleWordInline('${escapeHtml(lemma)}','${escapeHtml(lemmaMeaning)}',event)">+</span>`;
+    innerHTML += `<span class="wim-add" title="加入单词列表" onclick="addArticleWordInline('${escapeHtml(lemma)}','${escapeHtml(lemmaMeaning)}','${escapeHtml(pos)}',event)">+</span>`;
     innerHTML += `<span class="wim-close" onclick="removeAllInlineMeanings();event.stopPropagation();">&times;</span>`;
 
     loadingEl.innerHTML = innerHTML;
     loadingEl.dataset.lemma = lemma;
+    loadingEl.dataset.pos = pos;
     loadingEl.dataset.lemmaMeaning = lemmaMeaning;
   } catch (e) {
     const raw = (result && (result.content || result)) || '查询失败';
@@ -9666,7 +9671,7 @@ function removeAllInlineMeanings() {
   document.querySelectorAll('.article-para .word-clickable.active').forEach(el => el.classList.remove('active'));
 }
 
-function addArticleWordInline(lemma, meaning, event) {
+function addArticleWordInline(lemma, meaning, pos, event) {
   if (event) event.stopPropagation();
   const word = lemma;
   const parsedMeaning = meaning;
@@ -9675,6 +9680,13 @@ function addArticleWordInline(lemma, meaning, event) {
 
   const existing = appData.words.find(w => w.english.toLowerCase() === word.toLowerCase());
   if (existing) {
+    // Update pos if existing word has no pos
+    if (!existing.pos && pos) {
+      existing.pos = pos;
+      existing.updatedAt = new Date().toISOString();
+      persist();
+      renderWordTable();
+    }
     showToast(`"${word}" 已在单词列表中`);
     return;
   }
@@ -9682,7 +9694,7 @@ function addArticleWordInline(lemma, meaning, event) {
   appData.words.push({
     english: word,
     chinese: parsedMeaning,
-    pos: '',
+    pos: pos || '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     source: articleData.title || '文章陪读'
@@ -9697,6 +9709,7 @@ function addArticleWord() {
   const popup = $('articleWordPopup');
   const word = popup.dataset.lemma || popup.dataset.currentWord;  // Use lemma (base form) as the word
   const meaning = popup.dataset.lemmaMeaning || $('awpMeaning').textContent;
+  const pos = popup.dataset.pos || '';
   const contextWord = popup.dataset.currentWord;
 
   if (!word) return;
@@ -9704,6 +9717,13 @@ function addArticleWord() {
   // Check if word already exists
   const existing = appData.words.find(w => w.english.toLowerCase() === word.toLowerCase());
   if (existing) {
+    // Update pos if existing word has no pos
+    if (!existing.pos && pos) {
+      existing.pos = pos;
+      existing.updatedAt = new Date().toISOString();
+      persist();
+      renderWordTable();
+    }
     showToast(`"${word}" 已在单词列表中`);
     return;
   }
@@ -9711,7 +9731,7 @@ function addArticleWord() {
   appData.words.push({
     english: word,
     chinese: meaning,
-    pos: '',
+    pos: pos,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     source: articleData.title || '文章陪读'
