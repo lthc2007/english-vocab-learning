@@ -9519,14 +9519,24 @@ function renderArticle() {
   articleData._quizAnswersShown = false;
 
   // ── 句子选择检测 ──
+  // Clean up old listeners before adding new ones
+  if (_articleTouchEndHandler) {
+    container.removeEventListener('touchend', _articleTouchEndHandler);
+  }
+  if (_articleSelChangeHandler) {
+    document.removeEventListener('selectionchange', _articleSelChangeHandler);
+  }
+
   container.onmouseup = handleArticleSelection;
-  container.addEventListener('touchend', function(e) {
+  _articleTouchEndHandler = function(e) {
     // On mobile, selection needs more time to settle after long-press
     setTimeout(() => handleArticleSelection(e), 300);
-  });
+  };
+  container.addEventListener('touchend', _articleTouchEndHandler);
+
   // Fallback: also listen to selectionchange for when user adjusts handles after touchend
   let selectionDebounce = null;
-  document.addEventListener('selectionchange', function() {
+  _articleSelChangeHandler = function() {
     if (selectionDebounce) clearTimeout(selectionDebounce);
     selectionDebounce = setTimeout(() => {
       // Don't interfere if popup is already open
@@ -9540,7 +9550,8 @@ function renderArticle() {
         handleArticleSelection({});
       }
     }, 500);
-  });
+  };
+  document.addEventListener('selectionchange', _articleSelChangeHandler);
 }
 
 async function translateParagraph(idx) {
@@ -9767,6 +9778,8 @@ document.addEventListener('click', function(e) {
 // ═══════════════════════════════════════
 let selectedSentenceText = '';
 let _sentencePopupJustClosed = false;
+let _articleSelChangeHandler = null;
+let _articleTouchEndHandler = null;
 
 function handleArticleSelection(e) {
   // Don't interfere with button clicks
