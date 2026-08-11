@@ -1504,20 +1504,27 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
 .article-para .word-clickable.active { background: var(--accent-soft); color: var(--accent); }
 /* ── 单词行内释义 ── */
 .word-inline-meaning {
-  display: inline; vertical-align: middle;
-  margin-left: 4px; padding: 1px 8px;
+  display: inline-block; vertical-align: middle;
+  margin-left: 4px; padding: 4px 10px;
   background: #eef6f6; border: 1px solid var(--accent);
   border-radius: 10px; font-size: 0.8rem; color: var(--accent);
-  white-space: nowrap; cursor: default; line-height: 1.5;
-  animation: fadeIn 0.2s ease-out;
+  cursor: default; line-height: 1.5;
+  animation: fadeIn 0.2s ease-out; max-width: 320px;
 }
 .word-inline-meaning .wim-text {
-  margin-right: 6px;
+  font-weight: 600; color: #2c3e50;
+}
+.word-inline-meaning .wim-context {
+  display: block; font-weight: 600; color: #2c3e50; margin-bottom: 2px;
+}
+.word-inline-meaning .wim-lemma-line {
+  display: block; font-size: 0.75rem; color: #888; margin-top: 2px;
+  border-top: 1px dashed #dde; padding-top: 2px;
 }
 .word-inline-meaning .wim-add {
   display: inline-block; cursor: pointer; color: var(--accent2);
   font-weight: 700; font-size: 0.85rem; padding: 0 3px;
-  border-radius: 50%; transition: all 0.15s;
+  border-radius: 50%; transition: all 0.15s; float: right; margin-left: 6px;
 }
 .word-inline-meaning .wim-add:hover { background: var(--gold-soft); color: var(--accent); }
 .word-inline-meaning .wim-close {
@@ -1586,6 +1593,12 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
   line-height: 1; padding: 4px; transition: color 0.15s;
 }
 .article-sentence-popup .asp-close:hover { color: var(--danger); }
+.article-sentence-popup .asp-type-badge {
+  display: inline-block; font-size: 0.75rem; padding: 2px 10px;
+  border-radius: 10px; margin-bottom: 8px; font-weight: 600;
+}
+.article-sentence-popup .asp-type-badge.phrase { background: #edf7f0; color: #5a8f6e; }
+.article-sentence-popup .asp-type-badge.sentence { background: #eef2ff; color: #4f5eb0; }
 .article-quiz-answer {
   background: #f0fdf4; border: 1px solid #86efac; border-radius: var(--radius-sm);
   padding: 14px 18px; margin-top: 16px; display: none; line-height: 1.8;
@@ -2472,14 +2485,16 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
           <button class="btn btn-secondary btn-sm" onclick="closeArticleWordPopup()">关闭</button>
         </div>
       </div>
-      <!-- 句子选择弹窗 -->
+      <!-- 选择弹窗（短语/句子） -->
       <div class="article-sentence-popup" id="articleSentencePopup">
         <button class="asp-close" onclick="closeArticleSentencePopup()" title="关闭">&times;</button>
         <div class="asp-en" id="aspEn"></div>
         <div class="asp-cn" id="aspCn"></div>
+        <div class="asp-type-badge" id="aspTypeBadge" style="display:none;"></div>
         <div class="asp-actions">
           <button class="btn btn-accent btn-sm" id="btnAspTranslate" onclick="translateSelectedSentence()">🤖 AI 翻译</button>
           <button class="btn btn-primary btn-sm" id="btnAspSave" onclick="saveSelectedSentence()" style="display:none;">保存到好句背诵</button>
+          <button class="btn btn-success btn-sm" id="btnAspSavePhrase" onclick="saveSelectedPhrase()" style="display:none;">加入单词列表</button>
           <button class="btn btn-secondary btn-sm" onclick="closeArticleSentencePopup()">关闭</button>
         </div>
       </div>
@@ -9460,7 +9475,7 @@ async function contextSpeakWord(event, word) {
 // ═══════════════════════════════════════
 let articleData = { title: '', paragraphs: [], translations: {} };
 let articleFontSize = 3; // 0-6: 特小/较小/小/标准/大/较大/特大
-const articleFontSizes = [0.6, 0.7, 0.8, 0.95, 1.15, 1.35, 1.6];
+const articleFontSizes = [0.5, 0.65, 0.8, 1.0, 1.3, 1.6, 2.0];
 const articleFontLabels = ['特小', '较小', '小', '标准', '大', '较大', '特大'];
 
 function changeArticleFontSize(delta) {
@@ -9727,11 +9742,31 @@ Context: ${context}`;
 
     const lemma = parsed.lemma || word;
     const pos = parsed.pos || '';
-    const contextMeaning = parsed.context_meaning || parsed.meaning || '';
-    const lemmaMeaning = parsed.lemma_meaning || contextMeaning;
+    const contextMeaning = parsed.context_meaning || '';
+    const lemmaMeaning = parsed.lemma_meaning || contextMeaning || parsed.meaning || '';
+    const isBaseForm = (lemma.toLowerCase() === word.toLowerCase());
+    const hasContextMeaning = contextMeaning && contextMeaning !== lemmaMeaning;
 
-    // Build inline display
-    let innerHTML = `<span class="wim-text">${escapeHtml(lemmaMeaning)}</span>`;
+    // Build inline display: context meaning first, then lemma info
+    let innerHTML = '';
+
+    if (hasContextMeaning) {
+      // Show context meaning as primary
+      innerHTML += `<span class="wim-context">${escapeHtml(contextMeaning)}</span>`;
+    }
+
+    if (!isBaseForm) {
+      // Word is not the base form: show lemma and its meaning
+      innerHTML += `<span class="wim-text">${isBaseForm ? '' : '→ 原型: '}${escapeHtml(lemma)}</span>`;
+      innerHTML += `<span class="wim-lemma-line">${escapeHtml(lemmaMeaning)}</span>`;
+    } else if (!hasContextMeaning) {
+      // Base form with no special context meaning: just show lemma meaning
+      innerHTML += `<span class="wim-text">${escapeHtml(lemmaMeaning)}</span>`;
+    } else {
+      // Base form with different context meaning: show both
+      innerHTML += `<span class="wim-lemma-line">通用释义: ${escapeHtml(lemmaMeaning)}</span>`;
+    }
+
     innerHTML += `<span class="wim-add" title="加入单词列表" onclick="addArticleWordInline('${escapeHtml(lemma)}','${escapeHtml(lemmaMeaning)}','${escapeHtml(pos)}',event)">+</span>`;
     innerHTML += `<span class="wim-close" onclick="removeAllInlineMeanings();event.stopPropagation();">&times;</span>`;
 
@@ -9848,6 +9883,8 @@ document.addEventListener('click', function(e) {
 // 句子选择弹窗
 // ═══════════════════════════════════════
 let selectedSentenceText = '';
+let _selectedIsPhrase = false;  // AI 分类：是否为短语
+let _selectedPhraseBase = '';   // 短语原型
 let _sentencePopupJustClosed = false;
 let _articleSelChangeHandler = null;
 let _articleTouchEndHandler = null;
@@ -9867,9 +9904,9 @@ function handleArticleSelection(e) {
     }
 
     const text = selection.toString().trim();
-    // Require at least 3 words and at most 600 chars
+    // Require at least 2 words and at most 600 chars
     const wordCount = text.split(/\s+/).length;
-    if (wordCount < 3 || text.length > 600) return;
+    if (wordCount < 2 || text.length > 600) return;
 
     // Check selection is within article display
     const range = selection.getRangeAt(0);
@@ -9882,25 +9919,35 @@ function handleArticleSelection(e) {
     if (anc.parentElement && anc.parentElement.classList && anc.parentElement.classList.contains('word-clickable')) return;
 
     selectedSentenceText = text;
+    _selectedIsPhrase = false;
+    _selectedPhraseBase = '';
 
     // Show popup
     const popup = $('articleSentencePopup');
     $('aspEn').textContent = text;
     $('aspCn').textContent = '';
     $('aspCn').classList.remove('show');
+    $('aspTypeBadge').style.display = 'none';
+    $('aspTypeBadge').textContent = '';
+    $('aspTypeBadge').className = 'asp-type-badge';
     $('btnAspTranslate').disabled = false;
     $('btnAspTranslate').textContent = '🤖 AI 翻译';
     $('btnAspSave').style.display = 'none';
+    $('btnAspSavePhrase').style.display = 'none';
 
     // Position near the selection (account for card's contain: layout)
     const selRect = range.getBoundingClientRect();
     const card = document.getElementById('articleDisplayCard');
     const cardRect = card ? card.getBoundingClientRect() : null;
+    // Convert to card-relative coordinates (popup has position:fixed inside contain:layout card)
     let top = selRect.bottom + 10;
     let left = selRect.left;
     if (cardRect) { top -= cardRect.top; left -= cardRect.left; }
-    if (top + 280 > window.innerHeight) top = selRect.top - 280 - (cardRect ? cardRect.top : 0);
-    if (left + 420 > window.innerWidth) left = (cardRect ? cardRect.width : window.innerWidth) - 430;
+    // Compare in viewport coordinates
+    const viewportTop = top + (cardRect ? cardRect.top : 0);
+    const viewportLeft = left + (cardRect ? cardRect.left : 0);
+    if (viewportTop + 280 > window.innerHeight) top = selRect.top - 285 - (cardRect ? cardRect.top : 0);
+    if (viewportLeft + 420 > window.innerWidth) left = (cardRect ? cardRect.width : window.innerWidth) - 430;
     if (left < 10) left = 10;
     if (top < 10) top = 10;
 
@@ -9926,16 +9973,61 @@ async function translateSelectedSentence() {
 
   const btn = $('btnAspTranslate');
   btn.disabled = true;
-  btn.textContent = '⏳ 翻译中...';
+  btn.textContent = '⏳ AI 分析中...';
 
   try {
-    const prompt = `请将以下英文句子翻译成地道的中文，只返回翻译结果，不要加任何解释：\n\n${selectedSentenceText}`;
+    const prompt = `请对以下英文文本做两件事：
+1. 将其翻译成地道的中文
+2. 判断它是"短语"还是"句子"
+
+判断标准：
+- 短语：动词短语(give up)、固定搭配(in terms of)、习语等，通常不是一个完整句子
+- 句子：完整的陈述句、疑问句等，有主语和谓语
+
+请严格按以下格式返回（每行一个标签，不要加其他内容）：
+【类型】短语/句子
+【原型】如果是短语，给出原型形式（如 give up）；如果是句子，写"无"
+【翻译】中文翻译
+
+文本：${selectedSentenceText}`;
+
     const result = await callAI(prompt, 1024);
+    const response = result.trim();
+
+    // Parse the response
+    const typeMatch = response.match(/【类型】\s*(.+)/);
+    const baseMatch = response.match(/【原型】\s*(.+)/);
+    const transMatch = response.match(/【翻译】\s*(.+)/);
+
+    const isPhrase = typeMatch && typeMatch[1].includes('短语');
+    const phraseBase = (baseMatch && baseMatch[1] && baseMatch[1] !== '无' && baseMatch[1] !== '无') 
+      ? baseMatch[1].trim() : '';
+    const translation = transMatch ? transMatch[1].trim() : response;
+
+    _selectedIsPhrase = isPhrase;
+    _selectedPhraseBase = phraseBase || selectedSentenceText;
+
+    // Show translation
     const cnDiv = $('aspCn');
-    cnDiv.textContent = result.trim();
+    cnDiv.textContent = translation;
     cnDiv.classList.add('show');
-    $('btnAspSave').style.display = '';
-    showToast('翻译完成');
+
+    // Show classification badge
+    const badge = $('aspTypeBadge');
+    if (isPhrase) {
+      badge.textContent = phraseBase ? `📌 短语 · 原型: ${phraseBase}` : '📌 短语';
+      badge.className = 'asp-type-badge phrase';
+      $('btnAspSavePhrase').style.display = '';
+      $('btnAspSave').style.display = 'none';
+    } else {
+      badge.textContent = '📝 句子';
+      badge.className = 'asp-type-badge sentence';
+      $('btnAspSave').style.display = '';
+      $('btnAspSavePhrase').style.display = 'none';
+    }
+    badge.style.display = '';
+
+    showToast(isPhrase ? 'AI 识别为短语' : 'AI 识别为句子');
   } catch (e) {
     showToast('翻译失败: ' + (e.message || '请检查 API 配置'));
   } finally {
@@ -9972,6 +10064,44 @@ function saveSelectedSentence() {
   appData.sentences.unshift(sentence);
   persist();
   showToast('已保存到好句背诵 ✓');
+  closeArticleSentencePopup();
+}
+
+function saveSelectedPhrase() {
+  const phrase = _selectedPhraseBase || selectedSentenceText;
+  const chinese = $('aspCn').textContent.trim();
+
+  if (!phrase) return;
+  if (!chinese) { showToast('请先翻译短语'); return; }
+
+  // Check if already exists
+  const existing = appData.words.find(w => w.english.toLowerCase() === phrase.toLowerCase());
+  if (existing) {
+    // Update meaning if existing word has no meaning
+    if (!existing.chinese) {
+      existing.chinese = chinese;
+      existing.updatedAt = new Date().toISOString();
+      persist();
+      renderWordTable();
+    }
+    showToast(`"${phrase}" 已在单词列表中`);
+    return;
+  }
+
+  appData.words.push({
+    english: phrase,
+    chinese: chinese,
+    pos: 'phrase',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    source: articleData.title || '文章陪读'
+  });
+  persist();
+  renderWordTable();
+  const addedMsg = phrase.toLowerCase() !== selectedSentenceText.toLowerCase()
+    ? `"${selectedSentenceText}" → 原型短语 "${phrase}" 已加入单词列表`
+    : `"${phrase}" 已加入单词列表`;
+  showToast(addedMsg);
   closeArticleSentencePopup();
 }
 
