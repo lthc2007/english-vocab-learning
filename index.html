@@ -1577,8 +1577,58 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
 }
 .article-quiz-answer.show { display: block; animation: fadeIn 0.3s ease-out; }
 .article-quiz-answer h4 { margin: 0 0 8px; font-size: 0.9rem; color: #166534; }
-.article-quiz-answer .answer-item { padding: 4px 0; font-size: 0.88rem; }
+.article-quiz-answer .answer-item { padding: 8px 0; font-size: 0.88rem; border-bottom: 1px dashed var(--border); }
+.article-quiz-answer .answer-item:last-child { border-bottom: none; }
 .article-quiz-answer .answer-item strong { color: var(--accent); }
+.article-quiz-answer .answer-evidence {
+  display: block; margin-top: 4px; padding: 6px 10px;
+  background: rgba(45,90,90,0.04); border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0; font-size: 0.82rem; color: #555;
+  font-style: italic; line-height: 1.6;
+}
+.article-quiz-answer .answer-evidence-label {
+  font-style: normal; font-weight: 600; color: var(--accent); margin-right: 4px;
+}
+/* Question type badge */
+.quiz-type-badge {
+  display: inline-block; font-size: 0.7rem; padding: 2px 8px;
+  border-radius: 10px; margin-left: 8px; vertical-align: middle;
+  font-weight: 500; letter-spacing: 0.03em;
+}
+.quiz-type-detail { background: #e8f0fe; color: #1a56db; }
+.quiz-type-main { background: #fef3c7; color: #92400e; }
+.quiz-type-infer { background: #ede9fe; color: #6b21a8; }
+/* ── 已保存文章列表 ── */
+.saved-articles-section {
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);
+}
+.saved-articles-section h4 {
+  font-size: 0.85rem; color: var(--muted); margin-bottom: 10px; font-weight: 500;
+}
+.saved-article-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; margin-bottom: 6px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); cursor: pointer;
+  transition: all var(--transition); gap: 8px;
+}
+.saved-article-item:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); }
+.saved-article-item .sa-title {
+  font-weight: 600; font-size: 0.9rem; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
+}
+.saved-article-item .sa-meta {
+  font-size: 0.72rem; color: var(--muted); white-space: nowrap; flex-shrink: 0;
+}
+.saved-article-item .sa-del {
+  cursor: pointer; color: var(--muted); font-size: 0.85rem; padding: 2px 6px;
+  border-radius: 4px; flex-shrink: 0; border: none; background: none;
+  transition: all 0.15s;
+}
+.saved-article-item .sa-del:hover { color: var(--danger); background: rgba(184,84,80,0.08); }
+.saved-article-empty {
+  text-align: center; padding: 16px; color: var(--muted); font-size: 0.82rem;
+}
 
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2370,9 +2420,15 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       <div class="article-actions">
         <button class="btn btn-primary" id="btnArticleParse" onclick="parseArticle()">AI 解析文章</button>
         <button class="btn btn-secondary" id="btnArticleClear" onclick="clearArticle()" style="display:none;">清空</button>
+        <button class="btn btn-accent btn-sm" id="btnArticleCloudSave" onclick="saveArticleToCloud()" style="display:none;" title="保存文章到云端">☁️ 保存到云端</button>
         <span id="articleProgress" style="display:none;color:var(--muted);font-size:0.85rem;">
           <span class="spinner" style="border-color:rgba(45,90,90,0.3);border-top-color:var(--accent);"></span> AI 正在解析文章...
         </span>
+      </div>
+      <!-- 已保存文章列表 -->
+      <div class="saved-articles-section" id="savedArticlesSection" style="display:none;">
+        <h4>☁️ 云端保存的文章</h4>
+        <div id="savedArticlesList"></div>
       </div>
     </div>
 
@@ -2405,7 +2461,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       <!-- 练习题区域 -->
       <div class="article-quiz-section" id="articleQuizSection" style="display:none;">
         <div style="text-align:center;margin-bottom:16px;">
-          <button class="btn btn-accent" id="btnArticleQuiz" onclick="generateArticleQuiz()">生成课后练习（六级选择题）</button>
+          <button class="btn btn-accent" id="btnArticleQuiz" onclick="generateArticleQuiz()">生成课后练习</button>
           <span id="articleQuizProgress" style="display:none;color:var(--muted);font-size:0.85rem;margin-left:10px;">
             <span class="spinner" style="border-color:rgba(45,90,90,0.3);border-top-color:var(--accent);"></span> AI 正在出题...
           </span>
@@ -3052,6 +3108,7 @@ function saveData(data) {
 let appData = loadData();
 // Ensure sentences array exists for users upgrading from older versions
 if (!appData.sentences) appData.sentences = [];
+if (!appData.articles) appData.articles = [];
 if (!appData.viewCounts) appData.viewCounts = {};
 // 为旧数据迁移：旧版扁平 API 配置迁移到 per-provider 结构
 if (!appData.providerConfigs) appData.providerConfigs = {};
@@ -3583,7 +3640,7 @@ async function cloudUpload() {
         .from('user_words')
         .upsert({
           user_id: userId,
-          words: { words: appData.words, sentences: appData.sentences || [], corrections: loadHistory(), viewCounts: appData.viewCounts || {}, providerConfigs: appData.providerConfigs || {}, ttsProviderConfigs: appData.ttsProviderConfigs || {} },
+          words: { words: appData.words, sentences: appData.sentences || [], articles: appData.articles || [], corrections: loadHistory(), viewCounts: appData.viewCounts || {}, providerConfigs: appData.providerConfigs || {}, ttsProviderConfigs: appData.ttsProviderConfigs || {} },
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' });
     });
@@ -3632,6 +3689,7 @@ async function cloudDownload() {
     // Parse cloud data: support both old format (array) and new format ({words, sentences, corrections})
     const cloudWords = Array.isArray(data.words) ? data.words : (data.words.words || []);
     const cloudSentences = Array.isArray(data.words) ? [] : (data.words.sentences || []);
+    const cloudArticles = Array.isArray(data.words) ? [] : (data.words.articles || []);
     const cloudCorrections = Array.isArray(data.words) ? [] : (data.words.corrections || []);
     const cloudViewCounts = Array.isArray(data.words) ? {} : (data.words.viewCounts || {});
     const cloudProviderConfigs = Array.isArray(data.words) ? {} : (data.words.providerConfigs || {});
@@ -3640,6 +3698,7 @@ async function cloudDownload() {
     // 云端数据完全替换本地（云端是唯一真相来源）
     appData.words = cloudWords;
     appData.sentences = cloudSentences;
+    appData.articles = cloudArticles;
     appData.viewCounts = cloudViewCounts;
     if (Object.keys(cloudProviderConfigs).length > 0) appData.providerConfigs = cloudProviderConfigs;
     if (Object.keys(cloudTtsProviderConfigs).length > 0) appData.ttsProviderConfigs = cloudTtsProviderConfigs;
@@ -3647,7 +3706,7 @@ async function cloudDownload() {
     renderWordTable();
     if (cloudCorrections.length > 0) { saveHistory(cloudCorrections); renderHistory(); }
     $('cloudSyncTime').textContent = '云端时间: ' + new Date(data.updated_at).toLocaleString('zh-CN');
-    showToast('已从云端下载 ' + cloudWords.length + ' 个单词、' + cloudSentences.length + ' 个好句、' + cloudCorrections.length + ' 条批改记录');
+    showToast('已从云端下载 ' + cloudWords.length + ' 个单词、' + cloudSentences.length + ' 个好句、' + cloudArticles.length + ' 篇文章、' + cloudCorrections.length + ' 条批改记录');
     $('cloudStatusDot').className = 'cloud-status synced';
     syncStudyTimeFromCloud();
   } catch (e) {
@@ -3766,6 +3825,7 @@ function exportData() {
     exportedAt: new Date().toISOString(),
     words: appData.words,
     sentences: appData.sentences || [],
+    articles: appData.articles || [],
     apiKey: appData.apiKey,
     apiUrl: appData.apiUrl,
     model: appData.model,
@@ -3821,13 +3881,27 @@ function importData(event) {
               sentenceAdded++;
             }
           });
-          showToast('合并导入完成: ' + added + ' 个新单词已添加, ' + sentenceAdded + ' 个好句已恢复');
+        }
+        // Merge articles
+        if (data.articles && Array.isArray(data.articles)) {
+          const existingArticleIds = new Set((appData.articles || []).map(a => a.id));
+          let articleAdded = 0;
+          data.articles.forEach(a => {
+            if (!existingArticleIds.has(a.id)) {
+              (appData.articles || (appData.articles = [])).push(a);
+              articleAdded++;
+            }
+          });
+          showToast('合并导入完成: ' + added + ' 个新单词已添加, ' + ((data.sentences || []).length) + ' 个好句已恢复, ' + articleAdded + ' 篇文章已恢复');
+        } else if (data.sentences && Array.isArray(data.sentences)) {
+          showToast('合并导入完成: ' + added + ' 个新单词已添加, ' + ((data.sentences || []).length) + ' 个好句已恢复');
         } else {
           showToast('合并导入完成: ' + added + ' 个新单词已添加');
         }
       } else {
         appData.words = data.words;
         appData.sentences = data.sentences || [];
+        appData.articles = data.articles || [];
         // 确保导入的单词有 updatedAt 字段
         appData.words.forEach(w => { if (!w.updatedAt) w.updatedAt = w.createdAt || new Date().toISOString(); });
         (appData.sentences || []).forEach(s => { if (!s.updatedAt) s.updatedAt = s.createdAt || new Date().toISOString(); });
@@ -3843,7 +3917,7 @@ function importData(event) {
         if (data.ttsVoice) appData.ttsVoice = data.ttsVoice;
         if (data.providerConfigs && Object.keys(data.providerConfigs).length > 0) appData.providerConfigs = data.providerConfigs;
         if (data.ttsProviderConfigs && Object.keys(data.ttsProviderConfigs).length > 0) appData.ttsProviderConfigs = data.ttsProviderConfigs;
-        showToast('覆盖导入完成: ' + data.words.length + ' 个单词、' + ((data.sentences || []).length) + ' 个好句已导入');
+        showToast('覆盖导入完成: ' + data.words.length + ' 个单词、' + ((data.sentences || []).length) + ' 个好句、' + ((data.articles || []).length) + ' 篇文章已导入');
       }
       persist();
       renderWordTable();
@@ -4399,6 +4473,7 @@ function onTabSwitch(tab) {
   if (tab === 'history') lazyInitTab('history', renderHistory);
   if (tab === 'recite') switchReciteTab('add');
   if (tab === 'context') renderContextWords();
+  if (tab === 'article') renderSavedArticles();
 }
 
 // ═══════════════════════════════════════
@@ -9338,6 +9413,7 @@ function clearArticle() {
   $('articleQuizAnswers').classList.remove('show');
   $('articleQuizAnswerContent').innerHTML = '';
   $('btnArticleClear').style.display = 'none';
+  $('btnArticleCloudSave').style.display = 'none';
   closeArticleSentencePopup();
   removeAllInlineMeanings();
 }
@@ -9382,7 +9458,9 @@ ${text}`;
     renderArticle();
     $('articleDisplayCard').style.display = '';
     $('btnArticleClear').style.display = '';
+    $('btnArticleCloudSave').style.display = '';
     $('articleQuizSection').style.display = '';
+    $('btnArticleQuiz').style.display = '';
     showToast('文章解析完成: ' + parsed.paragraphs.length + ' 个段落');
   } catch (e) {
     showToast('解析失败: ' + e.message);
@@ -9422,7 +9500,14 @@ function renderArticle() {
   $('articleQuizAnswers').classList.remove('show');
   $('articleQuizAnswerContent').innerHTML = '';
   $('btnArticleQuiz').disabled = false;
+  $('btnArticleQuiz').style.display = '';
   $('articleQuizProgress').style.display = 'none';
+  // Remove old quiz questions from DOM
+  const oldQuestions = document.getElementById('articleQuizQuestionsContainer');
+  if (oldQuestions) oldQuestions.remove();
+  // Clear quiz data
+  articleData._quizQuestions = null;
+  articleData._quizAnswersShown = false;
 
   // ── 句子选择检测 ──
   container.onmouseup = handleArticleSelection;
@@ -9776,6 +9861,156 @@ function saveSelectedSentence() {
   closeArticleSentencePopup();
 }
 
+// ═══════════════════════════════════════
+// 文章云端保存/加载
+// ═══════════════════════════════════════
+function renderSavedArticles() {
+  const list = $('savedArticlesList');
+  const section = $('savedArticlesSection');
+  const articles = appData.articles || [];
+
+  if (articles.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = '';
+  let html = '';
+  articles.forEach((a, idx) => {
+    const date = a.savedAt ? new Date(a.savedAt).toLocaleDateString('zh-CN') : '';
+    html += `<div class="saved-article-item" onclick="loadSavedArticle(${idx})">
+      <span class="sa-title">${escapeHtml(a.title || '未命名文章')}</span>
+      <span class="sa-meta">${date} · ${(a.paragraphs || []).length}段</span>
+      <button class="sa-del" onclick="deleteSavedArticle(${idx}, event)" title="删除">×</button>
+    </div>`;
+  });
+  list.innerHTML = html;
+}
+
+async function saveArticleToCloud() {
+  if (!articleData || !articleData.title || articleData.paragraphs.length === 0) {
+    showToast('请先解析文章');
+    return;
+  }
+
+  if (!sbClient || !initSupabase()) {
+    // No cloud login: save locally only
+    saveArticleLocal();
+    return;
+  }
+
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (!session) {
+    // Not logged in: save locally only
+    saveArticleLocal();
+    return;
+  }
+
+  const btn = $('btnArticleCloudSave');
+  btn.disabled = true;
+  btn.textContent = '⏳ 保存中...';
+
+  try {
+    saveArticleLocal();
+    // Sync to cloud
+    await syncArticlesToCloud(session.user.id);
+    showToast('文章已保存到云端 ✓');
+    renderSavedArticles();
+  } catch (e) {
+    showToast('云端保存失败: ' + (e.message || '网络错误'));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '☁️ 保存到云端';
+  }
+}
+
+function saveArticleLocal() {
+  const existingIdx = (appData.articles || []).findIndex(a => a.title === articleData.title);
+  const article = {
+    id: generateId(),
+    title: articleData.title,
+    paragraphs: [...articleData.paragraphs],
+    translations: {...articleData.translations},
+    originalText: $('articleInput').value.trim(),
+    savedAt: new Date().toISOString(),
+    _quizQuestions: articleData._quizQuestions ? JSON.parse(JSON.stringify(articleData._quizQuestions)) : null,
+    _quizAnswersShown: articleData._quizAnswersShown || false
+  };
+
+  if (existingIdx >= 0) {
+    article.id = appData.articles[existingIdx].id;
+    appData.articles[existingIdx] = article;
+  } else {
+    appData.articles.unshift(article);
+  }
+  persist();
+}
+
+async function syncArticlesToCloud(userId) {
+  if (!sbClient) return;
+  const { error } = await withRetry(function() {
+    return sbClient
+      .from('user_words')
+      .upsert({
+        user_id: userId,
+        words: { words: appData.words, sentences: appData.sentences || [], articles: appData.articles || [], corrections: loadHistory(), viewCounts: appData.viewCounts || {}, providerConfigs: appData.providerConfigs || {}, ttsProviderConfigs: appData.ttsProviderConfigs || {} },
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+  });
+  if (error) throw error;
+}
+
+function loadSavedArticle(idx) {
+  const article = (appData.articles || [])[idx];
+  if (!article) return;
+
+  // Restore article input
+  $('articleInput').value = article.originalText || article.paragraphs.join('\n\n');
+
+  // Restore article data
+  articleData.title = article.title;
+  articleData.paragraphs = [...article.paragraphs];
+  articleData.translations = {...(article.translations || {})};
+  articleData._quizQuestions = null;
+  articleData._quizAnswersShown = false;
+
+  // Render
+  renderArticle();
+  $('articleDisplayCard').style.display = '';
+  $('btnArticleClear').style.display = '';
+  $('btnArticleCloudSave').style.display = '';
+  $('articleQuizSection').style.display = '';
+
+  // Restore quiz if saved
+  if (article._quizQuestions && Array.isArray(article._quizQuestions) && article._quizQuestions.length > 0) {
+    articleData._quizQuestions = JSON.parse(JSON.stringify(article._quizQuestions));
+    const wasAnswersShown = article._quizAnswersShown || false;
+    renderQuiz(articleData._quizQuestions);
+    articleData._quizAnswersShown = wasAnswersShown;
+    // Restore user's answered states on DOM
+    restoreQuizAnswers();
+    $('btnArticleQuiz').style.display = 'none';
+    if (wasAnswersShown) {
+      $('articleQuizAnswers').classList.add('show');
+    }
+  } else {
+    $('btnArticleQuiz').style.display = '';
+  }
+
+  showToast('已加载文章：「' + article.title + '」');
+}
+
+function deleteSavedArticle(idx, event) {
+  if (event) event.stopPropagation();
+  const article = (appData.articles || [])[idx];
+  if (!article) return;
+
+  appData.articles.splice(idx, 1);
+  persist();
+  renderSavedArticles();
+  showToast('已删除文章：「' + (article.title || '未命名') + '」');
+}
+
 async function generateArticleQuiz() {
   if (articleData.paragraphs.length === 0) { showToast('请先解析文章'); return; }
   if (!appData.provider || appData.provider === 'zhipu_free') {
@@ -9789,17 +10024,20 @@ async function generateArticleQuiz() {
 
   const articleText = articleData.title + '\n\n' + articleData.paragraphs.join('\n\n');
 
-  const prompt = `Based on the following English article, create 5 multiple-choice quiz questions suitable for CET-6 (College English Test Band 6) level. Each question should test reading comprehension of the article.
+  const prompt = `Based on the following English article, create 5 multiple-choice quiz questions suitable for CET-6 (College English Test Band 6) level. Include a mix of question types.
 
 Return a JSON array of question objects. Each question object must have:
 - "question": the question text (in English)
+- "type": one of "细节题", "主旨题", or "推理题" (in Chinese)
+- "evidence_label": for 细节题 use "定位句", for 主旨题 use "主旨句", for 推理题 use "推理依据" (in Chinese)
+- "evidence": the relevant sentence(s) from the article that support the answer (quote the original English text)
 - "options": array of 4 option strings labeled A, B, C, D (in English)
 - "answer": the correct option letter (A/B/C/D)
 - "explanation": brief explanation of the answer (in Chinese)
 
 Return ONLY the JSON array, no other text:
 [
-  {"question": "...", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "answer": "A", "explanation": "..."},
+  {"question": "...", "type": "细节题", "evidence_label": "定位句", "evidence": "...", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "answer": "A", "explanation": "..."},
   ...
 ]
 
@@ -9820,6 +10058,7 @@ ${articleText.substring(0, 3000)}`;
     if (!Array.isArray(questions) || questions.length === 0) throw new Error('题目格式错误');
 
     renderQuiz(questions);
+    $('btnArticleQuiz').style.display = 'none';
     showToast('已生成 ' + questions.length + ' 道练习题');
   } catch (e) {
     showToast('出题失败: ' + e.message);
@@ -9837,8 +10076,10 @@ function renderQuiz(questions) {
 
   let html = '';
   questions.forEach((q, idx) => {
+    const typeClass = q.type === '细节题' ? 'quiz-type-detail' : (q.type === '主旨题' ? 'quiz-type-main' : 'quiz-type-infer');
+    const typeBadge = q.type ? `<span class="quiz-type-badge ${typeClass}">${escapeHtml(q.type)}</span>` : '';
     html += `<div class="article-quiz-question" id="quizQ${idx}">
-      <div class="q-stem">${idx + 1}. ${escapeHtml(q.question)}</div>`;
+      <div class="q-stem">${idx + 1}. ${escapeHtml(q.question)}${typeBadge}</div>`;
     q.options.forEach((opt, oi) => {
       const letter = String.fromCharCode(65 + oi);
       html += `<div class="q-option" onclick="selectQuizOption(${idx}, '${letter}', '${escapeHtml(q.answer)}', this)" data-q="${idx}" data-opt="${letter}">${escapeHtml(opt)}</div>`;
@@ -9860,12 +10101,17 @@ function renderQuiz(questions) {
   // Build answer content
   let answerHtml = '';
   questions.forEach((q, idx) => {
-    answerHtml += `<div class="answer-item"><strong>${idx + 1}. ${q.answer}</strong> — ${escapeHtml(q.explanation)}</div>`;
+    answerHtml += `<div class="answer-item"><strong>${idx + 1}. ${q.answer}</strong> — ${escapeHtml(q.explanation)}`;
+    if (q.evidence && q.evidence_label) {
+      answerHtml += `<span class="answer-evidence"><span class="answer-evidence-label">${escapeHtml(q.evidence_label)}：</span>${escapeHtml(q.evidence)}</span>`;
+    }
+    answerHtml += `</div>`;
   });
   answerContent.innerHTML = answerHtml;
 
   // Store questions for checking
   articleData._quizQuestions = questions;
+  articleData._quizAnswersShown = false;
 }
 
 function selectQuizOption(qIdx, selected, correct, el) {
@@ -9873,6 +10119,7 @@ function selectQuizOption(qIdx, selected, correct, el) {
   if (!question) return;
   if (question._answered) return; // already answered
   question._answered = true;
+  question._selected = selected;
 
   const container = document.getElementById('quizQ' + qIdx);
   const options = container.querySelectorAll('.q-option');
@@ -9887,6 +10134,21 @@ function selectQuizOption(qIdx, selected, correct, el) {
     articleData._quizAnswersShown = true;
     $('articleQuizAnswers').classList.add('show');
   }
+}
+
+function restoreQuizAnswers() {
+  if (!articleData._quizQuestions) return;
+  articleData._quizQuestions.forEach((q, idx) => {
+    if (!q._answered) return;
+    const container = document.getElementById('quizQ' + idx);
+    if (!container) return;
+    const options = container.querySelectorAll('.q-option');
+    options.forEach(opt => {
+      opt.style.pointerEvents = 'none';
+      if (opt.dataset.opt === q.answer) opt.classList.add('correct');
+      if (opt.dataset.opt === q._selected && q._selected !== q.answer) opt.classList.add('wrong');
+    });
+  });
 }
 </script>
 </body>
