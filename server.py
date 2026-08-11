@@ -177,7 +177,7 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     server = http.server.HTTPServer(("0.0.0.0", PORT), ProxyHandler)
     print(f"Server running at http://localhost:{PORT}/")
-    print(f"  - Static files: /english-vocab-learning.html")
+    print(f"  - Static files: /index.html")
     print(f"  - TTS Proxy:    POST /api/proxy-volcano-tts")
     try:
         server.serve_forever()
