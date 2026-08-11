@@ -1690,6 +1690,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
   <div class="nav-inner">
     <button class="nav-tab active" data-tab="lookup">单词查询</button>
     <button class="nav-tab" data-tab="manage">单词管理</button>
+    <button class="nav-tab" data-tab="article">文章陪读</button>
     <button class="nav-tab" data-tab="context">语境学词</button>
     <button class="nav-tab" data-tab="learn">单词卡片</button>
     <button class="nav-tab" data-tab="spell">拼写练习</button>
@@ -1699,7 +1700,6 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
     <button class="nav-tab" data-tab="writing">作文练习</button>
     <button class="nav-tab" data-tab="history">批改记录</button>
     <button class="nav-tab" data-tab="recite">好句背诵</button>
-    <button class="nav-tab" data-tab="article">文章陪读</button>
   </div>
 </nav>
 
@@ -2427,7 +2427,10 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       </div>
       <!-- 已保存文章列表 -->
       <div class="saved-articles-section" id="savedArticlesSection" style="display:none;">
-        <h4>☁️ 云端保存的文章</h4>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <h4 style="margin:0;">☁️ 云端保存的文章</h4>
+          <button class="btn btn-outline btn-sm" id="btnArticleSyncCloud" onclick="syncArticlesFromCloud()" style="display:none;" title="从云端同步文章">🔄 同步</button>
+        </div>
         <div id="savedArticlesList"></div>
       </div>
     </div>
@@ -3380,6 +3383,8 @@ function updateCloudUI(loggedIn, email) {
     $('cloudNotLoggedIn') && ($('cloudNotLoggedIn').style.display = 'none');
     $('cloudLoggedIn') && ($('cloudLoggedIn').style.display = '');
     if ($('cloudUserEmail')) $('cloudUserEmail').textContent = email || '';
+    // 登录后显示文章同步按钮
+    if ($('btnArticleSyncCloud')) $('btnArticleSyncCloud').style.display = '';
   } else {
     cloudUserEmail = null;
     btn.className = 'cloud-btn';
@@ -3390,6 +3395,8 @@ function updateCloudUI(loggedIn, email) {
     // 隐藏云端音频卡片和保存按钮
     if ($('cloudAudioCard')) $('cloudAudioCard').style.display = 'none';
     if ($('btnReadCloudSave')) $('btnReadCloudSave').style.display = 'none';
+    // 隐藏文章同步按钮
+    if ($('btnArticleSyncCloud')) $('btnArticleSyncCloud').style.display = 'none';
   }
 }
 
@@ -4473,7 +4480,7 @@ function onTabSwitch(tab) {
   if (tab === 'history') lazyInitTab('history', renderHistory);
   if (tab === 'recite') switchReciteTab('add');
   if (tab === 'context') renderContextWords();
-  if (tab === 'article') renderSavedArticles();
+  if (tab === 'article') { renderSavedArticles(); syncArticlesFromCloudSilent(); }
 }
 
 // ═══════════════════════════════════════
@@ -9885,6 +9892,71 @@ function renderSavedArticles() {
     </div>`;
   });
   list.innerHTML = html;
+}
+
+async function syncArticlesFromCloudSilent() {
+  // Silent sync on tab switch - no toast on success/empty
+  if (!sbClient || !initSupabase()) return;
+  try {
+    const { data: { session } } = await sbClient.auth.getSession();
+    if (!session) return;
+    const { data, error } = await withRetry(function() {
+      return sbClient
+        .from('user_words')
+        .select('words')
+        .eq('user_id', session.user.id)
+        .single();
+    });
+    if (error || !data || !data.words) return;
+    const cloudArticles = Array.isArray(data.words) ? [] : (data.words.articles || []);
+    if (cloudArticles.length === 0) return;
+    appData.articles = cloudArticles;
+    persist();
+    renderSavedArticles();
+  } catch (e) { /* silent */ }
+}
+
+async function syncArticlesFromCloud() {
+  if (!sbClient || !initSupabase()) { showToast('请先登录'); return; }
+  const { data: { session } } = await sbClient.auth.getSession();
+  if (!session) { showToast('登录已过期，请重新登录'); return; }
+
+  const btn = $('btnArticleSyncCloud');
+  btn.disabled = true;
+  btn.textContent = '⏳ 同步中...';
+
+  try {
+    const { data, error } = await withRetry(function() {
+      return sbClient
+        .from('user_words')
+        .select('words')
+        .eq('user_id', session.user.id)
+        .single();
+    });
+
+    if (error && error.code !== 'PGRST116') throw error;
+    if (!data || !data.words) {
+      showToast('云端暂无文章数据');
+      return;
+    }
+
+    const cloudArticles = Array.isArray(data.words) ? [] : (data.words.articles || []);
+    if (cloudArticles.length === 0) {
+      showToast('云端暂无文章数据');
+      return;
+    }
+
+    // Merge cloud articles into local
+    appData.articles = cloudArticles;
+    persist();
+    renderSavedArticles();
+    showToast('已同步 ' + cloudArticles.length + ' 篇文章');
+  } catch (e) {
+    showToast('同步失败: ' + (e.message || '网络错误'));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 同步';
+  }
 }
 
 async function saveArticleToCloud() {
