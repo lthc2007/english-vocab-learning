@@ -10583,7 +10583,7 @@ function loadSavedArticle(idx) {
   showToast('已加载文章：「' + article.title + '」');
 }
 
-function deleteSavedArticle(idx, event) {
+async function deleteSavedArticle(idx, event) {
   if (event) event.stopPropagation();
   const article = (appData.articles || [])[idx];
   if (!article) return;
@@ -10592,6 +10592,18 @@ function deleteSavedArticle(idx, event) {
   persist();
   renderSavedArticles();
   showToast('已删除文章：「' + (article.title || '未命名') + '」');
+
+  // Sync deletion to cloud if logged in
+  if (sbClient) {
+    try {
+      const { data: { session } } = await sbClient.auth.getSession();
+      if (session) {
+        await syncArticlesToCloud(session.user.id);
+      }
+    } catch (e) {
+      console.warn('云端删除同步失败:', e.message);
+    }
+  }
 }
 
 async function answerExistingQuestions() {
