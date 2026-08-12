@@ -1471,6 +1471,11 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
   resize: vertical; background: var(--bg); color: var(--ink);
 }
 .article-actions { display: flex; gap: 10px; margin-top: 12px; align-items: center; }
+.article-mode-toggle { display: flex; gap: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); width: fit-content; }
+.mode-btn { padding: 6px 18px; border: none; background: var(--bg); color: var(--muted); cursor: pointer; font-size: 0.85rem; transition: all 0.2s; }
+.mode-btn:first-child { border-right: 1px solid var(--border); }
+.mode-btn.active { background: var(--accent); color: #fff; }
+.mode-btn:hover:not(.active) { background: var(--bg-hover); }
 .article-display {
   background: var(--bg); border: 1px solid var(--border);
   border-radius: var(--radius-sm); padding: 24px 28px; margin-top: 20px;
@@ -1553,9 +1558,11 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
   transition: all 0.15s; border: 1.5px solid transparent; font-size: 0.9rem;
 }
 .article-quiz-question .q-option:hover { background: var(--accent-soft); }
+.article-quiz-question .q-option.selected { background: #e3f2fd; border-color: #2196f3; color: #1565c0; }
 .article-quiz-question .q-option.correct { background: #e8f5e9; border-color: #4caf50; color: #2e7d32; }
 .article-quiz-question .q-option.wrong { background: #fce4ec; border-color: #ef5350; color: #c62828; }
-.article-quiz-question .q-option.reveal { background: #e8f5e9; border-color: #4caf50; color: #2e7d32; font-weight: 600; }
+.article-quiz-question .q-option.selected.correct { background: #e8f5e9; border-color: #4caf50; color: #2e7d32; }
+.article-quiz-question .q-option.selected.wrong { background: #fce4ec; border-color: #ef5350; color: #c62828; }
 .article-word-popup {
   position: fixed; background: #fff; border: 1px solid var(--border);
   border-radius: var(--radius-sm); padding: 16px 20px;
@@ -2489,6 +2496,13 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <span style="font-size:0.75rem;color:var(--muted);">导入英文文章，AI 辅助阅读和学习</span>
       </div>
       <div class="form-group">
+        <label class="form-label">文章模式</label>
+        <div class="article-mode-toggle" id="articleModeToggle">
+          <button class="mode-btn active" data-mode="no-quiz" onclick="setArticleMode('no-quiz')">📄 无题目</button>
+          <button class="mode-btn" data-mode="has-quiz" onclick="setArticleMode('has-quiz')">📝 有题目</button>
+        </div>
+      </div>
+      <div class="form-group">
         <label class="form-label">粘贴英文文章</label>
         <textarea class="article-textarea" id="articleInput" placeholder="在此粘贴英文文章...&#10;AI 将自动识别标题和段落"></textarea>
       </div>
@@ -2547,12 +2561,6 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       </div>
       <!-- 练习题区域 -->
       <div class="article-quiz-section" id="articleQuizSection" style="display:none;">
-        <div style="text-align:center;margin-bottom:16px;">
-          <button class="btn btn-accent" id="btnArticleQuiz" onclick="generateArticleQuiz()">生成课后练习</button>
-          <span id="articleQuizProgress" style="display:none;color:var(--muted);font-size:0.85rem;margin-left:10px;">
-            <span class="spinner" style="border-color:rgba(45,90,90,0.3);border-top-color:var(--accent);"></span> AI 正在出题...
-          </span>
-        </div>
         <div class="article-quiz-answer" id="articleQuizAnswers">
           <h4>参考答案与解析</h4>
           <div id="articleQuizAnswerContent"></div>
@@ -9572,9 +9580,17 @@ async function contextSpeakWord(event, word) {
 // Article Reader（文章陪读）
 // ═══════════════════════════════════════
 let articleData = { title: '', paragraphs: [], translations: {} };
+let articleMode = 'no-quiz'; // 'no-quiz' | 'has-quiz'
 let articleFontSize = 3; // 0-6: 特小/较小/小/标准/大/较大/特大
 const articleFontSizes = [0.5, 0.65, 0.8, 1.0, 1.3, 1.6, 2.0];
 const articleFontLabels = ['特小', '较小', '小', '标准', '大', '较大', '特大'];
+
+function setArticleMode(mode) {
+  articleMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+}
 
 function changeArticleFontSize(delta) {
   articleFontSize = Math.max(0, Math.min(6, articleFontSize + delta));
@@ -9608,8 +9624,70 @@ function clearArticle() {
   $('articleQuizAnswerContent').innerHTML = '';
   $('btnArticleClear').style.display = 'none';
   $('btnArticleCloudSave').style.display = 'none';
+  const btnArea = $('articleQuizBtnArea');
+  if (btnArea) btnArea.style.display = 'none';
   closeArticleSentencePopup();
   removeAllInlineMeanings();
+}
+
+// ── 客户端正则提取题目 ──
+function extractQuestionsFromText(text) {
+  const lines = text.split('\n');
+  const questions = [];
+  const articleLines = [];
+  let inQuestions = false;
+  let currentQuestion = null;
+  let currentOptions = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const qLineMatch = line.match(/^(\d+)\.\s+(.+)$/);
+    const optLineMatch = line.match(/^\s*\[?([A-D])\]?\s*[.)]?\s+(.+)$/);
+
+    if (qLineMatch && !inQuestions) {
+      // Check if next few lines look like options
+      let optionCount = 0;
+      for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+        if (lines[j].match(/^\s*\[?[A-D]\]?\s*[.)]?\s+.+$/)) optionCount++;
+      }
+      if (optionCount >= 3) {
+        inQuestions = true;
+        currentQuestion = qLineMatch[2].trim();
+        currentOptions = [];
+        continue;
+      }
+    }
+
+    if (inQuestions) {
+      if (qLineMatch) {
+        // Save previous question
+        if (currentQuestion && currentOptions.length === 4) {
+          questions.push({ question: currentQuestion, options: [...currentOptions] });
+        }
+        currentQuestion = qLineMatch[2].trim();
+        currentOptions = [];
+      } else if (optLineMatch) {
+        currentOptions.push(optLineMatch[2].trim());
+      }
+    } else {
+      articleLines.push(line);
+    }
+  }
+
+  // Save last question
+  if (currentQuestion && currentOptions.length === 4) {
+    questions.push({ question: currentQuestion, options: [...currentOptions] });
+  }
+
+  return {
+    articleText: articleLines.join('\n').trim(),
+    questions: questions
+  };
+}
+
+function stripOptionPrefix(opt) {
+  // Strip leading letter prefix like "A. ", "A) ", "A, ", "[A] " etc.
+  return opt.replace(/^\s*\[?[A-D]\]?\s*[.)、,]\s*/, '');
 }
 
 async function parseArticle() {
@@ -9622,22 +9700,38 @@ async function parseArticle() {
   $('btnArticleParse').disabled = true;
   $('articleProgress').style.display = '';
 
-  const prompt = `You are an English article parser. Analyze the following English article text and return a JSON object with two fields:
+  const hasQuizMode = articleMode === 'has-quiz';
+
+  // Step 1: Client-side split — extract questions from text if in "有题目" mode
+  const { articleText, questions } = hasQuizMode ? extractQuestionsFromText(text) : { articleText: text, questions: [] };
+  const hasQuestions = hasQuizMode && questions.length > 0;
+
+  if (hasQuizMode && !hasQuestions) {
+    showToast('未检测到题目，请确认题目格式正确（如 "1. xxx\nA. xxx\nB. xxx..."）');
+    $('btnArticleParse').disabled = false;
+    $('articleProgress').style.display = 'none';
+    return;
+  }
+
+  try {
+    // Step 2: Ask AI to parse ONLY the article part
+    const parseText = hasQuestions ? articleText : text;
+    if (!parseText) throw new Error('未检测到文章内容，请确认粘贴了文章正文');
+
+    const prompt = `You are an English article parser. Analyze the following English article text and return a JSON object with:
 - "title": the article title (extract from text, or summarize if no explicit title)
 - "paragraphs": an array of strings, each string is one paragraph. Split by blank lines or logical paragraph breaks.
 
-Return ONLY valid JSON, no other text. The JSON format:
-{"title": "...", "paragraphs": ["para1 text...", "para2 text...", ...]}
+Return ONLY valid JSON:
+{"title": "...", "paragraphs": ["para1...", "para2...", ...]}
 
-Article text:
-${text}`;
+Article:
+${parseText}`;
 
-  try {
     const result = await doCallAI(prompt, 2000);
     if (!result) throw new Error('AI 返回为空');
 
     let jsonStr = result.content || result;
-    // Clean up the response
     jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
     const parsed = JSON.parse(jsonStr);
 
@@ -9648,16 +9742,33 @@ ${text}`;
     articleData.title = parsed.title;
     articleData.paragraphs = parsed.paragraphs;
     articleData.translations = {};
+    const _savedHasQuestions = hasQuestions;
+    const _savedQuizQuestions = hasQuestions ? JSON.parse(JSON.stringify(questions)) : null;
 
     renderArticle();
+    articleData._hasQuestions = _savedHasQuestions;
+    articleData._quizQuestions = _savedQuizQuestions;
+    articleData._articleMode = articleMode;
     $('articleDisplayCard').style.display = '';
     $('articleFontCtrl').style.display = '';
     $('btnArticleClear').style.display = '';
     $('btnArticleCloudSave').style.display = '';
     $('articleQuizSection').style.display = '';
-    $('btnArticleQuiz').style.display = '';
+    if (hasQuestions) {
+      // "有题目" mode: show questions + "AI 批改" button below
+      $('articleQuizBtnArea').style.display = 'none';
+      articleData._quizAnswersShown = false;
+      renderQuiz(articleData._quizQuestions);
+    } else {
+      // "无题目" mode: show "AI 生成题目" button at end of article
+      $('articleQuizBtnArea').style.display = '';
+      $('btnArticleQuiz').textContent = 'AI 生成题目';
+      $('btnArticleQuiz').onclick = generateArticleQuiz;
+      $('btnArticleQuiz').disabled = false;
+      $('articleQuizProgress').style.display = 'none';
+    }
     applyArticleFontSize();
-    showToast('文章解析完成: ' + parsed.paragraphs.length + ' 个段落');
+    showToast('文章解析完成: ' + parsed.paragraphs.length + ' 个段落' + (hasQuestions ? '，检测到 ' + questions.length + ' 道题目' : ''));
   } catch (e) {
     showToast('解析失败: ' + e.message);
     console.error('Article parse error:', e);
@@ -9692,12 +9803,23 @@ function renderArticle() {
 
   container.innerHTML = html;
 
+  // Append quiz button + progress at end of article (shown when no imported questions)
+  const btnHtml = `<div id="articleQuizBtnArea" style="text-align:center;margin-top:20px;display:none;">
+    <button class="btn btn-accent" id="btnArticleQuiz" onclick="generateArticleQuiz()">AI 生成题目</button>
+    <span id="articleQuizProgress" style="display:none;color:var(--muted);font-size:0.85rem;margin-left:10px;">
+      <span class="spinner" style="border-color:rgba(45,90,90,0.3);border-top-color:var(--accent);"></span>
+      <span id="articleQuizProgressText">AI 正在出题...</span>
+    </span>
+  </div>`;
+  container.insertAdjacentHTML('beforeend', btnHtml);
+
   // Reset quiz section
   $('articleQuizAnswers').classList.remove('show');
   $('articleQuizAnswerContent').innerHTML = '';
-  $('btnArticleQuiz').disabled = false;
-  $('btnArticleQuiz').style.display = '';
-  $('articleQuizProgress').style.display = 'none';
+  const btnQ = $('btnArticleQuiz');
+  if (btnQ) { btnQ.disabled = false; btnQ.style.display = ''; }
+  const prog = $('articleQuizProgress');
+  if (prog) prog.style.display = 'none';
   // Remove old quiz questions from DOM
   const oldQuestions = document.getElementById('articleQuizQuestionsContainer');
   if (oldQuestions) oldQuestions.remove();
@@ -9705,6 +9827,14 @@ function renderArticle() {
   articleData._quizQuestions = null;
   articleData._quizAnswersShown = false;
   articleData._quizDiscussions = null;
+  articleData._hasQuestions = false;
+  articleData._articleMode = null;
+  // Remove old quiz questions container
+  const oldContainer = document.getElementById('articleQuizQuestionsContainer');
+  if (oldContainer) oldContainer.remove();
+  // Reset button area (hidden by default, shown by parseArticle on no-questions)
+  const btnArea = $('articleQuizBtnArea');
+  if (btnArea) btnArea.style.display = 'none';
 
   // ── 句子选择检测 ──
   // Clean up old listeners before adding new ones
@@ -10347,7 +10477,9 @@ function saveArticleLocal() {
     savedAt: new Date().toISOString(),
     _quizQuestions: articleData._quizQuestions ? JSON.parse(JSON.stringify(articleData._quizQuestions)) : null,
     _quizAnswersShown: articleData._quizAnswersShown || false,
-    _quizDiscussions: articleData._quizDiscussions ? JSON.parse(JSON.stringify(articleData._quizDiscussions)) : null
+    _quizDiscussions: articleData._quizDiscussions ? JSON.parse(JSON.stringify(articleData._quizDiscussions)) : null,
+    _hasQuestions: articleData._hasQuestions || false,
+    _articleMode: articleData._articleMode || articleMode
   };
 
   if (existingIdx >= 0) {
@@ -10386,13 +10518,21 @@ function loadSavedArticle(idx) {
   articleData.translations = {...(article.translations || {})};
   articleData._quizQuestions = null;
   articleData._quizAnswersShown = false;
+  articleData._hasQuestions = article._hasQuestions || false;
+  articleData._articleMode = article._articleMode || 'no-quiz';
+  // Restore mode toggle UI
+  setArticleMode(articleData._articleMode);
   // Save discussions before renderArticle() clears them
   const savedDiscussions = article._quizDiscussions ? JSON.parse(JSON.stringify(article._quizDiscussions)) : null;
+  const savedHasQuestions = article._hasQuestions || false;
+  const savedArticleMode = articleData._articleMode;
 
   // Render
   renderArticle();
-  // Restore discussions after render
+  // Restore after renderArticle clears them
   articleData._quizDiscussions = savedDiscussions;
+  articleData._hasQuestions = savedHasQuestions;
+  articleData._articleMode = savedArticleMode;
   $('articleDisplayCard').style.display = '';
   $('articleFontCtrl').style.display = '';
   $('btnArticleClear').style.display = '';
@@ -10403,13 +10543,13 @@ function loadSavedArticle(idx) {
   // Restore quiz if saved
   if (article._quizQuestions && Array.isArray(article._quizQuestions) && article._quizQuestions.length > 0) {
     articleData._quizQuestions = JSON.parse(JSON.stringify(article._quizQuestions));
-    const wasAnswersShown = article._quizAnswersShown || false;
+    // Hide article-end button, questions will render with their own button
+    $('articleQuizBtnArea').style.display = 'none';
+    // Set _quizAnswersShown based on saved state (both modes respect it)
+    articleData._quizAnswersShown = article._quizAnswersShown || false;
     renderQuiz(articleData._quizQuestions);
-    articleData._quizAnswersShown = wasAnswersShown;
-    // Restore user's answered states on DOM
-    restoreQuizAnswers();
-    $('btnArticleQuiz').style.display = 'none';
-    if (wasAnswersShown) {
+    if (articleData._quizAnswersShown) {
+      restoreQuizAnswers();
       $('articleQuizAnswers').classList.add('show');
     }
     // Restore discussions
@@ -10432,7 +10572,12 @@ function loadSavedArticle(idx) {
       }, 100);
     }
   } else {
-    $('btnArticleQuiz').style.display = '';
+    // No questions — show "AI 生成题目" button at end of article
+    $('articleQuizBtnArea').style.display = '';
+    $('btnArticleQuiz').textContent = 'AI 生成题目';
+    $('btnArticleQuiz').onclick = generateArticleQuiz;
+    $('btnArticleQuiz').disabled = false;
+    $('articleQuizProgress').style.display = 'none';
   }
 
   showToast('已加载文章：「' + article.title + '」');
@@ -10449,6 +10594,92 @@ function deleteSavedArticle(idx, event) {
   showToast('已删除文章：「' + (article.title || '未命名') + '」');
 }
 
+async function answerExistingQuestions() {
+  if (!articleData._quizQuestions || articleData._quizQuestions.length === 0) {
+    showToast('未检测到题目');
+    return;
+  }
+  if (!appData.provider || appData.provider === 'zhipu_free') {
+    if (!appData.apiKey) { showToast('请先在 API 设置中配置 API Key'); return; }
+  }
+
+  const btn = $('btnArticleQuizAnswer') || $('btnArticleQuiz');
+  const progress = $('articleQuizAnswerProgress') || $('articleQuizProgress');
+  const progressText = $('articleQuizAnswerProgressText') || $('articleQuizProgressText');
+  if (btn) btn.disabled = true;
+  if (progress) {
+    if (progressText) progressText.textContent = 'AI 正在批改...';
+    progress.style.display = '';
+  }
+
+  const articleText = articleData.title + '\n\n' + articleData.paragraphs.join('\n\n');
+  const questionsJson = JSON.stringify(articleData._quizQuestions.map(q => ({
+    question: q.question,
+    options: q.options
+  })));
+
+  const prompt = `You are an English reading comprehension teacher. Below is an English article and a set of multiple-choice questions that a student imported. Please answer each question based on the article.
+
+For each question, return:
+- "answer": the correct option letter (A/B/C/D)
+- "type": classify as "细节题", "主旨题", or "推理题" (in Chinese)
+- "explanation": brief explanation of the answer (in Chinese)
+- "evidence_label": "定位句" for detail questions, "主旨句" for main idea questions, "推理依据" for inference questions
+- "evidence": the relevant sentence(s) from the article that support the answer (quote the original English text)
+
+Return ONLY a JSON array, each element matches the input question order:
+[
+  {"answer": "A", "type": "细节题", "explanation": "...", "evidence_label": "定位句", "evidence": "..."},
+  ...
+]
+
+Article:
+${articleText.substring(0, 3000)}
+
+Questions:
+${questionsJson}`;
+
+  try {
+    const result = await doCallAI(prompt, 3000);
+    if (!result) throw new Error('AI 返回为空');
+    let jsonStr = result.content || result;
+    jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+
+    const arrMatch = jsonStr.match(/\[[\s\S]*\]/);
+    if (!arrMatch) throw new Error('未找到有效的 JSON 数组');
+    const answers = JSON.parse(arrMatch[0]);
+
+    if (!Array.isArray(answers) || answers.length !== articleData._quizQuestions.length) {
+      throw new Error('AI 返回答案数量不匹配');
+    }
+
+    // Merge answers into the existing questions, preserving user selections
+    const fullQuestions = articleData._quizQuestions.map((q, i) => ({
+      ...q,
+      answer: answers[i].answer,
+      type: answers[i].type || '细节题',
+      explanation: answers[i].explanation,
+      evidence_label: answers[i].evidence_label,
+      evidence: answers[i].evidence,
+      _locked: true // lock after grading
+    }));
+
+    articleData._quizQuestions = fullQuestions;
+    articleData._quizAnswersShown = true;
+    renderQuiz(fullQuestions);
+    // Show correct/wrong on the newly rendered DOM
+    restoreQuizAnswers();
+    $('articleQuizAnswers').classList.add('show');
+    showToast('已解答 ' + fullQuestions.length + ' 道题目');
+  } catch (e) {
+    showToast('解答失败: ' + e.message);
+    console.error('Answer questions error:', e);
+  } finally {
+    if (btn) btn.disabled = false;
+    if (progress) progress.style.display = 'none';
+  }
+}
+
 async function generateArticleQuiz() {
   if (articleData.paragraphs.length === 0) { showToast('请先解析文章'); return; }
   if (!appData.provider || appData.provider === 'zhipu_free') {
@@ -10457,7 +10688,9 @@ async function generateArticleQuiz() {
 
   const btn = $('btnArticleQuiz');
   const progress = $('articleQuizProgress');
+  const progressText = $('articleQuizProgressText');
   btn.disabled = true;
+  if (progressText) progressText.textContent = 'AI 正在出题...';
   progress.style.display = '';
 
   const articleText = articleData.title + '\n\n' + articleData.paragraphs.join('\n\n');
@@ -10472,6 +10705,13 @@ Return a JSON array of question objects. Each question object must have:
 - "options": array of 4 option strings labeled A, B, C, D (in English)
 - "answer": the correct option letter (A/B/C/D)
 - "explanation": brief explanation of the answer (in Chinese)
+
+IMPORTANT — ANSWER DISTRIBUTION (MUST FOLLOW STRICTLY):
+- The 5 correct answers MUST use ALL FOUR letters: A, B, C, D.
+- Each of A, B, C, D must appear at least once. One letter will appear twice.
+- Example of a valid distribution: A, B, C, D, A (or A, B, C, D, B, etc.)
+- NEVER use only B and C. NEVER use only 2 or 3 letters.
+- Before outputting, count: does A appear? B? C? D? If any is missing, redo the answers.
 
 Return ONLY the JSON array, no other text:
 [
@@ -10495,9 +10735,35 @@ ${articleText.substring(0, 3000)}`;
 
     if (!Array.isArray(questions) || questions.length === 0) throw new Error('题目格式错误');
 
+    // Strip letter prefixes from options
+    questions.forEach(q => {
+      q.options = q.options.map(opt => stripOptionPrefix(opt));
+    });
+
+    // Shuffle options within each question to ensure random answer distribution
+    questions.forEach(q => {
+      const correctIdx = ['A', 'B', 'C', 'D'].indexOf(q.answer);
+      if (correctIdx < 0) return;
+      const correctOpt = q.options[correctIdx];
+      // Fisher-Yates shuffle
+      const labels = ['A', 'B', 'C', 'D'];
+      const pairs = q.options.map((opt, i) => ({ opt, label: labels[i] }));
+      for (let i = pairs.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
+      }
+      q.options = pairs.map(p => p.opt);
+      q.answer = pairs.find(p => p.opt === correctOpt).label;
+    });
+
+    articleData._quizQuestions = questions;
+    articleData._articleMode = 'no-quiz';
+    articleData._quizAnswersShown = false;
+    articleData._hasQuestions = true;
     renderQuiz(questions);
-    $('btnArticleQuiz').style.display = 'none';
-    showToast('已生成 ' + questions.length + ' 道练习题');
+    const btnQuiz = $('btnArticleQuiz');
+    if (btnQuiz) btnQuiz.style.display = 'none';
+    showToast('已生成 ' + questions.length + ' 道练习题，请选择答案后提交批改');
   } catch (e) {
     showToast('出题失败: ' + e.message);
     console.error('Quiz generation error:', e);
@@ -10512,6 +10778,14 @@ function renderQuiz(questions) {
   const answerContent = $('articleQuizAnswerContent');
   answersDiv.classList.remove('show');
 
+  const isNoQuizMode = articleData._articleMode === 'no-quiz' || (!articleData._articleMode && articleMode === 'no-quiz');
+  const hasStoredAnswers = questions.length > 0 && questions[0].answer;
+
+  // Both modes: show answers only after user has submitted for grading
+  const showAnswers = hasStoredAnswers && articleData._quizAnswersShown;
+  // Options are selectable when answers are stored but not yet shown
+  const optionsSelectable = hasStoredAnswers && !showAnswers;
+
   let html = '';
   questions.forEach((q, idx) => {
     const typeClass = q.type === '细节题' ? 'quiz-type-detail' : (q.type === '主旨题' ? 'quiz-type-main' : 'quiz-type-infer');
@@ -10519,87 +10793,149 @@ function renderQuiz(questions) {
     html += `<div class="article-quiz-question" id="quizQ${idx}">
       <div class="q-stem">${idx + 1}. ${escapeHtml(q.question)}${typeBadge}</div>`;
     q.options.forEach((opt, oi) => {
+      const cleanOpt = stripOptionPrefix(opt);
       const letter = String.fromCharCode(65 + oi);
-      html += `<div class="q-option" onclick="selectQuizOption(${idx}, '${letter}', '${escapeHtml(q.answer)}', this)" data-q="${idx}" data-opt="${letter}">${escapeHtml(opt)}</div>`;
+      const correctParam = showAnswers ? escapeHtml(q.answer || '') : '';
+      html += `<div class="q-option${optionsSelectable ? ' q-option-selectable' : ''}" onclick="selectQuizOption(${idx}, '${letter}', '${correctParam}', this)" data-q="${idx}" data-opt="${letter}">${letter}. ${escapeHtml(cleanOpt)}</div>`;
     });
     html += `</div>`;
   });
 
-  // Insert questions before the quiz section (replace previous questions if any)
+  // Button area below questions
+  if (!showAnswers) {
+    if (isNoQuizMode && hasStoredAnswers) {
+      // "无题目" mode: AI already has answers → local grading
+      html += `<div style="text-align:center;margin-top:16px;" id="articleQuizAnswerBtnArea">
+        <button class="btn btn-accent" id="btnArticleQuizAnswer" onclick="gradeQuizAnswers()">提交批改</button>
+      </div>`;
+    } else if (!isNoQuizMode) {
+      // "有题目" mode: need AI to provide answers
+      html += `<div style="text-align:center;margin-top:16px;" id="articleQuizAnswerBtnArea">
+        <button class="btn btn-accent" id="btnArticleQuizAnswer" onclick="answerExistingQuestions()">AI 批改</button>
+        <span id="articleQuizAnswerProgress" style="display:none;color:var(--muted);font-size:0.85rem;margin-left:10px;">
+          <span class="spinner" style="border-color:rgba(45,90,90,0.3);border-top-color:var(--accent);"></span>
+          <span id="articleQuizAnswerProgressText">AI 正在批改...</span>
+        </span>
+      </div>`;
+    }
+  }
+
+  // Insert questions container
   const existingQuestions = document.querySelectorAll('.article-quiz-question');
   existingQuestions.forEach(el => el.remove());
+  const oldContainer = document.getElementById('articleQuizQuestionsContainer');
+  if (oldContainer) oldContainer.remove();
 
   const quizSection = $('articleQuizSection');
-  const firstChild = quizSection.firstElementChild;
   const questionsContainer = document.createElement('div');
   questionsContainer.id = 'articleQuizQuestionsContainer';
   questionsContainer.innerHTML = html;
-  quizSection.insertBefore(questionsContainer, firstChild.nextSibling);
+  quizSection.insertBefore(questionsContainer, quizSection.firstElementChild);
 
-  // Build answer content
-  let answerHtml = '';
-  questions.forEach((q, idx) => {
-    answerHtml += `<div class="answer-item"><strong>${idx + 1}. ${q.answer}</strong> — ${escapeHtml(q.explanation)}`;
-    if (q.evidence && q.evidence_label) {
-      answerHtml += `<span class="answer-evidence"><span class="answer-evidence-label">${escapeHtml(q.evidence_label)}：</span>${escapeHtml(q.evidence)}</span>`;
-    }
-    answerHtml += `<div class="quiz-discuss" id="quizDiscuss${idx}">
-      <div class="quiz-discuss-header">
-        <span class="quiz-discuss-title">💬 题目讨论</span>
-        <button class="btn btn-sm quiz-discuss-toggle" id="discussToggle${idx}" onclick="toggleQuizDiscuss(${idx})" title="折叠/展开">▲</button>
-      </div>
-      <div class="quiz-discuss-body" id="discussBody${idx}">
-        <div class="quiz-discuss-history" id="discussHistory${idx}"></div>
-        <div class="quiz-discuss-input">
-          <input type="text" id="discussInput${idx}" placeholder="对这道题有疑问？输入问题与 AI 讨论..." onkeydown="if(event.key==='Enter')discussQuizQuestion(${idx})">
-          <button class="btn btn-accent btn-sm" onclick="discussQuizQuestion(${idx})">讨论</button>
+  // Build answer content — only if answers should be shown
+  if (showAnswers) {
+    let answerHtml = '';
+    questions.forEach((q, idx) => {
+      answerHtml += `<div class="answer-item"><strong>${idx + 1}. ${q.answer}</strong> — ${escapeHtml(q.explanation)}`;
+      if (q.evidence && q.evidence_label) {
+        answerHtml += `<span class="answer-evidence"><span class="answer-evidence-label">${escapeHtml(q.evidence_label)}：</span>${escapeHtml(q.evidence)}</span>`;
+      }
+      answerHtml += `<div class="quiz-discuss" id="quizDiscuss${idx}">
+        <div class="quiz-discuss-header">
+          <span class="quiz-discuss-title">💬 题目讨论</span>
+          <button class="btn btn-sm quiz-discuss-toggle" id="discussToggle${idx}" onclick="toggleQuizDiscuss(${idx})" title="折叠/展开">▲</button>
         </div>
-      </div>
-    </div>`;
-    answerHtml += `</div>`;
-  });
-  answerContent.innerHTML = answerHtml;
+        <div class="quiz-discuss-body" id="discussBody${idx}">
+          <div class="quiz-discuss-history" id="discussHistory${idx}"></div>
+          <div class="quiz-discuss-input">
+            <input type="text" id="discussInput${idx}" placeholder="对这道题有疑问？输入问题与 AI 讨论..." onkeydown="if(event.key==='Enter')discussQuizQuestion(${idx})">
+            <button class="btn btn-accent btn-sm" onclick="discussQuizQuestion(${idx})">讨论</button>
+          </div>
+        </div>
+      </div>`;
+      answerHtml += `</div>`;
+    });
+    answerContent.innerHTML = answerHtml;
+  } else {
+    answerContent.innerHTML = '';
+  }
 
   // Store questions for checking
   articleData._quizQuestions = questions;
-  articleData._quizAnswersShown = false;
+  articleData._quizAnswersShown = showAnswers;
 }
 
 function selectQuizOption(qIdx, selected, correct, el) {
   const question = articleData._quizQuestions[qIdx];
   if (!question) return;
-  if (question._answered) return; // already answered
-  question._answered = true;
-  question._selected = selected;
+  if (question._locked) return; // already locked after AI answers
 
+  const hasAnswer = !!correct;
   const container = document.getElementById('quizQ' + qIdx);
   const options = container.querySelectorAll('.q-option');
+
+  if (!hasAnswer) {
+    // Pre-answer: just toggle selection, user can change
+    if (question._selected === selected) {
+      // Deselect
+      question._selected = null;
+      options.forEach(opt => opt.classList.remove('selected'));
+    } else {
+      question._selected = selected;
+      options.forEach(opt => {
+        opt.classList.remove('selected');
+        if (opt.dataset.opt === selected) opt.classList.add('selected');
+      });
+    }
+    return;
+  }
+
+  // After AI answers: lock and show correct/wrong
+  question._locked = true;
   options.forEach(opt => {
     opt.style.pointerEvents = 'none';
     if (opt.dataset.opt === correct) opt.classList.add('correct');
-    else if (opt.dataset.opt === selected && selected !== correct) opt.classList.add('wrong');
+    if (opt.dataset.opt === question._selected && question._selected !== correct) opt.classList.add('wrong');
   });
-
-  // Show answer section after first answer
-  if (!articleData._quizAnswersShown) {
-    articleData._quizAnswersShown = true;
-    $('articleQuizAnswers').classList.add('show');
-  }
 }
 
 function restoreQuizAnswers() {
   if (!articleData._quizQuestions) return;
   articleData._quizQuestions.forEach((q, idx) => {
-    if (!q._answered) return;
     const container = document.getElementById('quizQ' + idx);
     if (!container) return;
     const options = container.querySelectorAll('.q-option');
-    options.forEach(opt => {
-      opt.style.pointerEvents = 'none';
-      if (opt.dataset.opt === q.answer) opt.classList.add('correct');
-      if (opt.dataset.opt === q._selected && q._selected !== q.answer) opt.classList.add('wrong');
-    });
+    if (q._locked) {
+      // After AI answers: lock and show correct/wrong
+      options.forEach(opt => {
+        opt.style.pointerEvents = 'none';
+        if (opt.dataset.opt === q.answer) opt.classList.add('correct');
+        if (opt.dataset.opt === q._selected) {
+          opt.classList.add('selected');
+          if (q._selected !== q.answer) opt.classList.add('wrong');
+        }
+      });
+    } else if (q._selected) {
+      // Pre-answer: restore selection highlight
+      options.forEach(opt => {
+        if (opt.dataset.opt === q._selected) opt.classList.add('selected');
+      });
+    }
   });
+}
+
+function gradeQuizAnswers() {
+  const questions = articleData._quizQuestions;
+  if (!questions || questions.length === 0) return;
+
+  // Lock all questions for grading display
+  questions.forEach(q => { q._locked = true; });
+  articleData._quizAnswersShown = true;
+
+  // Re-render to show correct/wrong markings + answer section
+  renderQuiz(questions);
+  restoreQuizAnswers();
+  $('articleQuizAnswers').classList.add('show');
 }
 
 async function discussQuizQuestion(qIdx) {
