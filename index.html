@@ -1626,6 +1626,53 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
 .quiz-type-detail { background: #e8f0fe; color: #1a56db; }
 .quiz-type-main { background: #fef3c7; color: #92400e; }
 .quiz-type-infer { background: #ede9fe; color: #6b21a8; }
+/* ── 题目讨论区 ── */
+.quiz-discuss {
+  margin-top: 10px; padding-top: 0; border-top: 1px dashed #dde;
+}
+.quiz-discuss-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 0; cursor: default;
+}
+.quiz-discuss-title {
+  font-size: 0.8rem; font-weight: 600; color: #888;
+}
+.quiz-discuss-toggle {
+  font-size: 0.7rem; padding: 2px 6px; line-height: 1;
+  background: transparent; border: 1px solid #ddd; border-radius: 4px;
+  color: #999; cursor: pointer; transition: all 0.15s;
+}
+.quiz-discuss-toggle:hover { border-color: var(--accent); color: var(--accent); }
+.quiz-discuss.collapsed .quiz-discuss-body { display: none; }
+.quiz-discuss.collapsed .quiz-discuss-toggle { transform: rotate(180deg); }
+.quiz-discuss-body {
+  display: block; animation: fadeIn 0.25s ease-out;
+}
+.quiz-discuss-input {
+  display: flex; gap: 6px; align-items: center;
+}
+.quiz-discuss-input input {
+  flex: 1; border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 10px; font-size: 0.82rem; font-family: var(--font-body);
+  background: #fff; color: var(--ink);
+}
+.quiz-discuss-input input:focus { outline: none; border-color: var(--accent); }
+.quiz-discuss-history {
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: 300px; overflow-y: auto; margin-bottom: 8px;
+}
+.quiz-discuss-question {
+  padding: 8px 12px; background: #eef6f6; border-radius: 6px;
+  font-size: 0.82rem; color: #2c3e50; line-height: 1.6;
+  align-self: flex-end; max-width: 85%;
+  border: 1px solid var(--accent); border-right: 3px solid var(--accent);
+}
+.quiz-discuss-answer {
+  padding: 8px 12px; background: #fafafa; border-radius: 6px;
+  font-size: 0.82rem; color: #444; line-height: 1.6;
+  align-self: flex-start; max-width: 90%;
+  border: 1px solid #e0e0e0; border-left: 3px solid var(--accent2);
+}
 /* ── 已保存文章列表 ── */
 .saved-articles-section {
   margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);
@@ -3327,6 +3374,9 @@ async function handleAuthSignIn(session) {
   syncStudyTimeFromCloud();
   autoSyncStudyTime();
 
+  // 登录后自动从云端同步数据（单词、好句、文章、API配置等）
+  syncCloudDataSilently(session);
+
   // 检查是否有待处理的注册确认（signUp 后邮箱确认链接跳转回来）
   const pendingEmail = localStorage.getItem('pendingRegEmail');
   if (pendingEmail && pendingEmail === session.user.email) {
@@ -3395,6 +3445,8 @@ async function checkCloudSession() {
       updateCloudUI(true, session.user.email);
       // 页面加载时从云端拉取学习时长（跨设备同步）
       syncStudyTimeFromCloud();
+      // 页面加载时自动从云端同步数据
+      syncCloudDataSilently(session);
       // 如果 URL 中还有 hash 残留，清理它
       if (window.location.hash && window.location.hash.includes('access_token')) {
         window.history.replaceState(null, '', window.location.pathname);
@@ -3700,6 +3752,52 @@ async function cloudUpload() {
   } finally {
     btn.disabled = false;
     btn.textContent = '☁️ 上传到云端';
+  }
+}
+
+// 静默同步 API 配置（登录/页面加载时自动调用，仅同步 Key/URL 等配置，不触动单词/句子/文章数据）
+async function syncCloudDataSilently(session) {
+  if (!sbClient || !session?.user?.id) return;
+  try {
+    const { data, error } = await withRetry(function() {
+      return sbClient
+        .from('user_words')
+        .select('words, updated_at')
+        .eq('user_id', session.user.id)
+        .single();
+    });
+
+    if (error && error.code !== 'PGRST116') {
+      console.warn('云端配置同步失败:', error.message);
+      return;
+    }
+    if (!data || !data.words || Array.isArray(data.words)) return;
+
+    // 只同步 API 配置，不动单词/句子/文章等核心数据
+    const cloudProviderConfigs = data.words.providerConfigs || {};
+    const cloudTtsProviderConfigs = data.words.ttsProviderConfigs || {};
+
+    if (Object.keys(cloudProviderConfigs).length > 0) appData.providerConfigs = cloudProviderConfigs;
+    if (Object.keys(cloudTtsProviderConfigs).length > 0) appData.ttsProviderConfigs = cloudTtsProviderConfigs;
+    persist();
+
+    // 同步后更新当前 API 配置内存
+    if (appData.provider && appData.providerConfigs[appData.provider]) {
+      const cfg = appData.providerConfigs[appData.provider];
+      if (cfg.apiKey) appData.apiKey = cfg.apiKey;
+      if (cfg.apiUrl) appData.apiUrl = cfg.apiUrl;
+      if (cfg.model) appData.model = cfg.model;
+    }
+    if (appData.ttsProvider && appData.ttsProviderConfigs[appData.ttsProvider]) {
+      const tcfg = appData.ttsProviderConfigs[appData.ttsProvider];
+      if (tcfg.apiKey) appData.ttsApiKey = tcfg.apiKey;
+      if (tcfg.apiUrl) appData.ttsApiUrl = tcfg.apiUrl;
+      if (tcfg.model) appData.ttsModel = tcfg.model;
+    }
+
+    console.log('云端配置同步完成');
+  } catch (e) {
+    console.warn('云端配置同步异常:', e.message);
   }
 }
 
@@ -9491,6 +9589,10 @@ function applyArticleFontSize() {
   // Also adjust title
   const title = document.querySelector('#articleDisplay .article-title');
   if (title) title.style.fontSize = (articleFontSizes[articleFontSize] + 0.35) + 'rem';
+  // Also adjust paragraph translations
+  const trans = document.querySelectorAll('#articleDisplay .article-para-translation');
+  const transSize = (articleFontSizes[articleFontSize] * 0.85) + 'rem';
+  trans.forEach(t => { t.style.fontSize = transSize; });
 }
 
 function clearArticle() {
@@ -9575,7 +9677,7 @@ function renderArticle() {
     const wrapped = words.map(part => {
       if (part.trim() === '') return part;
       // Only wrap words (letters), not punctuation
-      return part.replace(/([a-zA-Z]+(?:'[a-zA-Z]+)?)/g, '<span class="word-clickable" onclick="lookupArticleWord(\'$1\', event)" data-word="$1">$1</span>');
+      return part.replace(/([a-zA-Z]+(?:'[a-zA-Z]+)?(?:-[a-zA-Z]+(?:'[a-zA-Z]+)?)*)/g, '<span class="word-clickable" onclick="lookupArticleWord(\'$1\', event)" data-word="$1">$1</span>');
     }).join('');
 
     html += `<div class="article-para" id="articlePara${idx}">
@@ -9602,6 +9704,7 @@ function renderArticle() {
   // Clear quiz data
   articleData._quizQuestions = null;
   articleData._quizAnswersShown = false;
+  articleData._quizDiscussions = null;
 
   // ── 句子选择检测 ──
   // Clean up old listeners before adding new ones
@@ -10243,7 +10346,8 @@ function saveArticleLocal() {
     originalText: $('articleInput').value.trim(),
     savedAt: new Date().toISOString(),
     _quizQuestions: articleData._quizQuestions ? JSON.parse(JSON.stringify(articleData._quizQuestions)) : null,
-    _quizAnswersShown: articleData._quizAnswersShown || false
+    _quizAnswersShown: articleData._quizAnswersShown || false,
+    _quizDiscussions: articleData._quizDiscussions ? JSON.parse(JSON.stringify(articleData._quizDiscussions)) : null
   };
 
   if (existingIdx >= 0) {
@@ -10282,9 +10386,13 @@ function loadSavedArticle(idx) {
   articleData.translations = {...(article.translations || {})};
   articleData._quizQuestions = null;
   articleData._quizAnswersShown = false;
+  // Save discussions before renderArticle() clears them
+  const savedDiscussions = article._quizDiscussions ? JSON.parse(JSON.stringify(article._quizDiscussions)) : null;
 
   // Render
   renderArticle();
+  // Restore discussions after render
+  articleData._quizDiscussions = savedDiscussions;
   $('articleDisplayCard').style.display = '';
   $('articleFontCtrl').style.display = '';
   $('btnArticleClear').style.display = '';
@@ -10303,6 +10411,25 @@ function loadSavedArticle(idx) {
     $('btnArticleQuiz').style.display = 'none';
     if (wasAnswersShown) {
       $('articleQuizAnswers').classList.add('show');
+    }
+    // Restore discussions
+    if (articleData._quizDiscussions) {
+      setTimeout(() => {
+        Object.entries(articleData._quizDiscussions).forEach(([qIdx, msgs]) => {
+          const history = document.getElementById('discussHistory' + qIdx);
+          if (!history || !Array.isArray(msgs)) return;
+          msgs.forEach(msg => {
+            const qDiv = document.createElement('div');
+            qDiv.className = 'quiz-discuss-question';
+            qDiv.textContent = msg.q;
+            history.appendChild(qDiv);
+            const aDiv = document.createElement('div');
+            aDiv.className = 'quiz-discuss-answer';
+            aDiv.textContent = msg.a;
+            history.appendChild(aDiv);
+          });
+        });
+      }, 100);
     }
   } else {
     $('btnArticleQuiz').style.display = '';
@@ -10416,6 +10543,19 @@ function renderQuiz(questions) {
     if (q.evidence && q.evidence_label) {
       answerHtml += `<span class="answer-evidence"><span class="answer-evidence-label">${escapeHtml(q.evidence_label)}：</span>${escapeHtml(q.evidence)}</span>`;
     }
+    answerHtml += `<div class="quiz-discuss" id="quizDiscuss${idx}">
+      <div class="quiz-discuss-header">
+        <span class="quiz-discuss-title">💬 题目讨论</span>
+        <button class="btn btn-sm quiz-discuss-toggle" id="discussToggle${idx}" onclick="toggleQuizDiscuss(${idx})" title="折叠/展开">▲</button>
+      </div>
+      <div class="quiz-discuss-body" id="discussBody${idx}">
+        <div class="quiz-discuss-history" id="discussHistory${idx}"></div>
+        <div class="quiz-discuss-input">
+          <input type="text" id="discussInput${idx}" placeholder="对这道题有疑问？输入问题与 AI 讨论..." onkeydown="if(event.key==='Enter')discussQuizQuestion(${idx})">
+          <button class="btn btn-accent btn-sm" onclick="discussQuizQuestion(${idx})">讨论</button>
+        </div>
+      </div>
+    </div>`;
     answerHtml += `</div>`;
   });
   answerContent.innerHTML = answerHtml;
@@ -10461,6 +10601,69 @@ function restoreQuizAnswers() {
     });
   });
 }
+
+async function discussQuizQuestion(qIdx) {
+  const input = document.getElementById('discussInput' + qIdx);
+  const history = document.getElementById('discussHistory' + qIdx);
+  const question = articleData._quizQuestions[qIdx];
+  if (!input || !history || !question) return;
+
+  const userMsg = input.value.trim();
+  if (!userMsg) return;
+  if (!hasValidApiConfig()) { showToast('请先在 API 设置中配置 API Key'); return; }
+
+  // Append user question
+  const qDiv = document.createElement('div');
+  qDiv.className = 'quiz-discuss-question';
+  qDiv.textContent = userMsg;
+  history.appendChild(qDiv);
+
+  // Append loading placeholder
+  const aDiv = document.createElement('div');
+  aDiv.className = 'quiz-discuss-answer';
+  aDiv.textContent = '⏳ AI 思考中...';
+  history.appendChild(aDiv);
+  history.scrollTop = history.scrollHeight;
+
+  input.disabled = true;
+  input.value = '';
+
+  try {
+    const prompt = `用户正在做一道英语阅读理解题，对以下题目和答案有疑问，请用中文进行解答：
+
+题目：${question.question}
+类型：${question.type}
+选项：${question.options.join('；')}
+正确答案：${question.answer}
+解析：${question.explanation}
+${question.evidence ? '依据：' + question.evidence : ''}
+
+用户的问题：${userMsg}
+
+请针对用户的问题进行详细解答，用中文回复，保持在200字以内。`;
+
+    const result = await callAI(prompt, 800);
+    aDiv.textContent = result.trim();
+    history.scrollTop = history.scrollHeight;
+
+    // Save discussion to articleData for cloud sync
+    if (!articleData._quizDiscussions) articleData._quizDiscussions = {};
+    if (!articleData._quizDiscussions[qIdx]) articleData._quizDiscussions[qIdx] = [];
+    articleData._quizDiscussions[qIdx].push({ q: userMsg, a: result.trim() });
+  } catch (e) {
+    aDiv.textContent = '讨论失败: ' + (e.message || '请检查 API 配置');
+  } finally {
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+function toggleQuizDiscuss(qIdx) {
+  const el = document.getElementById('quizDiscuss' + qIdx);
+  if (!el) return;
+  el.classList.toggle('collapsed');
+}
+
 </script>
 </body>
 </html>
