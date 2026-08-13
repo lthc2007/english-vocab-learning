@@ -10718,12 +10718,13 @@ Return a JSON array of question objects. Each question object must have:
 - "answer": the correct option letter (A/B/C/D)
 - "explanation": brief explanation of the answer (in Chinese)
 
-IMPORTANT — ANSWER DISTRIBUTION (MUST FOLLOW STRICTLY):
-- The 5 correct answers MUST use ALL FOUR letters: A, B, C, D.
-- Each of A, B, C, D must appear at least once. One letter will appear twice.
-- Example of a valid distribution: A, B, C, D, A (or A, B, C, D, B, etc.)
-- NEVER use only B and C. NEVER use only 2 or 3 letters.
-- Before outputting, count: does A appear? B? C? D? If any is missing, redo the answers.
+IMPORTANT — ANSWER POSITION (MUST FOLLOW STRICTLY):
+- For each question, FIRST decide what the correct answer is, THEN randomly place it at A, B, C, or D position. Write the 3 distractors accordingly.
+- Across 5 questions, the correct answer must appear at all 4 positions at least once (one position will be used twice).
+- Example: if Q1 correct is "over a million players daily", place it at position A for Q1, at position C for Q3, etc.
+- The "answer" field MUST match the actual position where you placed the correct option. If you put the correct option at position D, answer must be "D".
+- NEVER change the answer letter to "balance" after you've already written the options. The options order determines the answer, not the other way around.
+- Before outputting, verify: for each question, does the option content at the answer letter genuinely match the correct answer? If not, redo that question.
 
 Return ONLY the JSON array, no other text:
 [
