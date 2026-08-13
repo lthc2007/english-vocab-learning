@@ -10752,22 +10752,6 @@ ${articleText.substring(0, 3000)}`;
       q.options = q.options.map(opt => stripOptionPrefix(opt));
     });
 
-    // Shuffle options within each question to ensure random answer distribution
-    questions.forEach(q => {
-      const correctIdx = ['A', 'B', 'C', 'D'].indexOf(q.answer);
-      if (correctIdx < 0) return;
-      const correctOpt = q.options[correctIdx];
-      // Fisher-Yates shuffle
-      const labels = ['A', 'B', 'C', 'D'];
-      const pairs = q.options.map((opt, i) => ({ opt, label: labels[i] }));
-      for (let i = pairs.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
-      }
-      q.options = pairs.map(p => p.opt);
-      q.answer = pairs.find(p => p.opt === correctOpt).label;
-    });
-
     articleData._quizQuestions = questions;
     articleData._articleMode = 'no-quiz';
     articleData._quizAnswersShown = false;
