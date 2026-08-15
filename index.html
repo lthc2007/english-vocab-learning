@@ -1107,6 +1107,60 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
   gap: 6px;
   margin-top: 8px;
 }
+/* 句子分类 */
+.sentence-category-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sentence-category-badge.spoken { background: #e8f5e9; color: #2e7d32; }
+.sentence-category-badge.writing { background: #e3f2fd; color: #1565c0; }
+.sentence-category-toggle {
+  display: inline-flex;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.sentence-category-toggle button {
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  border: none;
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.sentence-category-toggle button.active {
+  background: var(--accent);
+  color: #fff;
+}
+.sentence-category-toggle button:not(:last-child) { border-right: 1px solid var(--rule); }
+.sentence-filter-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+.sentence-filter-tab {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  border: 1px solid var(--rule);
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.sentence-filter-tab.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.sentence-filter-tab:hover:not(.active) { border-color: var(--accent); }
 .recite-check-mode.active { border-color: var(--accent) !important; color: var(--accent) !important; background: var(--accent-soft) !important; }
 .recite-select-item {
   display: flex;
@@ -1122,6 +1176,8 @@ tr.highlight-row td { background: rgba(201,169,110,0.18) !important; animation: 
 .recite-select-item input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
 .recite-list-checkbox-wrap { display: none; }
 .recite-list-checkbox-wrap.export-mode { display: flex; }
+.export-mode-active .recite-sentence-actions { display: none; }
+.export-mode-active .recite-filter-tabs-hide { display: none; }
 
 .diff-selector { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .diff-btn {
@@ -2044,6 +2100,13 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
           <label class="form-label">来源（可选）</label>
           <input class="form-input" id="reciteSource" placeholder="例如：《经济学人》2024.03 期">
         </div>
+        <div class="form-group">
+          <label class="form-label">分类</label>
+          <div class="sentence-category-toggle" id="reciteCategoryToggle">
+            <button class="active" data-cat="口语" onclick="reciteSetCategory('口语', this)">💬 口语</button>
+            <button data-cat="作文" onclick="reciteSetCategory('作文', this)">📝 作文</button>
+          </div>
+        </div>
         <div id="reciteAddError" style="color:var(--danger);font-size:0.82rem;margin-bottom:8px;display:none;"></div>
         <div style="display:flex;gap:12px;">
           <button class="btn btn-primary" onclick="reciteAddSentence()">✅ 保存句子</button>
@@ -2054,13 +2117,21 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
 
     <!-- 子面板：我的句子 -->
     <div id="reciteListPanel" style="display:none;">
-      <div class="card">
+      <div class="card" id="reciteCard">
         <div class="card-header">
           <span>我的句子</span>
           <div style="display:flex;gap:8px;align-items:center;">
             <span style="font-size:0.75rem;color:var(--muted);" id="reciteCount">共 0 句</span>
             <button class="btn btn-accent btn-sm" id="btnReciteExport" onclick="reciteEnterExportMode()" style="background:var(--gold);">📄 导出</button>
           </div>
+        </div>
+        <div class="sentence-filter-tabs" id="reciteFilterTabs">
+          <button class="sentence-filter-tab active" data-filter="all" onclick="reciteFilterSentences('all')">全部</button>
+          <button class="sentence-filter-tab" data-filter="口语" onclick="reciteFilterSentences('口语')">💬 口语</button>
+          <button class="sentence-filter-tab" data-filter="作文" onclick="reciteFilterSentences('作文')">📝 作文</button>
+          <span style="flex:1;"></span>
+          <button class="btn btn-accent btn-sm" id="btnAiClassify" onclick="aiClassifySentences()" title="AI 自动分类">🤖 AI 自动分类</button>
+          <span id="aiClassifyProgress" style="display:none;color:var(--muted);font-size:0.75rem;"><span class="spinner" style="border-color:rgba(45,90,90,0.3);border-top-color:var(--accent);"></span> 分类中...</span>
         </div>
         <div id="reciteListToolbar" style="display:none;margin-bottom:12px;gap:8px;align-items:center;flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm" onclick="reciteToggleSelectAll()">☐ 全选 / 取消全选</button>
@@ -3233,6 +3304,7 @@ let _migrated = false;
 });
 (appData.sentences || []).forEach(s => {
   if (!s.updatedAt) { s.updatedAt = s.createdAt || new Date().toISOString(); _migrated = true; }
+  if (!s.category) { s.category = '口语'; _migrated = true; }
 });
 if (_migrated) persist();
 
@@ -8194,6 +8266,33 @@ function reciteClearForm() {
   $('reciteSource').value = '';
   editingSentenceId = null;
   if ($('reciteAddError')) $('reciteAddError').style.display = 'none';
+  // Reset category to 口语
+  const toggle = $('reciteCategoryToggle');
+  if (toggle) {
+    toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    const spokenBtn = toggle.querySelector('[data-cat="口语"]');
+    if (spokenBtn) spokenBtn.classList.add('active');
+  }
+}
+
+let _reciteCategory = '口语';  // 当前选中的分类
+let _reciteFilter = 'all';     // 当前列表筛选
+
+function reciteSetCategory(cat, btn) {
+  _reciteCategory = cat;
+  const toggle = $('reciteCategoryToggle');
+  if (toggle) {
+    toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  }
+  if (btn) btn.classList.add('active');
+}
+
+function reciteFilterSentences(filter) {
+  _reciteFilter = filter;
+  document.querySelectorAll('#reciteFilterTabs .sentence-filter-tab').forEach(t => t.classList.remove('active'));
+  const tab = document.querySelector(`#reciteFilterTabs .sentence-filter-tab[data-filter="${filter}"]`);
+  if (tab) tab.classList.add('active');
+  renderReciteList();
 }
 
 async function reciteAiTranslate() {
@@ -8233,6 +8332,7 @@ function reciteAddSentence() {
       s.english = english;
       s.chinese = chinese;
       s.source = source;
+      s.category = _reciteCategory;
       s.updatedAt = new Date().toISOString();
     }
     editingSentenceId = null;
@@ -8248,6 +8348,7 @@ function reciteAddSentence() {
     english,
     chinese,
     source,
+    category: _reciteCategory,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     aiTranslated: false,
@@ -8268,6 +8369,81 @@ async function reciteDeleteSentence(id) {
   showToast('已删除');
 }
 
+function changeSentenceCategory(id, event) {
+  if (event) event.stopPropagation();
+  const s = appData.sentences.find(s => s.id === id);
+  if (!s) return;
+  s.category = (s.category === '作文') ? '口语' : '作文';
+  persist();
+  renderReciteList();
+  showToast('已分类为：' + (s.category === '作文' ? '📝 作文' : '💬 口语'));
+}
+
+async function aiClassifySentences() {
+  const sentences = appData.sentences || [];
+  if (sentences.length === 0) { showToast('没有句子可分类'); return; }
+
+  if (!appData.apiKey && !appData.providerConfigs[appData.provider]?.apiKey) {
+    showToast('请先在设置中配置 API Key');
+    return;
+  }
+
+  const btnAi = $('btnAiClassify');
+  const progress = $('aiClassifyProgress');
+  if (btnAi) btnAi.disabled = true;
+  if (progress) progress.style.display = '';
+
+  try {
+    // Build prompt with all sentences
+    const sentencesText = sentences.map((s, i) => `[${i}] ${s.english}`).join('\n');
+    const prompt = `你是一个英语句子分类助手。请将以下句子分为两类：口语（日常对话、口语表达）和作文（书面表达、议论文、正式文体）。
+
+规则：
+- 口语：日常对话、俚语、口语化表达、简短随意
+- 作文：正式书面语、议论文句式、复杂从句、学术表达
+
+请返回一个 JSON 数组，每个元素包含 index 和 category：
+[
+  {"index": 0, "category": "口语"},
+  {"index": 1, "category": "作文"},
+  ...
+]
+
+句子列表：
+${sentencesText}
+
+Return ONLY the JSON array, no other text.`;
+
+    const result = await doCallAI(prompt, 3000);
+    if (!result) throw new Error('AI 返回为空');
+
+    let jsonStr = result.content || result;
+    jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    const classifications = JSON.parse(jsonStr);
+
+    let changed = 0;
+    classifications.forEach(item => {
+      const s = sentences[item.index];
+      if (s && (item.category === '口语' || item.category === '作文')) {
+        if (s.category !== item.category) {
+          s.category = item.category;
+          changed++;
+        }
+      }
+    });
+
+    persist();
+    renderReciteList();
+    showToast('AI 分类完成：' + changed + ' 句重新分类');
+  } catch (e) {
+    console.error('AI 分类失败:', e);
+    showToast('AI 分类失败：' + (e.message || '未知错误'));
+  } finally {
+    if (btnAi) btnAi.disabled = false;
+    if (progress) progress.style.display = 'none';
+  }
+}
+
 let editingSentenceId = null;  // 正在编辑的句子 ID
 
 function reciteEditSentence(id) {
@@ -8277,6 +8453,13 @@ function reciteEditSentence(id) {
   $('reciteEnglish').value = s.english;
   $('reciteChinese').value = s.chinese;
   $('reciteSource').value = s.source || '';
+  _reciteCategory = s.category || '口语';
+  const toggle = $('reciteCategoryToggle');
+  if (toggle) {
+    toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    const btn = toggle.querySelector(`[data-cat="${_reciteCategory}"]`);
+    if (btn) btn.classList.add('active');
+  }
   editingSentenceId = id;
   showToast('已加载到编辑区，修改后点击"保存"即可更新');
 }
@@ -8287,9 +8470,15 @@ function renderReciteList() {
   const toolbar = $('reciteListToolbar');
   const count = $('reciteCount');
   const exportBtn = $('btnReciteExport');
-  const sentences = appData.sentences || [];
+  const allSentences = appData.sentences || [];
 
-  count.textContent = '共 ' + sentences.length + ' 句';
+  // Filter by category
+  let sentences = allSentences;
+  if (_reciteFilter !== 'all') {
+    sentences = allSentences.filter(s => (s.category || '口语') === _reciteFilter);
+  }
+
+  count.textContent = '共 ' + allSentences.length + ' 句' + (_reciteFilter !== 'all' ? '（筛选 ' + sentences.length + ' 句）' : '');
 
   if (sentences.length === 0) {
     list.style.display = 'none';
@@ -8305,7 +8494,11 @@ function renderReciteList() {
   // Reset export mode
   _reciteSelectAll = false;
   list.style.display = '';
-  list.innerHTML = sentences.map(s => `
+  const catClass = (cat) => cat === '作文' ? 'writing' : 'spoken';
+  const catName = (cat) => cat === '作文' ? '作文' : '口语';
+  list.innerHTML = sentences.map(s => {
+    const cat = s.category || '口语';
+    return `
     <div class="recite-sentence-item">
       <label class="recite-select-item recite-list-checkbox-wrap" style="margin-bottom:8px;padding:0;">
         <input type="checkbox" class="recite-list-checkbox" value="${s.id}" onchange="reciteUpdateSelectedCount()">
@@ -8314,32 +8507,40 @@ function renderReciteList() {
       <div class="recite-sentence-en">${escapeHtml(s.english)}</div>
       <div class="recite-sentence-cn">${escapeHtml(s.chinese)}</div>
       <div class="recite-sentence-meta">
+        <span class="sentence-category-badge ${catClass(cat)}">${cat === '作文' ? '📝 作文' : '💬 口语'}</span>
         ${s.source ? '<span>📖 ' + escapeHtml(s.source) + '</span>' : ''}
         <span>📅 ${new Date(s.createdAt).toLocaleDateString('zh-CN')}</span>
         ${s.practiceCount > 0 ? '<span>🔄 练习 ' + s.practiceCount + ' 次</span>' : '<span>🆕 未练习</span>'}
       </div>
       <div class="recite-sentence-actions">
+        <button class="btn btn-secondary btn-sm" onclick="changeSentenceCategory('${s.id}', event)">🏷️ ${catName(cat)}</button>
         <button class="btn btn-secondary btn-sm" onclick="reciteEditSentence('${s.id}')">✏️ 编辑</button>
         <button class="btn btn-danger btn-sm" onclick="reciteDeleteSentence('${s.id}')">🗑️ 删除</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 function reciteEnterExportMode() {
-  // Show checkboxes and toolbar
+  // Show checkboxes, hide filter tabs & actions
   document.querySelectorAll('.recite-list-checkbox-wrap').forEach(el => el.classList.add('export-mode'));
   document.querySelectorAll('.recite-list-checkbox').forEach(cb => { cb.checked = false; });
   $('reciteListToolbar').style.display = 'flex';
   $('btnReciteExport').style.display = 'none';
+  $('btnReciteExportPdf').style.display = 'none';
+  $('reciteFilterTabs').style.display = 'none';
+  $('reciteCard').classList.add('export-mode-active');
   $('reciteSelectedCount').textContent = '已选 0 句';
 }
 
 function reciteCancelExportMode() {
-  // Hide checkboxes and toolbar
+  // Hide checkboxes, restore filter tabs & actions
   document.querySelectorAll('.recite-list-checkbox-wrap').forEach(el => el.classList.remove('export-mode'));
   $('reciteListToolbar').style.display = 'none';
   $('btnReciteExport').style.display = '';
+  $('btnReciteExportPdf').style.display = '';
+  $('reciteFilterTabs').style.display = '';
+  $('reciteCard').classList.remove('export-mode-active');
 }
 
 function reciteUpdateSelectedCount() {
@@ -8370,7 +8571,7 @@ function reciteExportPdf() {
     html += `<div style="font-size:0.78rem;font-weight:600;color:#2d5a5a;margin-bottom:6px;">#${i + 1}</div>`;
     html += `<div class="es-en">${escapeHtml(s.english)}</div>`;
     html += `<div class="es-cn">${escapeHtml(s.chinese)}</div>`;
-    html += `<div class="es-meta">${s.source ? '来源：' + escapeHtml(s.source) + '　' : ''}添加日期：${new Date(s.createdAt).toLocaleDateString('zh-CN')}${s.practiceCount > 0 ? '　练习 ' + s.practiceCount + ' 次' : ''}</div>`;
+    html += `<div class="es-meta">${s.category === '作文' ? '📝 作文' : '💬 口语'}　${s.source ? '来源：' + escapeHtml(s.source) + '　' : ''}添加日期：${new Date(s.createdAt).toLocaleDateString('zh-CN')}${s.practiceCount > 0 ? '　练习 ' + s.practiceCount + ' 次' : ''}</div>`;
     html += `</div>`;
   });
 
@@ -8395,6 +8596,7 @@ function renderReciteSelectList() {
     <label class="recite-select-item">
       <input type="checkbox" value="${s.id}">
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(s.chinese)}</span>
+      <span class="sentence-category-badge ${s.category === '作文' ? 'writing' : 'spoken'}" style="flex-shrink:0;">${s.category === '作文' ? '作文' : '口语'}</span>
       <span style="color:var(--muted);font-size:0.75rem;flex-shrink:0;">${s.practiceCount > 0 ? '练' + s.practiceCount + '次' : '新'}</span>
     </label>
   `).join('');
@@ -10288,6 +10490,7 @@ function saveSelectedSentence() {
     english,
     chinese,
     source: articleData.title || '文章陪读',
+    category: '口语',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     aiTranslated: true,
