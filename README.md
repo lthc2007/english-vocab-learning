@@ -101,8 +101,16 @@
 
 ## 🚀 快速开始
 
+### 网页端使用（推荐）
+
+直接访问：**[https://lthc2007.github.io/english-vocab-learning/](https://lthc2007.github.io/english-vocab-learning/)**
+
+无需安装任何依赖，打开即用。推荐使用 Chrome / Edge 浏览器。
+
+### 本地运行
+
 1. 克隆仓库或直接下载 `index.html`
-2. 用浏览器打开 `index.html`（推荐 Chrome / Edge）
+2. 用浏览器打开 `index.html`
 3. 无需安装任何依赖，开箱即用
 
 ### 使用云端功能（可选）
