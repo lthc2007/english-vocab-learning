@@ -7946,8 +7946,12 @@ async function doAILookupDirect() {
 
 async function doAILookupCore(validatedWord, session, force) {
   if (session !== undefined && session !== _lookupSession) return; // 已被更新的查询取代
-  const prompt = `请为英语单词 "${validatedWord}" 生成以下学习内容，严格按照格式输出。
-特别规则：若 "${validatedWord}" 并非真实存在的英语单词（拼写错误或生造词），所有内容只输出四个字：不存在
+  // force（用户点"我已检查，拼写无误"）时不加"不存在"规则：
+  // 让 AI 全力生成内容，避免专有名词/短语等真实词汇被误判成不存在而渲染出空结果
+  const specialRule = force
+    ? ''
+    : `\n特别规则：若 "${validatedWord}" 并非真实存在的英语单词（拼写错误或生造词），所有内容只输出四个字：不存在`;
+  const prompt = `请为英语单词 "${validatedWord}" 生成以下学习内容，严格按照格式输出。${specialRule}
 
 音标: <该单词的国际音标 IPA，例如 /ˈeksəmpəl/>
 释义: <列出不同词性的常用释义，每个词性列出1-3个最常用义项。用英文缩写标注词性，不要加序号。例如：n. 放弃、遗弃、抛弃；v. 放纵、沉溺于；adj. 被遗弃的>
