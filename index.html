@@ -7852,6 +7852,75 @@ async function speakExample(e) {
 // ═══════════════════════════════════════
 let lookupData = null; // { word, phonetic, definition, examples, derived }
 let _forceLookupWord = null;
+let _lookupSession = 0;
+
+// ── 拼写校验：本地缓存 + 3 秒超时，避免词典接口卡住查询流程 ──
+const DICT_CACHE_KEY = 'dictValidationCache';
+function getDictCache() {
+  try { return JSON.parse(localStorage.getItem(DICT_CACHE_KEY) || '{}'); } catch (e) { return {}; }
+}
+function setDictCacheEntry(key, val) {
+  const cache = getDictCache();
+  cache[key] = val;
+  const keys = Object.keys(cache);
+  if (keys.length > 200) {
+    const oldest = keys.sort((a, b) => (cache[a].ts || 0) - (cache[b].ts || 0))[0];
+    delete cache[oldest];
+  }
+  try { localStorage.setItem(DICT_CACHE_KEY, JSON.stringify(cache)); } catch (e) {}
+}
+// 词典查询：直连 + Supabase 代理并行赛跑（国内直连 api.dictionaryapi.dev 常被墙或挂起，
+// 代理由 Supabase 服务器中转）。谁先成功用谁，都失败才跳过校验。
+const DICT_PROXY_URL = SUPABASE_URL + '/functions/v1/dict-proxy?word=';
+async function fetchDictEntry(url, timeoutMs) {
+  const resp = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  if (resp.status === 404) {
+    // 必须是词典 API 的标准"无定义"结构才判定未找到（避免把代理服务自身的 404 误判成词不存在）
+    let title = '';
+    try { title = (await resp.json()).title || ''; } catch (e) {}
+    if (title === 'No Definitions Found') return { status: 'notfound' };
+    throw new Error('not a dict 404');
+  }
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  const data = await resp.json();
+  if (data && data.length > 0 && data[0].word) return { status: 'ok', canonical: data[0].word };
+  throw new Error('unexpected dict response');
+}
+// 命中缓存秒回；未命中走直连+代理双通道（超时/网络错误返回 skip，不阻塞查询）
+async function validateSpelling(word) {
+  const key = word.toLowerCase();
+  const now = Date.now();
+  const hit = getDictCache()[key];
+  if (hit) {
+    const ttl = hit.r === 'nf' ? 86400000 : 7 * 86400000; // 未找到缓存1天，找到缓存7天
+    if (now - (hit.ts || 0) < ttl) {
+      return hit.r === 'nf' ? { status: 'notfound' } : { status: 'ok', canonical: hit.w || key };
+    }
+  }
+  try {
+    // 仅走 Supabase 代理（国内直连词典 API 不通），两次独立请求并行赛跑；
+    // 代理为内置 37 万词表（无上游依赖，结果确定），5 秒超时覆盖 Supabase 冷启动。
+    // 仍失败（极罕见）则交给 AI 兜底判断拼写
+    const result = await Promise.any([
+      fetchDictEntry(DICT_PROXY_URL + encodeURIComponent(word), 5000),
+      fetchDictEntry(DICT_PROXY_URL + encodeURIComponent(word), 5000)
+    ]);
+    setDictCacheEntry(key, result.status === 'notfound' ? { r: 'nf', ts: now } : { r: 'ok', w: result.canonical, ts: now });
+    return result;
+  } catch (e) {
+    return { status: 'skip' }; // 直连与代理都失败：跳过校验，由 AI 兜底判断拼写
+  }
+}
+
+// 显示"词典未找到"提示，并使进行中的 AI 查询失效（避免迟到结果覆盖提示）
+function showLookupNotFound(word) {
+  _lookupSession++;
+  $('lookupLoading').style.display = 'none';
+  _forceLookupWord = word;
+  $('lookupError').innerHTML = `<div style="margin-bottom:10px;"><span style="color:#e74c3c;">⚠️ "${word}" 未在词典中找到，请检查拼写是否正确</span></div><button class="btn btn-outline btn-sm" onclick="doAILookupDirect()">我已检查，拼写无误，继续查询</button>`;
+  $('lookupError').style.display = '';
+  $('btnLookup').disabled = false;
+}
 
 async function doAILookupDirect() {
   const word = _forceLookupWord || $('lookupWord').value.trim();
@@ -7861,9 +7930,10 @@ async function doAILookupDirect() {
   $('lookupLoading').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;"><div class="spinner" style="width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div><span>AI 正在查询中，请稍候...</span></div>';
   $('btnLookup').disabled = true;
   lookupData = null;
+  const session = ++_lookupSession;
 
   try {
-    await doAILookupCore(word);
+    await doAILookupCore(word, session, true); // force：用户已确认拼写，跳过 AI 兜底拦截
   } catch (err) {
     console.error('lookup error:', err);
     $('lookupError').textContent = '查询失败: ' + (err.message || '未知错误');
@@ -7874,8 +7944,10 @@ async function doAILookupDirect() {
   $('btnLookup').disabled = false;
 }
 
-async function doAILookupCore(validatedWord) {
-  const prompt = `请为英语单词 "${validatedWord}" 生成以下学习内容，严格按照格式输出：
+async function doAILookupCore(validatedWord, session, force) {
+  if (session !== undefined && session !== _lookupSession) return; // 已被更新的查询取代
+  const prompt = `请为英语单词 "${validatedWord}" 生成以下学习内容，严格按照格式输出。
+特别规则：若 "${validatedWord}" 并非真实存在的英语单词（拼写错误或生造词），所有内容只输出四个字：不存在
 
 音标: <该单词的国际音标 IPA，例如 /ˈeksəmpəl/>
 释义: <列出不同词性的常用释义，每个词性列出1-3个最常用义项。用英文缩写标注词性，不要加序号。例如：n. 放弃、遗弃、抛弃；v. 放纵、沉溺于；adj. 被遗弃的>
@@ -7885,6 +7957,15 @@ async function doAILookupCore(validatedWord) {
 难度: <中考/高考/四级/六级/考研/雅思/托福/专八 中选一个最符合的>`;
 
   const result = await callAI(prompt, 2000);
+  if (session !== undefined && session !== _lookupSession) return; // 查询已过期（如拼写未通过被拦截），丢弃结果
+  if (!force && result) {
+    // AI 兜底拼写判断：词典双通道都不可用时，由 AI 判定单词是否存在
+    const firstLine = result.trim().split('\n')[0].replace(/[*_#`>]/g, '').trim();
+    if (firstLine.startsWith('不存在') && firstLine.length <= 12) {
+      showLookupNotFound(validatedWord);
+      return;
+    }
+  }
   if (result) {
     const phonetic = parseSection(result, '音标') || '';
     const definition = parseSection(result, '释义') || '';
@@ -7974,49 +8055,29 @@ async function doLookup() {
   $('lookupResult').style.display = 'none';
   $('lookupError').style.display = 'none';
   $('lookupLoading').style.display = '';
-  $('lookupLoading').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;"><div class="spinner" style="width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div><span>正在校验单词拼写...</span></div>';
+  $('lookupLoading').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;"><div class="spinner" style="width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div><span>AI 正在查询中，请稍候...</span></div>';
   $('btnLookup').disabled = true;
   lookupData = null;
+  const session = ++_lookupSession;
 
   try {
-    // Step 1: 使用 Free Dictionary API 校验单词拼写
-    let validatedWord = word;
-    let suggestion = null;
-    try {
-      const checkResp = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
-      if (checkResp.status === 404) {
-        // 单词未找到，尝试获取建议
-        const notFoundData = await checkResp.json();
-        const suggestions = notFoundData.title === 'No Definitions Found' ? [] : [];
-        // 有些404响应会带message但没有suggestions，尝试用AI获取建议
-        suggestion = `"${word}" 未在词典中找到，请检查拼写是否正确`;
-      } else if (checkResp.ok) {
-        const data = await checkResp.json();
-        // 验证成功，使用API返回的规范单词（可能大小写不同）
-        if (data && data.length > 0 && data[0].word) {
-          validatedWord = data[0].word;
-        }
-      } else {
-        // 其他错误，可能是网络问题，跳过校验直接查询
-        console.warn('Dictionary API error:', checkResp.status);
-      }
-    } catch (e) {
-      // 网络错误，跳过校验
-      console.warn('Dictionary API unreachable:', e.message);
-    }
+    // 拼写校验与 AI 查询并行执行：校验不再阻塞查询（缓存命中时零等待，
+    // 直连+代理双通道都失败时由 AI 兜底判断拼写）。仅当确认"单词不存在"时才拦截。
+    const dictPromise = validateSpelling(word);
+    const aiPromise = doAILookupCore(word, session);
 
-    if (suggestion) {
-      $('lookupLoading').style.display = 'none';
-      _forceLookupWord = word;
-      $('lookupError').innerHTML = `<div style="margin-bottom:10px;"><span style="color:#e74c3c;">⚠️ ${suggestion}</span></div><button class="btn btn-outline btn-sm" onclick="doAILookupDirect()">我已检查，拼写无误，继续查询</button>`;
-      $('lookupError').style.display = '';
-      $('btnLookup').disabled = false;
+    const dictResult = await Promise.race([
+      dictPromise,
+      aiPromise.then(() => ({ status: 'ai_done' })).catch(() => ({ status: 'ai_done' }))
+    ]);
+
+    if (dictResult.status === 'notfound') {
+      showLookupNotFound(word);
       return;
     }
 
-    // Step 2: 拼写校验通过，使用AI查询
-    $('lookupLoading').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:12px;"><div class="spinner" style="width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;"></div><span>AI 正在查询中，请稍候...</span></div>';
-    await doAILookupCore(validatedWord);
+    // 'ok' / 'skip' / AI 已先完成：继续等 AI 结果（若 AI 已完成则立即返回，出错则在此抛出）
+    await aiPromise;
   } catch (err) {
     console.error('lookup error:', err);
     $('lookupError').textContent = '查询失败: ' + (err.message || '未知错误');
