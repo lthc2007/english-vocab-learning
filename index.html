@@ -1541,7 +1541,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
   color: var(--ink);
 }
 .context-translation::before {
-  content: "📝 中文翻译";
+  content: "中文翻译";
   display: block;
   font-size: 0.78rem;
   font-weight: 600;
@@ -1805,12 +1805,59 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
   text-align: center; padding: 16px; color: var(--muted); font-size: 0.82rem;
 }
 
+/* ── SVG 线性图标（跟随文字颜色，与衬线排版风格统一）── */
+.ic { width: 1.05em; height: 1.05em; display: inline-block; vertical-align: -0.16em; flex-shrink: 0; }
+.btn-lg .ic, .btn-speak .ic { width: 1.15em; height: 1.15em; }
+
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Serif+SC:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
 </head>
 <body>
+
+<!-- SVG icon sprite（Lucide 风格线性图标） -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-volume" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-hourglass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414-4.414A2 2 0 0 1 7 6.172V2"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414 4.414A2 2 0 0 1 17 17.828V22"/></symbol>
+  <symbol id="i-timer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></symbol>
+  <symbol id="i-cloud-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></symbol>
+  <symbol id="i-cloud-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
+  <symbol id="i-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 20h16a2 2 0 0 0 1.73-2Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></symbol>
+  <symbol id="i-keyboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M7 16h10"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
+  <symbol id="i-trophy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+  <symbol id="i-chevron-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></symbol>
+  <symbol id="i-check-square" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></symbol>
+  <symbol id="i-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></symbol>
+</svg>
 
 <!-- Header -->
 <header class="header">
@@ -1825,7 +1872,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       <span class="cloud-status local" id="cloudStatusDot"></span> <span id="cloudBtnText">未登录</span>
     </button>
     <button class="study-timer-btn" id="studyTimerBtn" title="今日学习时长" onclick="openStudyTimerPanel()">
-      ⏱ <span id="studyTimerDisplay">0m</span>
+      <svg class="ic" aria-hidden="true"><use href="#i-timer"></use></svg> <span id="studyTimerDisplay">0m</span>
     </button>
     <button class="fullscreen-btn" onclick="toggleFullscreen()" title="全屏显示" aria-label="全屏显示">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
@@ -1840,8 +1887,8 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
 <div class="modal-overlay" id="modalStudyTimer">
   <div class="modal" style="max-width:420px;">
     <div class="modal-title" style="display:flex;justify-content:space-between;align-items:center;">
-      <span>📊 学习时长</span>
-      <button onclick="closeStudyTimerPanel()" style="background:none;border:none;cursor:pointer;font-size:1.3rem;color:var(--muted);padding:0 4px;line-height:1;" title="关闭">✕</button>
+      <span><svg class="ic" aria-hidden="true"><use href="#i-chart"></use></svg> 学习时长</span>
+      <button onclick="closeStudyTimerPanel()" style="background:none;border:none;cursor:pointer;font-size:1.3rem;color:var(--muted);padding:0 4px;line-height:1;" title="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button>
     </div>
     <div style="display:flex;gap:28px;padding:8px 0 18px;">
       <div style="text-align:center;flex:1;background:var(--bg);border-radius:10px;padding:14px 8px;">
@@ -1890,7 +1937,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <input type="text" id="lookupWord" placeholder="输入英文单词..." class="form-input" style="flex:1;font-size:1.1rem;padding:10px 14px;" onkeydown="if(event.key==='Enter')doLookup()">
-        <button class="btn btn-primary" id="btnLookup" onclick="doLookup()">🔍 查询</button>
+        <button class="btn btn-primary" id="btnLookup" onclick="doLookup()"><svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg> 查询</button>
       </div>
       <div id="lookupResult" style="display:none;margin-top:16px;border:1px solid var(--border);border-radius:10px;padding:16px;">
         <!-- Phonetic -->
@@ -1898,7 +1945,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
           <span style="font-size:1.5rem;font-weight:700;color:var(--accent);" id="luWord"></span>
           <span id="luDifficulty" style="display:none;"></span>
           <span style="font-size:1rem;color:var(--muted);" id="luPhonetic"></span>
-          <button class="btn-speak" id="luSpeak" onclick="lookupSpeak(event)" title="朗读单词" aria-label="朗读单词" style="display:none;">🔊</button>
+          <button class="btn-speak" id="luSpeak" onclick="lookupSpeak(event)" title="朗读单词" aria-label="朗读单词" style="display:none;"><svg class="ic" aria-hidden="true"><use href="#i-volume"></use></svg></button>
         </div>
         <!-- Definition -->
         <div style="margin-bottom:12px;">
@@ -1907,7 +1954,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         </div>
         <!-- Examples -->
         <div style="margin-bottom:12px;" id="luExamplesArea">
-          <div class="ai-section-title">例句 <button class="btn-speak-example" id="luSpeakExample" onclick="lookupSpeakExample(event)" title="朗读例句" aria-label="朗读例句" style="display:none;">📢</button></div>
+          <div class="ai-section-title">例句 <button class="btn-speak-example" id="luSpeakExample" onclick="lookupSpeakExample(event)" title="朗读例句" aria-label="朗读例句" style="display:none;"><svg class="ic" aria-hidden="true"><use href="#i-volume"></use></svg></button></div>
           <div class="ai-section-content" id="luExamples"></div>
         </div>
         <!-- Root & Affix -->
@@ -1922,7 +1969,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         </div>
         <!-- Add to list -->
         <div id="luAddArea" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
-          <button class="btn btn-primary" id="luAddBtn" onclick="addLookedUpWord()">➕ 添加到我的单词列表</button>
+          <button class="btn btn-primary" id="luAddBtn" onclick="addLookedUpWord()"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg> 添加到我的单词列表</button>
           <span id="luAddedMsg" style="display:none;margin-left:10px;color:var(--success);font-size:0.85rem;">已添加 ✓</span>
         </div>
       </div>
@@ -2022,9 +2069,9 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
             <div class="result-content" id="correctFixedEssay"></div>
           </div>
           <div style="text-align:center;margin-top:16px;">
-            <button class="btn btn-success" id="btnSaveCorrect" onclick="saveCorrection('translation')" style="display:none;">💾 保存本次批改</button>
+            <button class="btn btn-success" id="btnSaveCorrect" onclick="saveCorrection('translation')" style="display:none;"><svg class="ic" aria-hidden="true"><use href="#i-save"></use></svg> 保存本次批改</button>
             <span id="correctSavedMsg" style="display:none;color:var(--success);font-size:0.85rem;margin-left:10px;">已保存 ✓</span>
-            <button class="btn btn-secondary" id="btnNextCorrect" onclick="resetCorrection('translation')" style="display:none;margin-left:10px;">批改下一篇 ➤</button>
+            <button class="btn btn-secondary" id="btnNextCorrect" onclick="resetCorrection('translation')" style="display:none;margin-left:10px;">批改下一篇 <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"></use></svg></button>
           </div>
           </div>
       </div>
@@ -2081,9 +2128,9 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
             <div class="result-content" id="writingFixedEssay"></div>
           </div>
           <div style="text-align:center;margin-top:16px;">
-            <button class="btn btn-success" id="btnSaveWriting" onclick="saveCorrection('writing')" style="display:none;">💾 保存本次批改</button>
+            <button class="btn btn-success" id="btnSaveWriting" onclick="saveCorrection('writing')" style="display:none;"><svg class="ic" aria-hidden="true"><use href="#i-save"></use></svg> 保存本次批改</button>
             <span id="writingSavedMsg" style="display:none;color:var(--success);font-size:0.85rem;margin-left:10px;">已保存 ✓</span>
-            <button class="btn btn-secondary" id="btnNextWriting" onclick="resetCorrection('writing')" style="display:none;margin-left:10px;">批改下一篇 ➤</button>
+            <button class="btn btn-secondary" id="btnNextWriting" onclick="resetCorrection('writing')" style="display:none;margin-left:10px;">批改下一篇 <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"></use></svg></button>
           </div>
           </div>
         </div>
@@ -2130,7 +2177,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
           <label class="form-label">中文翻译</label>
           <div style="display:flex;gap:8px;align-items:flex-end;">
             <textarea class="form-textarea" id="reciteChinese" placeholder="手动输入翻译，或点击 AI 翻译自动生成" style="min-height:80px;flex:1;"></textarea>
-            <button class="btn btn-accent btn-sm" id="btnReciteTranslate" onclick="reciteAiTranslate()" style="flex-shrink:0;margin-bottom:2px;">🤖 AI 翻译</button>
+            <button class="btn btn-accent btn-sm" id="btnReciteTranslate" onclick="reciteAiTranslate()" style="flex-shrink:0;margin-bottom:2px;"><svg class="ic" aria-hidden="true"><use href="#i-bot"></use></svg> AI 翻译</button>
           </div>
         </div>
         <div class="form-group">
@@ -2140,13 +2187,13 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <div class="form-group">
           <label class="form-label">分类</label>
           <div class="sentence-category-toggle" id="reciteCategoryToggle">
-            <button class="active" data-cat="口语" onclick="reciteSetCategory('口语', this)">💬 口语</button>
-            <button data-cat="作文" onclick="reciteSetCategory('作文', this)">📝 作文</button>
+            <button class="active" data-cat="口语" onclick="reciteSetCategory('口语', this)"><svg class="ic" aria-hidden="true"><use href="#i-message"></use></svg> 口语</button>
+            <button data-cat="作文" onclick="reciteSetCategory('作文', this)"><svg class="ic" aria-hidden="true"><use href="#i-pen"></use></svg> 作文</button>
           </div>
         </div>
         <div id="reciteAddError" style="color:var(--danger);font-size:0.82rem;margin-bottom:8px;display:none;"></div>
         <div style="display:flex;gap:12px;">
-          <button class="btn btn-primary" onclick="reciteAddSentence()">✅ 保存句子</button>
+          <button class="btn btn-primary" onclick="reciteAddSentence()"><svg class="ic" aria-hidden="true"><use href="#i-check-circle"></use></svg> 保存句子</button>
           <button class="btn btn-secondary" onclick="reciteClearForm()">清空</button>
         </div>
       </div>
@@ -2159,21 +2206,21 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
           <span>我的句子</span>
           <div style="display:flex;gap:8px;align-items:center;">
             <span style="font-size:0.75rem;color:var(--muted);" id="reciteCount">共 0 句</span>
-            <button class="btn btn-accent btn-sm" id="btnReciteExport" onclick="reciteEnterExportMode()" style="background:var(--gold);">📄 导出</button>
+            <button class="btn btn-accent btn-sm" id="btnReciteExport" onclick="reciteEnterExportMode()" style="background:var(--gold);"><svg class="ic" aria-hidden="true"><use href="#i-file"></use></svg> 导出</button>
           </div>
         </div>
         <div class="sentence-filter-tabs" id="reciteFilterTabs">
           <button class="sentence-filter-tab active" data-filter="all" onclick="reciteFilterSentences('all')">全部</button>
-          <button class="sentence-filter-tab" data-filter="口语" onclick="reciteFilterSentences('口语')">💬 口语</button>
-          <button class="sentence-filter-tab" data-filter="作文" onclick="reciteFilterSentences('作文')">📝 作文</button>
+          <button class="sentence-filter-tab" data-filter="口语" onclick="reciteFilterSentences('口语')"><svg class="ic" aria-hidden="true"><use href="#i-message"></use></svg> 口语</button>
+          <button class="sentence-filter-tab" data-filter="作文" onclick="reciteFilterSentences('作文')"><svg class="ic" aria-hidden="true"><use href="#i-pen"></use></svg> 作文</button>
           <span style="flex:1;"></span>
-          <button class="btn btn-accent btn-sm" id="btnAiClassify" onclick="aiClassifySentences()" title="AI 自动分类">🤖 AI 自动分类</button>
+          <button class="btn btn-accent btn-sm" id="btnAiClassify" onclick="aiClassifySentences()" title="AI 自动分类"><svg class="ic" aria-hidden="true"><use href="#i-bot"></use></svg> AI 自动分类</button>
           <span id="aiClassifyProgress" style="display:none;color:var(--muted);font-size:0.75rem;"><span class="spinner" style="border-color:rgba(45,90,90,0.3);border-top-color:var(--accent);"></span> 分类中...</span>
         </div>
         <div id="reciteListToolbar" style="display:none;margin-bottom:12px;gap:8px;align-items:center;flex-wrap:wrap;">
-          <button class="btn btn-secondary btn-sm" onclick="reciteToggleSelectAll()">☐ 全选 / 取消全选</button>
+          <button class="btn btn-secondary btn-sm" onclick="reciteToggleSelectAll()"><svg class="ic" aria-hidden="true"><use href="#i-check-square"></use></svg> 全选 / 取消全选</button>
           <span style="font-size:0.75rem;color:var(--muted);" id="reciteSelectedCount">已选 0 句</span>
-          <button class="btn btn-accent btn-sm" id="btnReciteExportPdf" onclick="reciteExportPdf()" style="background:var(--gold);">📄 导出 PDF</button>
+          <button class="btn btn-accent btn-sm" id="btnReciteExportPdf" onclick="reciteExportPdf()" style="background:var(--gold);"><svg class="ic" aria-hidden="true"><use href="#i-file"></use></svg> 导出 PDF</button>
           <button class="btn btn-secondary btn-sm" onclick="reciteCancelExportMode()">取消</button>
         </div>
         </div>
@@ -2201,11 +2248,11 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <div style="margin-bottom:16px;">
           <label class="form-label">核对方式</label>
           <div style="display:flex;gap:8px;">
-            <button class="btn btn-secondary btn-sm recite-check-mode active" data-mode="manual" onclick="reciteSetCheckMode('manual')">👁️ 手动核对</button>
-            <button class="btn btn-secondary btn-sm recite-check-mode" data-mode="ai" onclick="reciteSetCheckMode('ai')">🤖 AI 核对</button>
+            <button class="btn btn-secondary btn-sm recite-check-mode active" data-mode="manual" onclick="reciteSetCheckMode('manual')"><svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg> 手动核对</button>
+            <button class="btn btn-secondary btn-sm recite-check-mode" data-mode="ai" onclick="reciteSetCheckMode('ai')"><svg class="ic" aria-hidden="true"><use href="#i-bot"></use></svg> AI 核对</button>
           </div>
         </div>
-        <button class="btn btn-primary btn-lg" onclick="reciteStartPractice()" style="width:100%;">🎯 开始背诵</button>
+        <button class="btn btn-primary btn-lg" onclick="reciteStartPractice()" style="width:100%;"><svg class="ic" aria-hidden="true"><use href="#i-target"></use></svg> 开始背诵</button>
       </div>
 
       <!-- 背诵中 -->
@@ -2220,27 +2267,27 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
           <textarea class="form-textarea" id="reciteUserAnswer" placeholder="根据中文翻译写出英文原句..." style="min-height:100px;font-size:1rem;"></textarea>
         </div>
         <div style="display:flex;gap:12px;margin-bottom:16px;">
-          <button class="btn btn-primary" id="btnReciteCheck" onclick="reciteCheckAnswer()" style="flex:1;">✅ 核对答案</button>
-          <button class="btn btn-secondary" onclick="reciteSkipSentence()">跳过 ➤</button>
+          <button class="btn btn-primary" id="btnReciteCheck" onclick="reciteCheckAnswer()" style="flex:1;"><svg class="ic" aria-hidden="true"><use href="#i-check-circle"></use></svg> 核对答案</button>
+          <button class="btn btn-secondary" onclick="reciteSkipSentence()">跳过 <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"></use></svg></button>
         </div>
 
         <!-- 核对结果 -->
         <div id="reciteResult" style="display:none;padding-top:16px;border-top:1px solid var(--rule);">
-          <div class="ai-section-title">📝 原文</div>
+          <div class="ai-section-title"><svg class="ic" aria-hidden="true"><use href="#i-pen"></use></svg> 原文</div>
           <div id="reciteOriginalDisplay" style="background:var(--bg);padding:12px;border-radius:var(--radius-sm);margin-bottom:12px;font-size:0.95rem;line-height:1.7;"></div>
-          <div class="ai-section-title">✏️ 你的答案</div>
+          <div class="ai-section-title"><svg class="ic" aria-hidden="true"><use href="#i-pen"></use></svg> 你的答案</div>
           <div id="reciteUserAnswerDisplay" style="background:var(--bg);padding:12px;border-radius:var(--radius-sm);margin-bottom:12px;font-size:0.95rem;line-height:1.7;"></div>
           <div id="reciteAiFeedback" style="display:none;"></div>
           <div style="display:flex;gap:12px;margin-top:12px;">
-            <button class="btn btn-primary" id="btnReciteNext" onclick="reciteNextSentence()" style="flex:1;">下一句 ➤</button>
-            <button class="btn btn-accent" onclick="reciteRetryAnswer()">🔄 重试</button>
+            <button class="btn btn-primary" id="btnReciteNext" onclick="reciteNextSentence()" style="flex:1;">下一句 <svg class="ic" aria-hidden="true"><use href="#i-arrow-right"></use></svg></button>
+            <button class="btn btn-accent" onclick="reciteRetryAnswer()"><svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg> 重试</button>
           </div>
         </div>
       </div>
 
       <!-- 背诵完成 -->
       <div class="card" id="recitePracticeDone" style="display:none;text-align:center;">
-        <div style="font-size:3rem;margin-bottom:12px;">🎉</div>
+        <div style="margin-bottom:12px;"><svg class="ic" style="width:52px;height:52px;color:var(--accent2);" aria-hidden="true"><use href="#i-trophy"></use></svg></div>
         <div style="font-family:var(--font-display);font-size:1.3rem;font-weight:600;color:var(--accent);margin-bottom:8px;">背诵完成！</div>
         <div style="color:var(--muted);margin-bottom:16px;">本次共背诵 <span id="reciteDoneCount" style="font-weight:600;color:var(--ink);">5</span> 句</div>
         <button class="btn btn-primary" onclick="switchReciteTab('practice')">再来一次</button>
@@ -2300,7 +2347,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       </div>
       <div class="form-group" style="position:relative;">
         <textarea class="form-textarea" id="phraseInput" rows="5" placeholder="take off - 起飞&#10;look forward to - 期待&#10;break down - 分解&#10;come up with - 想出"></textarea>
-        <button class="btn btn-secondary btn-sm paste-btn" onclick="pastePhrase()" title="从剪贴板粘贴">📋 粘贴</button>
+        <button class="btn btn-secondary btn-sm paste-btn" onclick="pastePhrase()" title="从剪贴板粘贴"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg> 粘贴</button>
       </div>
       <div style="display:flex;gap:12px;align-items:center;">
         <button class="btn btn-secondary" onclick="phraseImport()">短语导入</button>
@@ -2326,7 +2373,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       </div>
       <div class="form-group" style="position:relative;">
         <textarea class="form-textarea" id="batchInput" rows="5" placeholder="abandon v. 放弃&#10;brilliant adj. 杰出的&#10;compromise n. 妥协"></textarea>
-        <button class="btn btn-secondary btn-sm paste-btn" onclick="pasteFromClipboard()" title="从剪贴板粘贴">📋 粘贴</button>
+        <button class="btn btn-secondary btn-sm paste-btn" onclick="pasteFromClipboard()" title="从剪贴板粘贴"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg> 粘贴</button>
       </div>
       <div style="display:flex;gap:12px;align-items:center;">
         <button class="btn btn-secondary" onclick="batchImport()">单词批量导入</button>
@@ -2337,12 +2384,12 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       <div class="card-header">
         <div style="display:flex;align-items:center;gap:10px;">
           <span>单词列表 (<span id="wordCount">0</span>)</span>
-          <button class="btn btn-accent btn-sm" onclick="exportWordListPdf()" style="background:var(--gold);color:#fff;font-size:0.78rem;padding:3px 10px;">📄 导出 PDF</button>
+          <button class="btn btn-accent btn-sm" onclick="exportWordListPdf()" style="background:var(--gold);color:#fff;font-size:0.78rem;padding:3px 10px;"><svg class="ic" aria-hidden="true"><use href="#i-file"></use></svg> 导出 PDF</button>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <div style="position:relative;display:flex;align-items:center;">
             <input type="text" id="wordSearchInput" placeholder="搜索单词..." onkeydown="if(event.key==='Enter')searchWord()" style="width:160px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.85rem;background:var(--bg);color:var(--ink);outline:none;transition:border-color 0.2s;">
-            <button class="btn btn-primary btn-sm" onclick="searchWord()" style="margin-left:4px;">🔍</button>
+            <button class="btn btn-primary btn-sm" onclick="searchWord()" style="margin-left:4px;"><svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg></button>
           </div>
           <div style="flex:1;"></div>
           <button class="btn btn-primary btn-sm" id="btnGenAll" onclick="generateAllContentBatch()" disabled>AI 批量生成全部内容</button>
@@ -2369,15 +2416,15 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       <div class="flashcard-wrapper">
         <button class="btn-zoom" id="btnZoomOut" onclick="cardZoomOut(event)" title="缩小卡片" aria-label="缩小卡片">−</button>
         <div class="flashcard zoom-target" id="flashcard" onclick="handleCardClick()">
-          <div class="view-count" id="viewCountDisplay">👁 0</div>
+          <div class="view-count" id="viewCountDisplay"><svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg> 0</div>
           <div class="word-front" id="fcFront">click</div>
-          <button class="btn-speak" id="btnSpeak" onclick="speakWord(event)" title="朗读" aria-label="朗读单词">🔊</button>
+          <button class="btn-speak" id="btnSpeak" onclick="speakWord(event)" title="朗读" aria-label="朗读单词"><svg class="ic" aria-hidden="true"><use href="#i-volume"></use></svg></button>
           <div id="fcExampleFront" style="font-size:0.95rem;color:var(--ink);margin-top:8px;line-height:1.6;text-align:center;display:none;"></div>
             <div class="word-meta" id="fcMeta" style="display:none;"></div>
           <div id="fcBack" style="display:none;">
             <div class="word-back" id="fcWordHeader"></div>
             <div class="ai-section" id="aiExample" style="display:none;">
-              <div class="ai-section-title">例句 <button class="btn-speak-example" id="btnSpeakExampleBack" onclick="speakExample(event)" title="朗读例句" aria-label="朗读例句" style="display:none;">📢</button></div>
+              <div class="ai-section-title">例句 <button class="btn-speak-example" id="btnSpeakExampleBack" onclick="speakExample(event)" title="朗读例句" aria-label="朗读例句" style="display:none;"><svg class="ic" aria-hidden="true"><use href="#i-volume"></use></svg></button></div>
               <div class="ai-section-content" id="fcExampleBack"></div>
             </div>
             <div class="ai-section" id="aiSynonyms" style="display:none;">
@@ -2423,12 +2470,12 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       </div>
         <div class="card-hint" id="fcHint" onclick="flipCard()" style="cursor:pointer;">点击翻转卡片</div>
         <button class="btn btn-sm" id="btnKnown" onclick="markKnown()" style="margin-top:6px;color:var(--success);border-color:var(--success);font-size:0.8rem;">✓ 熟词（删除）</button>
-        <button class="btn btn-sm" id="btnAutoRead" onclick="startAutoRead()" style="margin-top:6px;margin-left:8px;color:var(--accent);border-color:var(--accent);font-size:0.8rem;">▶ 单词听读</button>
+        <button class="btn btn-sm" id="btnAutoRead" onclick="startAutoRead()" style="margin-top:6px;margin-left:8px;color:var(--accent);border-color:var(--accent);font-size:0.8rem;"><svg class="ic" aria-hidden="true"><use href="#i-play"></use></svg> 单词听读</button>
         <!-- 听读控制栏 -->
         <div id="autoReadControls" style="display:none;margin-top:8px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;">
           <span id="autoReadStatus" style="font-size:0.8rem;color:var(--accent);font-weight:600;">正在朗读...</span>
-          <button class="btn btn-sm" id="btnAutoReadPause" onclick="pauseAutoRead()" style="font-size:0.75rem;padding:4px 10px;">⏸ 暂停</button>
-          <button class="btn btn-sm" id="btnAutoReadStop" onclick="stopAutoRead()" style="font-size:0.75rem;padding:4px 10px;color:#e74c3c;border-color:#e74c3c;">⏹ 停止</button>
+          <button class="btn btn-sm" id="btnAutoReadPause" onclick="pauseAutoRead()" style="font-size:0.75rem;padding:4px 10px;"><svg class="ic" aria-hidden="true"><use href="#i-pause"></use></svg> 暂停</button>
+          <button class="btn btn-sm" id="btnAutoReadStop" onclick="stopAutoRead()" style="font-size:0.75rem;padding:4px 10px;color:#e74c3c;border-color:#e74c3c;"><svg class="ic" aria-hidden="true"><use href="#i-stop"></use></svg> 停止</button>
           <span id="autoReadProgress" style="font-size:0.75rem;color:var(--muted);"></span>
         </div>
         <div class="flashcard-nav">
@@ -2533,13 +2580,13 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <span id="articleSpeedLabel" style="font-size:0.82rem;font-weight:600;color:var(--accent);min-width:32px;">1.0x</span>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;">
-        <button class="btn btn-primary" id="btnReadPlay" onclick="startArticleRead()">▶ 朗读</button>
-        <button class="btn btn-secondary" id="btnReadPause" onclick="pauseArticleRead()" style="display:none;">⏸ 暂停</button>
-        <button class="btn btn-secondary" id="btnReadResume" onclick="resumeArticleRead()" style="display:none;">▶ 继续</button>
-        <button class="btn btn-secondary" id="btnReadStop" onclick="stopArticleRead()" style="display:none;">⏹ 停止</button>
-        <button class="btn btn-outline" id="btnReadDownload" onclick="downloadArticleAudio()" style="display:none;">💾 下载音频</button>
-        <button class="btn btn-outline" id="btnReadCloudSave" onclick="saveAudioToCloud()" style="display:none;">☁️ 保存到云端</button>
-        <button class="btn btn-secondary btn-sm" id="btnReadClear" onclick="clearArticle()" title="清空文章">🗑 清除</button>
+        <button class="btn btn-primary" id="btnReadPlay" onclick="startArticleRead()"><svg class="ic" aria-hidden="true"><use href="#i-play"></use></svg> 朗读</button>
+        <button class="btn btn-secondary" id="btnReadPause" onclick="pauseArticleRead()" style="display:none;"><svg class="ic" aria-hidden="true"><use href="#i-pause"></use></svg> 暂停</button>
+        <button class="btn btn-secondary" id="btnReadResume" onclick="resumeArticleRead()" style="display:none;"><svg class="ic" aria-hidden="true"><use href="#i-play"></use></svg> 继续</button>
+        <button class="btn btn-secondary" id="btnReadStop" onclick="stopArticleRead()" style="display:none;"><svg class="ic" aria-hidden="true"><use href="#i-stop"></use></svg> 停止</button>
+        <button class="btn btn-outline" id="btnReadDownload" onclick="downloadArticleAudio()" style="display:none;"><svg class="ic" aria-hidden="true"><use href="#i-save"></use></svg> 下载音频</button>
+        <button class="btn btn-outline" id="btnReadCloudSave" onclick="saveAudioToCloud()" style="display:none;"><svg class="ic" aria-hidden="true"><use href="#i-cloud"></use></svg> 保存到云端</button>
+        <button class="btn btn-secondary btn-sm" id="btnReadClear" onclick="clearArticle()" title="清空文章"><svg class="ic" aria-hidden="true"><use href="#i-trash"></use></svg> 清除</button>
         <span id="readStatus" style="font-size:0.8rem;color:var(--muted);"></span>
       </div>
       <div style="margin-top:8px;">
@@ -2552,8 +2599,8 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
     <!-- 云端音频 -->
     <div class="card" id="cloudAudioCard" style="display:none;">
       <div class="card-header">
-        <span>☁️ 云端音频</span>
-        <button class="btn btn-secondary btn-sm" onclick="loadCloudAudioList()" title="刷新列表">🔄 刷新</button>
+        <span><svg class="ic" aria-hidden="true"><use href="#i-cloud"></use></svg> 云端音频</span>
+        <button class="btn btn-secondary btn-sm" onclick="loadCloudAudioList()" title="刷新列表"><svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg> 刷新</button>
       </div>
       <div id="cloudAudioList" style="max-height:400px;overflow-y:auto;">
         <div class="empty-state" style="padding:24px;">
@@ -2579,7 +2626,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
           </div>
         </div>
         <div class="form-group" style="text-align:center;">
-          <button class="btn btn-primary btn-lg" id="btnContextGenerate" onclick="generateContextArticle()" disabled>✨ AI 生成文章</button>
+          <button class="btn btn-primary btn-lg" id="btnContextGenerate" onclick="generateContextArticle()" disabled><svg class="ic" aria-hidden="true"><use href="#i-sparkles"></use></svg> AI 生成文章</button>
         </div>
       </div>
       <div id="contextLoading" style="display:none;">
@@ -2593,7 +2640,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <div id="contextWordPopup" class="context-word-popup" style="display:none;"></div>
         <div class="context-translation" id="contextTranslation" style="display:none;"></div>
         <div class="context-word-summary">
-          <div class="context-word-summary-title">📖 文中词汇</div>
+          <div class="context-word-summary-title"><svg class="ic" aria-hidden="true"><use href="#i-book"></use></svg> 文中词汇</div>
           <table class="context-word-table">
             <thead>
               <tr><th style="width:22%;">单词</th><th style="width:18%;">音标</th><th>释义</th></tr>
@@ -2602,7 +2649,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
           </table>
         </div>
         <div class="form-group" style="text-align:center;margin-top:16px;">
-          <button class="btn btn-secondary" onclick="resetContextWords()">🔄 重新选择单词</button>
+          <button class="btn btn-secondary" onclick="resetContextWords()"><svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg> 重新选择单词</button>
         </div>
       </div>
     </div>
@@ -2618,8 +2665,8 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       <div class="form-group">
         <label class="form-label">文章模式</label>
         <div class="article-mode-toggle" id="articleModeToggle">
-          <button class="mode-btn active" data-mode="no-quiz" onclick="setArticleMode('no-quiz')">📄 无题目</button>
-          <button class="mode-btn" data-mode="has-quiz" onclick="setArticleMode('has-quiz')">📝 有题目</button>
+          <button class="mode-btn active" data-mode="no-quiz" onclick="setArticleMode('no-quiz')"><svg class="ic" aria-hidden="true"><use href="#i-file"></use></svg> 无题目</button>
+          <button class="mode-btn" data-mode="has-quiz" onclick="setArticleMode('has-quiz')"><svg class="ic" aria-hidden="true"><use href="#i-pen"></use></svg> 有题目</button>
         </div>
       </div>
       <div class="form-group">
@@ -2629,7 +2676,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       <div class="article-actions">
         <button class="btn btn-primary" id="btnArticleParse" onclick="parseArticle()">AI 解析文章</button>
         <button class="btn btn-secondary" id="btnArticleClear" onclick="clearArticle()" style="display:none;">清空</button>
-        <button class="btn btn-accent btn-sm" id="btnArticleCloudSave" onclick="saveArticleToCloud()" style="display:none;" title="保存文章到云端">☁️ 保存到云端</button>
+        <button class="btn btn-accent btn-sm" id="btnArticleCloudSave" onclick="saveArticleToCloud()" style="display:none;" title="保存文章到云端"><svg class="ic" aria-hidden="true"><use href="#i-cloud"></use></svg> 保存到云端</button>
         <span id="articleProgress" style="display:none;color:var(--muted);font-size:0.85rem;">
           <span class="spinner" style="border-color:rgba(45,90,90,0.3);border-top-color:var(--accent);"></span> AI 正在解析文章...
         </span>
@@ -2637,8 +2684,8 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       <!-- 已保存文章列表 -->
       <div class="saved-articles-section" id="savedArticlesSection" style="display:none;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <h4 style="margin:0;">☁️ 云端保存的文章</h4>
-          <button class="btn btn-outline btn-sm" id="btnArticleSyncCloud" onclick="syncArticlesFromCloud()" style="display:none;" title="从云端同步文章">🔄 同步</button>
+          <h4 style="margin:0;"><svg class="ic" aria-hidden="true"><use href="#i-cloud"></use></svg> 云端保存的文章</h4>
+          <button class="btn btn-outline btn-sm" id="btnArticleSyncCloud" onclick="syncArticlesFromCloud()" style="display:none;" title="从云端同步文章"><svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg> 同步</button>
         </div>
         <div id="savedArticlesList"></div>
       </div>
@@ -2673,7 +2720,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <div class="asp-cn" id="aspCn"></div>
         <div class="asp-type-badge" id="aspTypeBadge" style="display:none;"></div>
         <div class="asp-actions">
-          <button class="btn btn-accent btn-sm" id="btnAspTranslate" onclick="translateSelectedSentence()">🤖 AI 翻译</button>
+          <button class="btn btn-accent btn-sm" id="btnAspTranslate" onclick="translateSelectedSentence()"><svg class="ic" aria-hidden="true"><use href="#i-bot"></use></svg> AI 翻译</button>
           <button class="btn btn-primary btn-sm" id="btnAspSave" onclick="saveSelectedSentence()" style="display:none;">保存到好句背诵</button>
           <button class="btn btn-success btn-sm" id="btnAspSavePhrase" onclick="saveSelectedPhrase()" style="display:none;">加入单词列表</button>
           <button class="btn btn-secondary btn-sm" onclick="closeArticleSentencePopup()">关闭</button>
@@ -2701,7 +2748,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       <div class="form-group">
         <label class="form-label">服务商</label>
         <select class="form-input" id="providerSelect" onchange="onProviderChange()">
-          <option value="zhipu_free">智谱免费（GLM）✨ 无需配置</option>
+          <option value="zhipu_free">智谱免费（GLM）· 免配置</option>
           <option value="deepseek">DeepSeek</option>
           <option value="openai">OpenAI</option>
           <option value="moonshot">Moonshot (月之暗面)</option>
@@ -2724,11 +2771,11 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <label class="form-label">API Key</label>
         <input class="form-input" id="apiKeyInput" type="password" placeholder="sk-..." autocomplete="off" style="padding-right:80px;">
         <div class="input-btns">
-          <button class="btn btn-secondary btn-sm" onclick="pasteMainKey()">📋 粘贴</button>
-          <button class="btn btn-secondary btn-sm" onclick="toggleMainKeyVisibility()" title="显示/隐藏" id="toggleMainKeyBtn">👁</button>
+          <button class="btn btn-secondary btn-sm" onclick="pasteMainKey()"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg> 粘贴</button>
+          <button class="btn btn-secondary btn-sm" onclick="toggleMainKeyVisibility()" title="显示/隐藏" id="toggleMainKeyBtn"><svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg></button>
         </div>
         <p style="font-size:0.75rem;color:var(--muted);margin-top:4px;" id="apiKeyHint"></p>
-        <button class="btn btn-secondary btn-sm" onclick="testAiConnection()" id="testAiBtn" style="margin-top:8px;width:100%;">🔍 测试 AI 连接</button>
+        <button class="btn btn-secondary btn-sm" onclick="testAiConnection()" id="testAiBtn" style="margin-top:8px;width:100%;"><svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg> 测试 AI 连接</button>
         <span id="testAiResult" style="display:block;margin-top:4px;font-size:0.8rem;"></span>
       </div>
     </div>
@@ -2743,7 +2790,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
           <option value="minimax">MiniMax TTS</option>
           <option value="openai">OpenAI TTS</option>
           <option value="volcano">火山引擎 TTS</option>
-          <option value="mimo">小米 MIMO ✨</option>
+          <option value="mimo">小米 MIMO · 免配置</option>
         </select>
       </div>
       <div class="form-group" id="ttsUrlGroup">
@@ -2777,11 +2824,11 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <label class="form-label">TTS API Key</label>
         <input class="form-input" id="ttsKeyInput" type="password" placeholder="TTS API Key..." autocomplete="off" style="padding-right:80px;">
         <div class="input-btns">
-          <button class="btn btn-secondary btn-sm" onclick="pasteTtsKey()">📋 粘贴</button>
-          <button class="btn btn-secondary btn-sm" onclick="toggleTtsKeyVisibility()" title="显示/隐藏" id="toggleTtsKeyBtn">👁</button>
+          <button class="btn btn-secondary btn-sm" onclick="pasteTtsKey()"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg> 粘贴</button>
+          <button class="btn btn-secondary btn-sm" onclick="toggleTtsKeyVisibility()" title="显示/隐藏" id="toggleTtsKeyBtn"><svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg></button>
         </div>
         <p style="font-size:0.75rem;color:var(--muted);margin-top:4px;" id="ttsKeyHint"></p>
-        <button class="btn btn-secondary btn-sm" onclick="testTtsConnection()" id="testTtsBtn" style="margin-top:8px;width:100%;">🔍 测试 TTS 连接</button>
+        <button class="btn btn-secondary btn-sm" onclick="testTtsConnection()" id="testTtsBtn" style="margin-top:8px;width:100%;"><svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg> 测试 TTS 连接</button>
         <span id="testTtsResult" style="display:block;margin-top:4px;font-size:0.8rem;"></span>
       </div>
     </div>
@@ -2797,8 +2844,8 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
 <div class="modal-overlay" id="modalCloud">
   <div class="modal" style="max-width:480px;max-height:85vh;overflow-y:auto;">
     <div class="modal-title" style="display:flex;justify-content:space-between;align-items:center;">
-      <span>☁️ 个人信息</span>
-      <button onclick="closeCloudPanel()" style="background:none;border:none;cursor:pointer;font-size:1.3rem;color:var(--muted);padding:0 4px;line-height:1;" title="关闭">✕</button>
+      <span><svg class="ic" aria-hidden="true"><use href="#i-cloud"></use></svg> 个人信息</span>
+      <button onclick="closeCloudPanel()" style="background:none;border:none;cursor:pointer;font-size:1.3rem;color:var(--muted);padding:0 4px;line-height:1;" title="关闭"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button>
     </div>
     <!-- 未登录视图 -->
     <div id="cloudLoginView">
@@ -2816,7 +2863,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
           <label class="form-label">密码</label>
           <div style="position:relative;">
             <input class="form-input" id="cloudPassword" type="password" placeholder="至少6位" autocomplete="current-password" style="padding-right:40px;">
-            <button type="button" class="pwd-toggle" onclick="togglePassword('cloudPassword', this)" title="显示密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;">👁️</button>
+            <button type="button" class="pwd-toggle" onclick="togglePassword('cloudPassword', this)" title="显示密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;"><svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg></button>
           </div>
         </div>
         <div id="cloudError" style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;"></div>
@@ -2838,14 +2885,14 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
           <label class="form-label">密码</label>
           <div style="position:relative;">
             <input class="form-input" id="regCloudPassword" type="password" placeholder="至少6位" autocomplete="new-password" style="padding-right:40px;">
-            <button type="button" class="pwd-toggle" onclick="togglePassword('regCloudPassword', this)" title="显示密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;">👁️</button>
+            <button type="button" class="pwd-toggle" onclick="togglePassword('regCloudPassword', this)" title="显示密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;"><svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg></button>
           </div>
         </div>
         <div class="form-group">
           <label class="form-label">确认密码</label>
           <div style="position:relative;">
             <input class="form-input" id="regCloudConfirmPassword" type="password" placeholder="再次输入密码" autocomplete="new-password" style="padding-right:40px;">
-            <button type="button" class="pwd-toggle" onclick="togglePassword('regCloudConfirmPassword', this)" title="显示密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;">👁️</button>
+            <button type="button" class="pwd-toggle" onclick="togglePassword('regCloudConfirmPassword', this)" title="显示密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;"><svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg></button>
           </div>
         </div>
         <div id="regCloudError" style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;"></div>
@@ -2861,8 +2908,8 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       <div id="cloudNotLoggedIn" style="text-align:center;padding:16px 0 0;border-top:1px solid var(--rule);margin-top:16px;">
         <p style="color:var(--muted);margin-bottom:12px;font-size:0.82rem;">登录后可同步数据到云端，跨设备使用</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;">
-          <button class="btn btn-secondary btn-sm" onclick="exportData()">📤 导出备份</button>
-          <button class="btn btn-secondary btn-sm" onclick="$('importFileInput').click()">📥 导入合并</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportData()"><svg class="ic" aria-hidden="true"><use href="#i-upload"></use></svg> 导出备份</button>
+          <button class="btn btn-secondary btn-sm" onclick="$('importFileInput').click()"><svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg> 导入合并</button>
         </div>
       </div>
     </div>
@@ -2870,7 +2917,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
     <div id="cloudProfileView" style="display:none;">
       <!-- 账号信息 -->
       <div class="cloud-info" style="text-align:center;padding:8px 0 16px;">
-        <div style="font-size:2.5rem;margin-bottom:8px;">✅</div>
+        <div style="margin-bottom:8px;"><svg class="ic" style="width:40px;height:40px;color:var(--success);" aria-hidden="true"><use href="#i-check-circle"></use></svg></div>
         <div style="font-size:1rem;font-weight:600;color:var(--accent);margin-bottom:4px;">已登录</div>
         <div style="font-size:0.9rem;color:var(--ink);margin-bottom:4px;" id="cloudProfileEmail"></div>
       </div>
@@ -2880,18 +2927,18 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <div style="font-size:0.9rem;font-weight:600;color:var(--ink);margin-bottom:12px;">数据同步</div>
         <div id="cloudLoggedIn">
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
-            <span style="font-size:0.85rem;color:var(--success);">✅ 已登录：<strong id="cloudUserEmail"></strong></span>
+            <span style="font-size:0.85rem;color:var(--success);"><svg class="ic" aria-hidden="true"><use href="#i-check-circle"></use></svg> 已登录：<strong id="cloudUserEmail"></strong></span>
             <span style="font-size:0.75rem;color:var(--muted);" id="cloudSyncTime"></span>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <button class="btn btn-primary btn-sm" id="btnCloudUpload" onclick="cloudUpload()">☁️ 上传到云端</button>
-            <button class="btn btn-secondary btn-sm" id="btnCloudDownload" onclick="cloudDownload()">⬇️ 从云端下载</button>
+            <button class="btn btn-primary btn-sm" id="btnCloudUpload" onclick="cloudUpload()"><svg class="ic" aria-hidden="true"><use href="#i-cloud"></use></svg> 上传到云端</button>
+            <button class="btn btn-secondary btn-sm" id="btnCloudDownload" onclick="cloudDownload()"><svg class="ic" aria-hidden="true"><use href="#i-cloud-down"></use></svg> 从云端下载</button>
           </div>
           <div class="cloud-info" style="margin-top:8px;font-size:0.78rem;">点击「上传到云端」手动同步数据。在其他设备登录后点击「从云端下载」即可恢复。</div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--rule);">
-          <button class="btn btn-secondary btn-sm" onclick="exportData()">📤 导出备份</button>
-          <button class="btn btn-secondary btn-sm" onclick="$('importFileInput').click()">📥 导入合并</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportData()"><svg class="ic" aria-hidden="true"><use href="#i-upload"></use></svg> 导出备份</button>
+          <button class="btn btn-secondary btn-sm" onclick="$('importFileInput').click()"><svg class="ic" aria-hidden="true"><use href="#i-download"></use></svg> 导入合并</button>
           <span style="font-size:0.72rem;color:var(--muted);">无需登录，本地操作</span>
         </div>
         <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="importData(event)">
@@ -2900,7 +2947,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       <!-- 学习时长区块 -->
       <div id="studyTimeCard" style="border-top:1px solid var(--rule);padding-top:16px;margin-bottom:16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <span style="font-size:0.9rem;font-weight:600;color:var(--ink);">📊 学习时长</span>
+          <span style="font-size:0.9rem;font-weight:600;color:var(--ink);"><svg class="ic" aria-hidden="true"><use href="#i-chart"></use></svg> 学习时长</span>
           <span style="font-size:0.72rem;color:var(--muted);">自动记录，以天为单位同步到云端</span>
         </div>
         <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;padding:4px 0;">
@@ -2915,7 +2962,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
           <div style="flex:1;"></div>
           <div style="display:flex;gap:8px;align-items:center;">
             <span style="font-size:0.72rem;color:var(--muted);" id="studySyncStatus"></span>
-            <button class="btn btn-primary btn-sm" id="btnStudySync" onclick="syncStudyTimeToCloud()">☁️ 同步</button>
+            <button class="btn btn-primary btn-sm" id="btnStudySync" onclick="syncStudyTimeToCloud()"><svg class="ic" aria-hidden="true"><use href="#i-cloud"></use></svg> 同步</button>
           </div>
         </div>
         <div id="studyDetailArea" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--rule);">
@@ -2939,12 +2986,12 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
 <!-- Password Reset Modal -->
 <div class="modal-overlay" id="modalResetPassword">
   <div class="modal" style="max-width:380px;">
-    <div class="modal-title">🔑 设置新密码</div>
+    <div class="modal-title"><svg class="ic" aria-hidden="true"><use href="#i-key"></use></svg> 设置新密码</div>
     <div class="form-group">
       <label class="form-label">新密码（至少6位）</label>
       <div style="position:relative;">
         <input class="form-input" id="resetNewPassword" type="text" placeholder="请输入新密码" style="padding-right:40px;">
-        <button type="button" class="pwd-toggle" onclick="togglePassword('resetNewPassword', this)" title="隐藏密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;">🙈</button>
+        <button type="button" class="pwd-toggle" onclick="togglePassword('resetNewPassword', this)" title="隐藏密码" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);padding:4px;line-height:1;"><svg class="ic" aria-hidden="true"><use href="#i-eye-off"></use></svg></button>
       </div>
     </div>
     <div id="resetPwdError" style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;"></div>
@@ -2969,7 +3016,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
 <!-- Shortcuts Modal -->
 <div class="modal-overlay" id="modalShortcuts">
   <div class="modal" style="max-width:420px;">
-    <div class="modal-title">⌨️ 快捷键</div>
+    <div class="modal-title"><svg class="ic" aria-hidden="true"><use href="#i-keyboard"></use></svg> 快捷键</div>
     <div style="padding:12px 0;">
       <table style="width:100%;font-size:0.85rem;">
         <tr><td style="padding:6px 12px;"><code>← →</code></td><td>上一个/下一个单词（闪卡模式）</td></tr>
@@ -3714,11 +3761,11 @@ function togglePassword(inputId, btn) {
   const input = $(inputId);
   if (input.type === 'password') {
     input.type = 'text';
-    btn.textContent = '🙈';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-eye-off"></use></svg>';
     btn.title = '隐藏密码';
   } else {
     input.type = 'password';
-    btn.textContent = '👁️';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg>';
     btn.title = '显示密码';
   }
 }
@@ -3899,7 +3946,7 @@ async function cloudUpload() {
 
   const btn = $('btnCloudUpload');
   btn.disabled = true;
-  btn.textContent = '⏳ 上传中...';
+  btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-hourglass"></use></svg> 上传中...';
   $('cloudStatusDot').className = 'cloud-status syncing';
 
   try {
@@ -3925,7 +3972,7 @@ async function cloudUpload() {
     $('cloudStatusDot').className = 'cloud-status offline';
   } finally {
     btn.disabled = false;
-    btn.textContent = '☁️ 上传到云端';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-cloud"></use></svg> 上传到云端';
   }
 }
 
@@ -3983,7 +4030,7 @@ async function cloudDownload() {
 
   const btn = $('btnCloudDownload');
   btn.disabled = true;
-  btn.textContent = '⏳ 下载中...';
+  btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-hourglass"></use></svg> 下载中...';
   $('cloudStatusDot').className = 'cloud-status syncing';
 
   try {
@@ -4030,7 +4077,7 @@ async function cloudDownload() {
     $('cloudStatusDot').className = 'cloud-status offline';
   } finally {
     btn.disabled = false;
-    btn.textContent = '⬇️ 从云端下载';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-cloud-down"></use></svg> 从云端下载';
   }
 }
 
@@ -4523,7 +4570,7 @@ async function testAiConnection() {
     result.textContent = '请先填写 API Key';
     result.style.color = '#e74c3c';
     btn.disabled = false;
-    btn.textContent = '🔍 测试 AI 连接';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg> 测试 AI 连接';
     return;
   }
 
@@ -4573,7 +4620,7 @@ async function testAiConnection() {
     result.style.color = '#e74c3c';
   }
   btn.disabled = false;
-  btn.textContent = '🔍 测试 AI 连接';
+  btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg> 测试 AI 连接';
 }
 
 async function testTtsConnection() {
@@ -4589,7 +4636,7 @@ async function testTtsConnection() {
     result.textContent = '未启用 API 朗读，无需测试';
     result.style.color = '#999';
     btn.disabled = false;
-    btn.textContent = '🔍 测试 TTS 连接';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg> 测试 TTS 连接';
     return;
   }
 
@@ -4602,7 +4649,7 @@ async function testTtsConnection() {
     result.textContent = '请先填写 TTS API Key';
     result.style.color = '#e74c3c';
     btn.disabled = false;
-    btn.textContent = '🔍 测试 TTS 连接';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg> 测试 TTS 连接';
     return;
   }
 
@@ -4612,7 +4659,7 @@ async function testTtsConnection() {
       result.textContent = '旧版控制台请填写 App ID，或切换为"新版控制台"';
       result.style.color = '#e74c3c';
       btn.disabled = false;
-      btn.textContent = '🔍 测试 TTS 连接';
+      btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg> 测试 TTS 连接';
       return;
     }
   }
@@ -4711,7 +4758,7 @@ async function testTtsConnection() {
     result.style.color = '#e74c3c';
   }
   btn.disabled = false;
-  btn.textContent = '🔍 测试 TTS 连接';
+  btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg> 测试 TTS 连接';
 }
 
 function getModalModel() {
@@ -4765,12 +4812,12 @@ async function pasteTtsKey() {
 function toggleMainKeyVisibility() {
   const inp = $('apiKeyInput'); const btn = $('toggleMainKeyBtn');
   inp.type = inp.type === 'password' ? 'text' : 'password';
-  btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+  btn.innerHTML = inp.type === 'password' ? '<svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg>' : '<svg class="ic" aria-hidden="true"><use href="#i-eye-off"></use></svg>';
 }
 function toggleTtsKeyVisibility() {
   const inp = $('ttsKeyInput'); const btn = $('toggleTtsKeyBtn');
   inp.type = inp.type === 'password' ? 'text' : 'password';
-  btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+  btn.innerHTML = inp.type === 'password' ? '<svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg>' : '<svg class="ic" aria-hidden="true"><use href="#i-eye-off"></use></svg>';
 }
 
 // ═══════════════════════════════════════
@@ -5476,7 +5523,7 @@ async function doCallAI(prompt, maxTokens = 1500) {
     const tryModel = fallbackModels[attempt];
     // 检测模型降级切换
     if (lastModel && tryModel !== lastModel && isProxy) {
-      showToast(`🔄 ${lastModel} 访问量过大，已自动降级为 ${tryModel}`, 4000);
+      showToast(`${lastModel} 访问量过大，已自动降级为 ${tryModel}`, 4000);
     }
     lastModel = tryModel;
     try {
@@ -5799,7 +5846,7 @@ function updateViewCountDisplay() {
   if (!currentWord) return;
   const key = currentWord.english.toLowerCase();
   const count = appData.viewCounts[key] || 0;
-  $('viewCountDisplay').textContent = '👁 ' + count;
+  $('viewCountDisplay').innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg> ' + count;
 }
 
 function renderLearn() {
@@ -6301,7 +6348,7 @@ function startAutoRead() {
   // 显示控制栏，隐藏按钮
   $('autoReadControls').style.display = 'flex';
   $('btnAutoRead').style.display = 'none';
-  $('btnAutoReadPause').textContent = '⏸ 暂停';
+  $('btnAutoReadPause').innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-pause"></use></svg> 暂停';
   updateAutoReadProgress();
   
   // 从头开始朗读当前单词
@@ -6315,12 +6362,12 @@ function pauseAutoRead() {
   const btn = $('btnAutoReadPause');
   
   if (autoReadState.paused) {
-    btn.textContent = '▶ 继续';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-play"></use></svg> 继续';
     $('autoReadStatus').textContent = '已暂停';
     // 停止当前语音
     speechSynthesis.cancel();
   } else {
-    btn.textContent = '⏸ 暂停';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-pause"></use></svg> 暂停';
     $('autoReadStatus').textContent = '正在朗读...';
     // 继续当前步骤
     readCurrentWord();
@@ -6345,7 +6392,7 @@ function stopAutoRead() {
   $('autoReadControls').style.display = 'none';
   $('btnAutoRead').style.display = '';
   $('autoReadStatus').textContent = '正在朗读...';
-  $('btnAutoReadPause').textContent = '⏸ 暂停';
+  $('btnAutoReadPause').innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-pause"></use></svg> 暂停';
 }
 
 function readCurrentWord() {
@@ -7314,7 +7361,7 @@ function stopArticleRead() {
   articleWebSpeechMode = false;
   articleChunkIdx = -1;
   $('btnReadPlay').style.display = '';
-  $('btnReadPlay').textContent = articleBlob ? '🔄 重新播放' : '▶ 朗读';
+  $('btnReadPlay').innerHTML = articleBlob ? '<svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg> 重新播放' : '<svg class="ic" aria-hidden="true"><use href="#i-play"></use></svg> 朗读';
   $('btnReadPause').style.display = 'none';
   $('btnReadResume').style.display = 'none';
   $('btnReadStop').style.display = 'none';
@@ -7331,7 +7378,7 @@ function clearArticle() {
   articleChunks = [];
   articleBlob = null;
   $('articleSpeedSlider').disabled = false;
-  $('btnReadPlay').textContent = '▶ 朗读';
+  $('btnReadPlay').innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-play"></use></svg> 朗读';
   $('btnReadDownload').style.display = 'none';
   $('btnReadCloudSave').style.display = 'none';
 }
@@ -7341,7 +7388,7 @@ function onArticleEnded() {
   articleIsPaused = false;
   articleWebSpeechMode = false;
   $('btnReadPlay').style.display = '';
-  $('btnReadPlay').textContent = '🔄 重新播放';
+  $('btnReadPlay').innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg> 重新播放';
   $('btnReadPause').style.display = 'none';
   $('btnReadResume').style.display = 'none';
   $('btnReadStop').style.display = 'none';
@@ -7385,7 +7432,7 @@ async function saveAudioToCloud() {
 
   const btn = $('btnReadCloudSave');
   btn.disabled = true;
-  btn.textContent = '⏳ 上传中...';
+  btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-hourglass"></use></svg> 上传中...';
 
   try {
     const userId = session.user.id;
@@ -7420,11 +7467,11 @@ async function saveAudioToCloud() {
     if (dbError) throw dbError;
 
     showToast('音频已保存到云端 ✓');
-    btn.textContent = '✅ 已保存';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-check-circle"></use></svg> 已保存';
     loadCloudAudioList();
   } catch (e) {
     showToast('保存失败: ' + (e.message || '网络错误'));
-    btn.textContent = '☁️ 保存到云端';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-cloud"></use></svg> 保存到云端';
   } finally {
     btn.disabled = false;
   }
@@ -7449,7 +7496,7 @@ async function loadCloudAudioList() {
 
     const listEl = $('cloudAudioList');
     if (!data || data.length === 0) {
-      listEl.innerHTML = '<div class="empty-state" style="padding:24px;"><p style="color:var(--muted);">暂无云端音频，生成朗读后点击「☁️ 保存到云端」即可保存</p></div>';
+      listEl.innerHTML = '<div class="empty-state" style="padding:24px;"><p style="color:var(--muted);">暂无云端音频，生成朗读后点击「<svg class="ic" aria-hidden="true"><use href="#i-cloud"></use></svg> 保存到云端」即可保存</p></div>';
       return;
     }
 
@@ -7462,14 +7509,14 @@ async function loadCloudAudioList() {
       const rowStyle = isActive ? 'background:var(--accent-soft);border-color:var(--accent);' : 'background:var(--bg);border:1px solid var(--rule);';
       let playPauseBtn;
       if (isActive && !isPaused) {
-        playPauseBtn = '<button class="btn btn-primary btn-sm" onclick="pauseCloudAudio(\'' + item.id + '\')" title="暂停" style="background:var(--accent2);">⏸</button>';
+        playPauseBtn = '<button class="btn btn-primary btn-sm" onclick="pauseCloudAudio(\'' + item.id + '\')" title="暂停" style="background:var(--accent2);"><svg class="ic" aria-hidden="true"><use href="#i-pause"></use></svg></button>';
       } else if (isActive && isPaused) {
-        playPauseBtn = '<button class="btn btn-primary btn-sm" onclick="resumeCloudAudio(\'' + item.id + '\')" title="继续播放">▶</button>';
+        playPauseBtn = '<button class="btn btn-primary btn-sm" onclick="resumeCloudAudio(\'' + item.id + '\')" title="继续播放"><svg class="ic" aria-hidden="true"><use href="#i-play"></use></svg></button>';
       } else {
-        playPauseBtn = '<button class="btn btn-primary btn-sm" onclick="playCloudAudio(\'' + item.id + '\')" title="播放">▶</button>';
+        playPauseBtn = '<button class="btn btn-primary btn-sm" onclick="playCloudAudio(\'' + item.id + '\')" title="播放"><svg class="ic" aria-hidden="true"><use href="#i-play"></use></svg></button>';
       }
       const stopBtn = isActive
-        ? '<button class="btn btn-secondary btn-sm" onclick="stopCloudAudio(\'' + item.id + '\')" title="停止">⏹</button>'
+        ? '<button class="btn btn-secondary btn-sm" onclick="stopCloudAudio(\'' + item.id + '\')" title="停止"><svg class="ic" aria-hidden="true"><use href="#i-stop"></use></svg></button>'
         : '';
       html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;${rowStyle}border-radius:8px;flex-wrap:wrap;">
         <span style="flex:1;min-width:120px;font-size:0.85rem;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(item.title || '')}">${escapeHtml(item.title || '无标题')}</span>
@@ -7477,8 +7524,8 @@ async function loadCloudAudioList() {
         <span style="font-size:0.72rem;color:var(--muted);white-space:nowrap;">${size}</span>
         ${playPauseBtn}
         ${stopBtn}
-        <button class="btn btn-secondary btn-sm" onclick="downloadCloudAudio('${item.id}')" title="下载">⬇</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteCloudAudio('${item.id}')" title="删除">🗑</button>
+        <button class="btn btn-secondary btn-sm" onclick="downloadCloudAudio('${item.id}')" title="下载"><svg class="ic" aria-hidden="true"><use href="#i-cloud-down"></use></svg></button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCloudAudio('${item.id}')" title="删除"><svg class="ic" aria-hidden="true"><use href="#i-trash"></use></svg></button>
       </div>`;
     });
     html += '</div>';
@@ -7917,7 +7964,7 @@ function showLookupNotFound(word) {
   _lookupSession++;
   $('lookupLoading').style.display = 'none';
   _forceLookupWord = word;
-  $('lookupError').innerHTML = `<div style="margin-bottom:10px;"><span style="color:#e74c3c;">⚠️ "${word}" 未在词典中找到，请检查拼写是否正确</span></div><button class="btn btn-outline btn-sm" onclick="doAILookupDirect()">我已检查，拼写无误，继续查询</button>`;
+  $('lookupError').innerHTML = `<div style="margin-bottom:10px;"><span style="color:#e74c3c;"><svg class="ic" aria-hidden="true"><use href="#i-alert"></use></svg> "${word}" 未在词典中找到，请检查拼写是否正确</span></div><button class="btn btn-outline btn-sm" onclick="doAILookupDirect()">我已检查，拼写无误，继续查询</button>`;
   $('lookupError').style.display = '';
   $('btnLookup').disabled = false;
 }
@@ -8640,7 +8687,7 @@ async function reciteAiTranslate() {
 
   const btn = $('btnReciteTranslate');
   btn.disabled = true;
-  btn.textContent = '⏳ 翻译中...';
+  btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-hourglass"></use></svg> 翻译中...';
 
   try {
     const prompt = `请将以下英文句子翻译成地道的中文，只返回翻译结果，不要加任何解释：\n\n${english}`;
@@ -8651,7 +8698,7 @@ async function reciteAiTranslate() {
     showToast('翻译失败: ' + (e.message || '请检查 API 配置'));
   } finally {
     btn.disabled = false;
-    btn.textContent = '🤖 AI 翻译';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-bot"></use></svg> AI 翻译';
   }
 }
 
@@ -8714,7 +8761,7 @@ function changeSentenceCategory(id, event) {
   s.category = (s.category === '作文') ? '口语' : '作文';
   persist();
   renderReciteList();
-  showToast('已分类为：' + (s.category === '作文' ? '📝 作文' : '💬 口语'));
+  showToast('已分类为：' + (s.category === '作文' ? '作文' : '口语'));
 }
 
 async function aiClassifySentences() {
@@ -8845,15 +8892,15 @@ function renderReciteList() {
       <div class="recite-sentence-en">${escapeHtml(s.english)}</div>
       <div class="recite-sentence-cn">${escapeHtml(s.chinese)}</div>
       <div class="recite-sentence-meta">
-        <span class="sentence-category-badge ${catClass(cat)}">${cat === '作文' ? '📝 作文' : '💬 口语'}</span>
-        ${s.source ? '<span>📖 ' + escapeHtml(s.source) + '</span>' : ''}
-        <span>📅 ${new Date(s.createdAt).toLocaleDateString('zh-CN')}</span>
-        ${s.practiceCount > 0 ? '<span>🔄 练习 ' + s.practiceCount + ' 次</span>' : '<span>🆕 未练习</span>'}
+        <span class="sentence-category-badge ${catClass(cat)}">${cat === '作文' ? '<svg class="ic" aria-hidden="true"><use href="#i-pen"></use></svg> 作文' : '<svg class="ic" aria-hidden="true"><use href="#i-message"></use></svg> 口语'}</span>
+        ${s.source ? '<span><svg class="ic" aria-hidden="true"><use href="#i-book"></use></svg> ' + escapeHtml(s.source) + '</span>' : ''}
+        <span><svg class="ic" aria-hidden="true"><use href="#i-calendar"></use></svg> ${new Date(s.createdAt).toLocaleDateString('zh-CN')}</span>
+        ${s.practiceCount > 0 ? '<span><svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg> 练习 ' + s.practiceCount + ' 次</span>' : '<span><svg class="ic" aria-hidden="true"><use href="#i-circle"></use></svg> 未练习</span>'}
       </div>
       <div class="recite-sentence-actions">
-        <button class="btn btn-secondary btn-sm" onclick="changeSentenceCategory('${s.id}', event)">🏷️ ${catName(cat)}</button>
-        <button class="btn btn-secondary btn-sm" onclick="reciteEditSentence('${s.id}')">✏️ 编辑</button>
-        <button class="btn btn-danger btn-sm" onclick="reciteDeleteSentence('${s.id}')">🗑️ 删除</button>
+        <button class="btn btn-secondary btn-sm" onclick="changeSentenceCategory('${s.id}', event)"><svg class="ic" aria-hidden="true"><use href="#i-tag"></use></svg> ${catName(cat)}</button>
+        <button class="btn btn-secondary btn-sm" onclick="reciteEditSentence('${s.id}')"><svg class="ic" aria-hidden="true"><use href="#i-pen"></use></svg> 编辑</button>
+        <button class="btn btn-danger btn-sm" onclick="reciteDeleteSentence('${s.id}')"><svg class="ic" aria-hidden="true"><use href="#i-trash"></use></svg> 删除</button>
       </div>
     </div>`;
   }).join('');
@@ -8909,7 +8956,7 @@ function reciteExportPdf() {
     html += `<div style="font-size:0.78rem;font-weight:600;color:#2d5a5a;margin-bottom:6px;">#${i + 1}</div>`;
     html += `<div class="es-en">${escapeHtml(s.english)}</div>`;
     html += `<div class="es-cn">${escapeHtml(s.chinese)}</div>`;
-    html += `<div class="es-meta">${s.category === '作文' ? '📝 作文' : '💬 口语'}　${s.source ? '来源：' + escapeHtml(s.source) + '　' : ''}添加日期：${new Date(s.createdAt).toLocaleDateString('zh-CN')}${s.practiceCount > 0 ? '　练习 ' + s.practiceCount + ' 次' : ''}</div>`;
+    html += `<div class="es-meta">${s.category === '作文' ? '作文' : '口语'}　${s.source ? '来源：' + escapeHtml(s.source) + '　' : ''}添加日期：${new Date(s.createdAt).toLocaleDateString('zh-CN')}${s.practiceCount > 0 ? '　练习 ' + s.practiceCount + ' 次' : ''}</div>`;
     html += `</div>`;
   });
 
@@ -9001,12 +9048,12 @@ async function reciteCheckAnswer() {
     if (!hasValidApiConfig()) {
       showToast('请先在 API 设置中配置 API Key 以使用 AI 核对');
       $('reciteAiFeedback').style.display = '';
-      $('reciteAiFeedback').innerHTML = '<div class="ai-section-title">⚠️ 提示</div><div class="ai-section-content">未配置 API Key，无法进行 AI 核对。请切换为手动核对或配置 API。</div>';
+      $('reciteAiFeedback').innerHTML = '<div class="ai-section-title"><svg class="ic" aria-hidden="true"><use href="#i-alert"></use></svg> 提示</div><div class="ai-section-content">未配置 API Key，无法进行 AI 核对。请切换为手动核对或配置 API。</div>';
       return;
     }
 
     $('reciteAiFeedback').style.display = '';
-    $('reciteAiFeedback').innerHTML = '<div class="ai-section-title">🤖 AI 正在评价...</div><div class="ai-section-content"><span class="spinner"></span> 正在分析你的翻译...</div>';
+    $('reciteAiFeedback').innerHTML = '<div class="ai-section-title"><svg class="ic" aria-hidden="true"><use href="#i-bot"></use></svg> AI 正在评价...</div><div class="ai-section-content"><span class="spinner"></span> 正在分析你的翻译...</div>';
 
     try {
       const prompt = `你是一个专业的英语老师，请评价以下翻译练习。
@@ -9025,14 +9072,14 @@ async function reciteCheckAnswer() {
 请用友好的语气，鼓励为主。`;
 
       const result = await callAI(prompt, 2000);
-      $('reciteAiFeedback').innerHTML = '<div class="ai-section-title">🤖 AI 评价</div><div class="ai-section-content">' + escapeHtml(result).replace(/\n/g, '<br>') + '</div>';
+      $('reciteAiFeedback').innerHTML = '<div class="ai-section-title"><svg class="ic" aria-hidden="true"><use href="#i-bot"></use></svg> AI 评价</div><div class="ai-section-content">' + escapeHtml(result).replace(/\n/g, '<br>') + '</div>';
     } catch (e) {
-      $('reciteAiFeedback').innerHTML = '<div class="ai-section-title">⚠️ 评价失败</div><div class="ai-section-content">AI 评价暂时不可用: ' + (e.message || '请检查 API 配置') + '</div>';
+      $('reciteAiFeedback').innerHTML = '<div class="ai-section-title"><svg class="ic" aria-hidden="true"><use href="#i-alert"></use></svg> 评价失败</div><div class="ai-section-content">AI 评价暂时不可用: ' + (e.message || '请检查 API 配置') + '</div>';
     }
   } else {
     // Manual check: show side by side
     $('reciteAiFeedback').style.display = '';
-    $('reciteAiFeedback').innerHTML = '<div class="ai-section-title">👁️ 手动核对</div><div class="ai-section-content">请自行对比原文和你的答案，检查拼写、语法和用词是否一致。</div>';
+    $('reciteAiFeedback').innerHTML = '<div class="ai-section-title"><svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg> 手动核对</div><div class="ai-section-content">请自行对比原文和你的答案，检查拼写、语法和用词是否一致。</div>';
   }
 
   // Update practice count
@@ -9066,7 +9113,7 @@ function reciteFinishPractice() {
   $('recitePracticeActive').style.display = 'none';
   $('recitePracticeDone').style.display = '';
   $('reciteDoneCount').textContent = recitePracticeQueue.length;
-  showToast('背诵完成！🎉');
+  showToast('背诵完成！');
 }
 
 // ═══════════════════════════════════════
@@ -9538,7 +9585,7 @@ async function syncStudyTimeToCloud() {
   const btn = $('btnStudySync');
   const status = $('studySyncStatus');
   btn.disabled = true;
-  btn.textContent = '⏳ 同步中...';
+  btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-hourglass"></use></svg> 同步中...';
 
   // 先保存当前会话
   if (studyActive && studyTimeSeconds > 0) {
@@ -9594,7 +9641,7 @@ async function syncStudyTimeToCloud() {
     status.textContent = '同步失败';
   } finally {
     btn.disabled = false;
-    btn.textContent = '☁️ 同步到云端';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-cloud"></use></svg> 同步到云端';
     updateStudyTimerDisplay();
   }
 }
@@ -10731,7 +10778,7 @@ function handleArticleSelection(e) {
     $('aspTypeBadge').textContent = '';
     $('aspTypeBadge').className = 'asp-type-badge';
     $('btnAspTranslate').disabled = false;
-    $('btnAspTranslate').textContent = '🤖 AI 翻译';
+    $('btnAspTranslate').innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-bot"></use></svg> AI 翻译';
     $('btnAspSave').style.display = 'none';
     $('btnAspSavePhrase').style.display = 'none';
 
@@ -10773,7 +10820,7 @@ async function translateSelectedSentence() {
 
   const btn = $('btnAspTranslate');
   btn.disabled = true;
-  btn.textContent = '⏳ AI 分析中...';
+  btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-hourglass"></use></svg> AI 分析中...';
 
   try {
     const prompt = `请对以下英文文本做两件事：
@@ -10815,12 +10862,12 @@ async function translateSelectedSentence() {
     // Show classification badge
     const badge = $('aspTypeBadge');
     if (isPhrase) {
-      badge.textContent = phraseBase ? `📌 短语 · 原型: ${phraseBase}` : '📌 短语';
+      badge.innerHTML = phraseBase ? `<svg class="ic" aria-hidden="true"><use href="#i-tag"></use></svg> 短语 · 原型: ${escapeHtml(phraseBase)}` : '<svg class="ic" aria-hidden="true"><use href="#i-tag"></use></svg> 短语';
       badge.className = 'asp-type-badge phrase';
       $('btnAspSavePhrase').style.display = '';
       $('btnAspSave').style.display = 'none';
     } else {
-      badge.textContent = '📝 句子';
+      badge.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-pen"></use></svg> 句子';
       badge.className = 'asp-type-badge sentence';
       $('btnAspSave').style.display = '';
       $('btnAspSavePhrase').style.display = 'none';
@@ -10832,7 +10879,7 @@ async function translateSelectedSentence() {
     showToast('翻译失败: ' + (e.message || '请检查 API 配置'));
   } finally {
     btn.disabled = false;
-    btn.textContent = '🤖 AI 翻译';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-bot"></use></svg> AI 翻译';
   }
 }
 
@@ -10961,7 +11008,7 @@ async function syncArticlesFromCloud() {
 
   const btn = $('btnArticleSyncCloud');
   btn.disabled = true;
-  btn.textContent = '⏳ 同步中...';
+  btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-hourglass"></use></svg> 同步中...';
 
   try {
     const { data, error } = await withRetry(function() {
@@ -10993,7 +11040,7 @@ async function syncArticlesFromCloud() {
     showToast('同步失败: ' + (e.message || '网络错误'));
   } finally {
     btn.disabled = false;
-    btn.textContent = '🔄 同步';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg> 同步';
   }
 }
 
@@ -11018,7 +11065,7 @@ async function saveArticleToCloud() {
 
   const btn = $('btnArticleCloudSave');
   btn.disabled = true;
-  btn.textContent = '⏳ 保存中...';
+  btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-hourglass"></use></svg> 保存中...';
 
   try {
     saveArticleLocal();
@@ -11030,7 +11077,7 @@ async function saveArticleToCloud() {
     showToast('云端保存失败: ' + (e.message || '网络错误'));
   } finally {
     btn.disabled = false;
-    btn.textContent = '☁️ 保存到云端';
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-cloud"></use></svg> 保存到云端';
   }
 }
 
@@ -11407,8 +11454,8 @@ function renderQuiz(questions) {
       }
       answerHtml += `<div class="quiz-discuss" id="quizDiscuss${idx}">
         <div class="quiz-discuss-header">
-          <span class="quiz-discuss-title">💬 题目讨论</span>
-          <button class="btn btn-sm quiz-discuss-toggle" id="discussToggle${idx}" onclick="toggleQuizDiscuss(${idx})" title="折叠/展开">▲</button>
+          <span class="quiz-discuss-title"><svg class="ic" aria-hidden="true"><use href="#i-message"></use></svg> 题目讨论</span>
+          <button class="btn btn-sm quiz-discuss-toggle" id="discussToggle${idx}" onclick="toggleQuizDiscuss(${idx})" title="折叠/展开"><svg class="ic" aria-hidden="true"><use href="#i-chevron-up"></use></svg></button>
         </div>
         <div class="quiz-discuss-body" id="discussBody${idx}">
           <div class="quiz-discuss-history" id="discussHistory${idx}"></div>
@@ -11522,7 +11569,7 @@ async function discussQuizQuestion(qIdx) {
   // Append loading placeholder
   const aDiv = document.createElement('div');
   aDiv.className = 'quiz-discuss-answer';
-  aDiv.textContent = '⏳ AI 思考中...';
+  aDiv.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-hourglass"></use></svg> AI 思考中...';
   history.appendChild(aDiv);
   history.scrollTop = history.scrollHeight;
 
