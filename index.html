@@ -1855,6 +1855,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
   <symbol id="i-message" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
   <symbol id="i-chevron-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></symbol>
   <symbol id="i-check-square" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></symbol>
   <symbol id="i-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></symbol>
 </svg>
@@ -2037,10 +2038,16 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <div class="form-group">
           <label class="form-label">中文原文</label>
           <textarea class="form-textarea" id="correctOriginal" rows="4" placeholder="请输入中文原文..."></textarea>
+          <div style="margin-top:8px;">
+            <button class="btn btn-outline btn-sm" id="photoBtn_correctOriginal" onclick="photoImport('correctOriginal')" title="拍摄或选择图片，自动识别文字"><svg class="ic" aria-hidden="true"><use href="#i-camera"></use></svg> 图片导入</button>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">你的译文（英文）</label>
           <textarea class="form-textarea" id="correctTranslation" rows="4" placeholder="请输入你的英文翻译..."></textarea>
+          <div style="margin-top:8px;">
+            <button class="btn btn-outline btn-sm" id="photoBtn_correctTranslation" onclick="photoImport('correctTranslation')" title="拍摄或选择图片，自动识别文字"><svg class="ic" aria-hidden="true"><use href="#i-camera"></use></svg> 图片导入</button>
+          </div>
         </div>
         <div style="text-align:center;">
           <button class="btn btn-primary btn-lg" id="btnCorrectTrans" onclick="correctTranslation()">提交批改</button>
@@ -2096,6 +2103,9 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       <div class="form-group">
         <label class="form-label">你的作文</label>
         <textarea class="form-textarea" id="writingEssay" rows="10" placeholder="请输入你的英文作文..."></textarea>
+        <div style="margin-top:8px;">
+          <button class="btn btn-outline btn-sm" id="photoBtn_writingEssay" onclick="photoImport('writingEssay')" title="拍摄或选择图片，自动识别文字"><svg class="ic" aria-hidden="true"><use href="#i-camera"></use></svg> 图片导入</button>
+        </div>
       </div>
       <div style="text-align:center;">
         <button class="btn btn-primary btn-lg" id="btnWritingCorrect" onclick="correctWriting()">提交批改</button>
@@ -2672,6 +2682,9 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       <div class="form-group">
         <label class="form-label">粘贴英文文章</label>
         <textarea class="article-textarea" id="articleInput" placeholder="在此粘贴英文文章...&#10;AI 将自动识别标题和段落"></textarea>
+        <div style="margin-top:8px;">
+          <button class="btn btn-outline btn-sm" id="photoBtn_articleInput" onclick="photoImport('articleInput')" title="拍摄或选择图片，自动识别文字"><svg class="ic" aria-hidden="true"><use href="#i-camera"></use></svg> 图片导入</button>
+        </div>
       </div>
       <div class="article-actions">
         <button class="btn btn-primary" id="btnArticleParse" onclick="parseArticle()">AI 解析文章</button>
@@ -3437,6 +3450,112 @@ const SUPABASE_URL = 'https://mmdhtyuyirukvtmfzeby.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_rPnHnnwRKm-fi14h_zWE6w_SJVMO61c';
 const VOLCANO_TTS_PROXY = SUPABASE_URL + '/functions/v1/volcano-tts-proxy';
 const MIMO_TTS_PROXY = SUPABASE_URL + '/functions/v1/mimo-tts-proxy';
+const MINERU_PROXY_URL = SUPABASE_URL + '/functions/v1/mineru-proxy';
+
+// ── 拍照导入（Mineru OCR）：手机调相机 / 电脑选文件 → 压缩 → 识别 → 填入输入框 ──
+let _photoInputEl = null;
+let _photoTarget = null;
+
+function photoImport(targetId) {
+  _photoTarget = targetId;
+  if (!_photoInputEl) {
+    _photoInputEl = document.createElement('input');
+    _photoInputEl.type = 'file';
+    _photoInputEl.accept = 'image/*';
+    _photoInputEl.setAttribute('capture', 'environment'); // 手机直接调起后置相机，桌面退化为文件选择
+    _photoInputEl.style.display = 'none';
+    document.body.appendChild(_photoInputEl);
+    _photoInputEl.addEventListener('change', onPhotoSelected);
+  }
+  _photoInputEl.click();
+}
+
+function setPhotoBtnBusy(targetId, busy) {
+  const btn = document.getElementById('photoBtn_' + targetId);
+  if (!btn) return;
+  if (busy) {
+    btn.dataset.idleHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-hourglass"></use></svg> 识别中…';
+  } else {
+    btn.disabled = false;
+    if (btn.dataset.idleHtml) btn.innerHTML = btn.dataset.idleHtml;
+  }
+}
+
+// 兼容旧浏览器的超时 fetch（旧 iOS Safari 不支持 AbortSignal.timeout）
+function fetchWithTimeout(url, opts, ms) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, Object.assign({}, opts, { signal: ctrl.signal }))
+    .finally(() => clearTimeout(timer));
+}
+
+async function onPhotoSelected() {
+  const file = _photoInputEl && _photoInputEl.files && _photoInputEl.files[0];
+  _photoInputEl.value = ''; // 允许再次选择同一张照片
+  const targetId = _photoTarget;
+  if (!file || !targetId) return;
+  setPhotoBtnBusy(targetId, true);
+  try {
+    const blob = await compressPhoto(file);
+    // 1) 提交图片，快速拿到任务标识
+    const subResp = await fetchWithTimeout(MINERU_PROXY_URL, { method: 'POST', body: blob }, 150000);
+    const sub = await subResp.json().catch(() => ({}));
+    if (!sub.ok || !sub.id) {
+      throw new Error(sub.error || ('提交失败 (HTTP ' + subResp.status + ')'));
+    }
+    // 2) 轻量轮询识别状态（每次查询都是独立短请求，天然规避超时与限流）
+    const pollUrl = MINERU_PROXY_URL + '?id=' + encodeURIComponent(sub.id) + '&kind=' + encodeURIComponent(sub.kind);
+    const deadline = Date.now() + 240000;
+    let markdown = '';
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 3000));
+      const qResp = await fetchWithTimeout(pollUrl, {}, 30000);
+      const q = await qResp.json().catch(() => ({}));
+      if (q.ok && q.done) { markdown = q.markdown; break; }
+      if (!q.ok) throw new Error(q.error || '识别失败');
+    }
+    if (!markdown) throw new Error('识别超时（服务繁忙），请重试');
+    const box = $(targetId);
+    box.value = markdown.trim();
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    showToast('识别完成，请校对文字后继续');
+  } catch (err) {
+    console.error('photo import error:', err);
+    const msg = (err && err.name === 'AbortError')
+      ? '识别超时（图片较大或服务繁忙），请重试'
+      : (err.message || '请重试');
+    showToast('图片识别失败：' + msg);
+  } finally {
+    setPhotoBtnBusy(targetId, false);
+  }
+}
+
+// 压缩到最长边 1600px 的 JPEG，平衡清晰度与上传体积
+function compressPhoto(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      try {
+        const maxSide = 1600;
+        let w = img.naturalWidth, h = img.naturalHeight;
+        if (Math.max(w, h) > maxSide) {
+          const scale = maxSide / Math.max(w, h);
+          w = Math.round(w * scale); h = Math.round(h * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('图片压缩失败')), 'image/jpeg', 0.82);
+      } catch (e) { reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('图片格式无法读取，请换 JPG/PNG 图片重试')); };
+    img.src = url;
+  });
+}
 
 // MIMO TTS 调用封装（带重试，应对间歇性 401）
 async function callMimoTTS(body, timeoutMs = 20000, maxRetries = 2) {

@@ -127,6 +127,7 @@ supabase login
 # 部署 Edge Functions
 supabase functions deploy mimo-tts-proxy --project-ref <your-project-ref> --no-verify-jwt
 supabase functions deploy dict-proxy --project-ref <your-project-ref> --no-verify-jwt
+supabase functions deploy mineru-proxy --project-ref <your-project-ref> --no-verify-jwt
 ```
 
 然后在 Supabase 控制台设置 Secret：
@@ -148,9 +149,11 @@ english-vocab-learning/
 └── supabase/
     └── functions/
         ├── dict-proxy/
-        │   └── index.ts                # Free Dictionary API 代理（Edge Function）
+        │   └── index.ts                # 单词拼写校验（内置词表）
         ├── mimo-tts-proxy/
         │   └── index.ts                # 小米 MIMO TTS 代理（Edge Function）
+        ├── mineru-proxy/
+        │   └── index.ts                # Mineru 文档解析代理（拍照 OCR）
         ├── volcano-tts-proxy/
         │   └── index.ts                # 火山引擎 TTS 代理（Edge Function）
         └── zhipu-proxy/
@@ -162,6 +165,8 @@ english-vocab-learning/
 `mimo-tts-proxy` 用于代理小米 MIMO TTS API 调用，避免前端暴露 API Key。内置重试机制（最多 3 次，指数退避），应对间歇性 401/5xx 错误。
 
 `dict-proxy` 用于单词拼写校验，内置 37 万英语词表（来自 dwyl/english-words 的 words_alpha.txt），存在性判断为纯内存查询，不依赖任何上游 API，结果确定、响应稳定（毫秒级，冷启动约 3 秒）。单词不存在时前端提示检查拼写（可点击"继续查询"强制查询）；另带 AI 兜底判断，确保拼写提示在任何网络环境下都不会丢失。
+
+`mineru-proxy` 用于拍照 OCR：前端上传图片二进制（已压缩为 JPEG），本函数完成 Mineru 三步调用（提交任务拿签名 URL → PUT 上传 → 轮询结果）后返回 Markdown 文本。当前使用免 Token 的 Agent 轻量 API（单文件 ≤10MB、IP 限频、仅输出 Markdown）；拿到标准 Token 后可切换到标准 API（每日 1000~2000 页免费额度）。
 
 ## 📝 License
 
