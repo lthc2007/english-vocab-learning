@@ -2039,14 +2039,14 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
           <label class="form-label">中文原文</label>
           <textarea class="form-textarea" id="correctOriginal" rows="4" placeholder="请输入中文原文..."></textarea>
           <div style="margin-top:8px;">
-            <button class="btn btn-outline btn-sm" id="photoBtn_correctOriginal" onclick="photoImport('correctOriginal')" title="拍摄或选择图片，自动识别文字"><svg class="ic" aria-hidden="true"><use href="#i-camera"></use></svg> 图片导入</button>
+            <button class="btn btn-outline btn-sm" id="photoBtn_correctOriginal" onclick="photoImport('correctOriginal')" title="选择或拍摄图片（最多 5 张），自动识别文字"><svg class="ic" aria-hidden="true"><use href="#i-camera"></use></svg> 图片导入</button>
           </div>
         </div>
         <div class="form-group">
           <label class="form-label">你的译文（英文）</label>
           <textarea class="form-textarea" id="correctTranslation" rows="4" placeholder="请输入你的英文翻译..."></textarea>
           <div style="margin-top:8px;">
-            <button class="btn btn-outline btn-sm" id="photoBtn_correctTranslation" onclick="photoImport('correctTranslation')" title="拍摄或选择图片，自动识别文字"><svg class="ic" aria-hidden="true"><use href="#i-camera"></use></svg> 图片导入</button>
+            <button class="btn btn-outline btn-sm" id="photoBtn_correctTranslation" onclick="photoImport('correctTranslation')" title="选择或拍摄图片（最多 5 张），自动识别文字"><svg class="ic" aria-hidden="true"><use href="#i-camera"></use></svg> 图片导入</button>
           </div>
         </div>
         <div style="text-align:center;">
@@ -2104,7 +2104,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <label class="form-label">你的作文</label>
         <textarea class="form-textarea" id="writingEssay" rows="10" placeholder="请输入你的英文作文..."></textarea>
         <div style="margin-top:8px;">
-          <button class="btn btn-outline btn-sm" id="photoBtn_writingEssay" onclick="photoImport('writingEssay')" title="拍摄或选择图片，自动识别文字"><svg class="ic" aria-hidden="true"><use href="#i-camera"></use></svg> 图片导入</button>
+          <button class="btn btn-outline btn-sm" id="photoBtn_writingEssay" onclick="photoImport('writingEssay')" title="选择或拍摄图片（最多 5 张），自动识别文字"><svg class="ic" aria-hidden="true"><use href="#i-camera"></use></svg> 图片导入</button>
         </div>
       </div>
       <div style="text-align:center;">
@@ -2683,7 +2683,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <label class="form-label">粘贴英文文章</label>
         <textarea class="article-textarea" id="articleInput" placeholder="在此粘贴英文文章...&#10;AI 将自动识别标题和段落"></textarea>
         <div style="margin-top:8px;">
-          <button class="btn btn-outline btn-sm" id="photoBtn_articleInput" onclick="photoImport('articleInput')" title="拍摄或选择图片，自动识别文字"><svg class="ic" aria-hidden="true"><use href="#i-camera"></use></svg> 图片导入</button>
+          <button class="btn btn-outline btn-sm" id="photoBtn_articleInput" onclick="photoImport('articleInput')" title="选择或拍摄图片（最多 5 张），自动识别文字"><svg class="ic" aria-hidden="true"><use href="#i-camera"></use></svg> 图片导入</button>
         </div>
       </div>
       <div class="article-actions">
@@ -3452,9 +3452,11 @@ const VOLCANO_TTS_PROXY = SUPABASE_URL + '/functions/v1/volcano-tts-proxy';
 const MIMO_TTS_PROXY = SUPABASE_URL + '/functions/v1/mimo-tts-proxy';
 const MINERU_PROXY_URL = SUPABASE_URL + '/functions/v1/mineru-proxy';
 
-// ── 拍照导入（Mineru OCR）：手机调相机 / 电脑选文件 → 压缩 → 识别 → 填入输入框 ──
+// ── 图片导入（Mineru OCR）：手机可选拍照/相册，电脑选文件；最多 5 张，确认后统一识别 ──
+const MAX_PHOTO_COUNT = 5;
 let _photoInputEl = null;
 let _photoTarget = null;
+let _photoQueues = {}; // targetId -> [{ id, blob, url, error, processing, markdown }]
 
 function photoImport(targetId) {
   _photoTarget = targetId;
@@ -3462,25 +3464,72 @@ function photoImport(targetId) {
     _photoInputEl = document.createElement('input');
     _photoInputEl.type = 'file';
     _photoInputEl.accept = 'image/*';
-    _photoInputEl.setAttribute('capture', 'environment'); // 手机直接调起后置相机，桌面退化为文件选择
+    _photoInputEl.multiple = true;
+    // 不设置 capture：手机端由系统弹窗让用户自选"拍照"或"从相册选择"
     _photoInputEl.style.display = 'none';
     document.body.appendChild(_photoInputEl);
-    _photoInputEl.addEventListener('change', onPhotoSelected);
+    _photoInputEl.addEventListener('change', onPhotosSelected);
   }
   _photoInputEl.click();
 }
 
-function setPhotoBtnBusy(targetId, busy) {
-  const btn = document.getElementById('photoBtn_' + targetId);
-  if (!btn) return;
-  if (busy) {
-    btn.dataset.idleHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-hourglass"></use></svg> 识别中…';
-  } else {
-    btn.disabled = false;
-    if (btn.dataset.idleHtml) btn.innerHTML = btn.dataset.idleHtml;
+function photoAddMore(targetId) {
+  _photoTarget = targetId;
+  if (_photoInputEl) _photoInputEl.click();
+}
+
+function queueOf(targetId) {
+  if (!_photoQueues[targetId]) _photoQueues[targetId] = [];
+  return _photoQueues[targetId];
+}
+
+function ensureQueuePanel(targetId) {
+  let panel = document.getElementById('photoQueue_' + targetId);
+  if (!panel) {
+    const btnWrap = document.getElementById('photoBtn_' + targetId).parentElement;
+    panel = document.createElement('div');
+    panel.id = 'photoQueue_' + targetId;
+    panel.style.cssText = 'display:none;margin-top:10px;border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--bg);';
+    btnWrap.parentElement.appendChild(panel);
   }
+  return panel;
+}
+
+function renderQueuePanel(targetId) {
+  const panel = ensureQueuePanel(targetId);
+  const queue = queueOf(targetId);
+  if (!queue.length) { panel.style.display = 'none'; panel.innerHTML = ''; return; }
+  const busy = queue.some(it => it.processing);
+  const thumbs = queue.map((it, idx) => `
+    <div style="position:relative;width:64px;height:64px;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fff;${it.error ? 'outline:2px solid var(--danger);' : ''}">
+      <img src="${it.url}" style="width:100%;height:100%;object-fit:cover;" alt="">
+      ${busy ? '' : `<button onclick="photoRemoveItem('${targetId}',${idx})" title="移除" style="position:absolute;top:2px;right:2px;width:18px;height:18px;line-height:15px;border:none;border-radius:50%;background:rgba(0,0,0,0.55);color:#fff;font-size:12px;cursor:pointer;">×</button>`}
+      ${it.error ? '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(184,84,80,0.85);color:#fff;font-size:10px;text-align:center;padding:1px 0;">失败</div>' : ''}
+    </div>`).join('');
+  panel.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">${thumbs}</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span style="font-size:0.82rem;color:var(--muted);">已选 ${queue.length}/${MAX_PHOTO_COUNT} 张</span>
+      <button class="btn btn-outline btn-sm" ${busy || queue.length >= MAX_PHOTO_COUNT ? 'disabled' : ''} onclick="photoAddMore('${targetId}')"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg> 继续添加</button>
+      <button class="btn btn-primary btn-sm" ${busy ? 'disabled' : ''} onclick="photoStartRecognize('${targetId}')">${busy ? '<svg class="ic" aria-hidden="true"><use href="#i-hourglass"></use></svg> 识别中…' : '开始识别'}</button>
+      <button class="btn btn-secondary btn-sm" ${busy ? 'disabled' : ''} onclick="photoClearQueue('${targetId}')">清空</button>
+    </div>`;
+  panel.style.display = '';
+}
+
+function photoRemoveItem(targetId, idx) {
+  const queue = queueOf(targetId);
+  if (idx < 0 || idx >= queue.length) return;
+  if (queue[idx].url) URL.revokeObjectURL(queue[idx].url);
+  queue.splice(idx, 1);
+  renderQueuePanel(targetId);
+}
+
+function photoClearQueue(targetId) {
+  const queue = queueOf(targetId);
+  queue.forEach(it => { if (it.url) URL.revokeObjectURL(it.url); });
+  _photoQueues[targetId] = [];
+  renderQueuePanel(targetId);
 }
 
 // 兼容旧浏览器的超时 fetch（旧 iOS Safari 不支持 AbortSignal.timeout）
@@ -3491,44 +3540,78 @@ function fetchWithTimeout(url, opts, ms) {
     .finally(() => clearTimeout(timer));
 }
 
-async function onPhotoSelected() {
-  const file = _photoInputEl && _photoInputEl.files && _photoInputEl.files[0];
-  _photoInputEl.value = ''; // 允许再次选择同一张照片
+// 选择图片：压缩后进入待识别队列（最多 5 张）
+async function onPhotosSelected() {
+  const files = _photoInputEl && _photoInputEl.files ? Array.from(_photoInputEl.files) : [];
+  _photoInputEl.value = ''; // 允许再次选择同一批图片
   const targetId = _photoTarget;
-  if (!file || !targetId) return;
-  setPhotoBtnBusy(targetId, true);
+  if (!files.length || !targetId) return;
+  const queue = queueOf(targetId);
+  const slots = MAX_PHOTO_COUNT - queue.length;
+  if (slots <= 0) { showToast('最多 ' + MAX_PHOTO_COUNT + ' 张，请先移除部分图片'); return; }
+  const accepted = files.slice(0, slots);
+  if (files.length > slots) showToast('最多 ' + MAX_PHOTO_COUNT + ' 张，已忽略多余图片');
+  for (const file of accepted) {
+    try {
+      const blob = await compressPhoto(file);
+      queue.push({ id: generateId(), blob, url: URL.createObjectURL(blob), error: null, processing: false, markdown: '' });
+    } catch (e) {
+      showToast('图片读取失败：' + (e.message || '该图片无法使用'));
+    }
+  }
+  renderQueuePanel(targetId);
+}
+
+// 识别单张图片：提交 + 轻量轮询，返回 Markdown
+async function recognizeOnePhoto(blob) {
+  const subResp = await fetchWithTimeout(MINERU_PROXY_URL, { method: 'POST', body: blob }, 150000);
+  const sub = await subResp.json().catch(() => ({}));
+  if (!sub.ok || !sub.id) {
+    throw new Error(sub.error || ('提交失败 (HTTP ' + subResp.status + ')'));
+  }
+  const pollUrl = MINERU_PROXY_URL + '?id=' + encodeURIComponent(sub.id) + '&kind=' + encodeURIComponent(sub.kind);
+  const deadline = Date.now() + 240000;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 3000));
+    const qResp = await fetchWithTimeout(pollUrl, {}, 30000);
+    const q = await qResp.json().catch(() => ({}));
+    if (q.ok && q.done) return q.markdown;
+    if (!q.ok) throw new Error(q.error || '识别失败');
+  }
+  throw new Error('识别超时（服务繁忙），请重试');
+}
+
+// 开始识别队列中的全部图片，成功后合并填入输入框
+async function photoStartRecognize(targetId) {
+  const queue = queueOf(targetId);
+  if (!queue.length) return;
+  queue.forEach(it => { it.processing = true; it.error = null; });
+  renderQueuePanel(targetId);
   try {
-    const blob = await compressPhoto(file);
-    // 1) 提交图片，快速拿到任务标识
-    const subResp = await fetchWithTimeout(MINERU_PROXY_URL, { method: 'POST', body: blob }, 150000);
-    const sub = await subResp.json().catch(() => ({}));
-    if (!sub.ok || !sub.id) {
-      throw new Error(sub.error || ('提交失败 (HTTP ' + subResp.status + ')'));
+    const results = await Promise.allSettled(queue.map(it => recognizeOnePhoto(it.blob)));
+    queue.forEach((it, i) => {
+      it.processing = false;
+      const r = results[i];
+      if (r.status === 'fulfilled') { it.error = null; it.markdown = r.value; }
+      else { it.error = (r.reason && r.reason.message) || '识别失败'; }
+    });
+    const failed = queue.filter(it => it.error);
+    if (failed.length) {
+      renderQueuePanel(targetId);
+      showToast('有 ' + failed.length + ' 张图片识别失败，可再次点击"开始识别"重试');
+      return;
     }
-    // 2) 轻量轮询识别状态（每次查询都是独立短请求，天然规避超时与限流）
-    const pollUrl = MINERU_PROXY_URL + '?id=' + encodeURIComponent(sub.id) + '&kind=' + encodeURIComponent(sub.kind);
-    const deadline = Date.now() + 240000;
-    let markdown = '';
-    while (Date.now() < deadline) {
-      await new Promise(r => setTimeout(r, 3000));
-      const qResp = await fetchWithTimeout(pollUrl, {}, 30000);
-      const q = await qResp.json().catch(() => ({}));
-      if (q.ok && q.done) { markdown = q.markdown; break; }
-      if (!q.ok) throw new Error(q.error || '识别失败');
-    }
-    if (!markdown) throw new Error('识别超时（服务繁忙），请重试');
+    const merged = queue.map(it => (it.markdown || '').trim()).filter(Boolean).join('\n\n');
     const box = $(targetId);
-    box.value = markdown.trim();
+    box.value = merged;
     box.dispatchEvent(new Event('input', { bubbles: true }));
-    showToast('识别完成，请校对文字后继续');
+    showToast('已识别 ' + queue.length + ' 张图片并填入，请校对后继续');
+    photoClearQueue(targetId);
   } catch (err) {
+    queue.forEach(it => { it.processing = false; });
+    renderQueuePanel(targetId);
     console.error('photo import error:', err);
-    const msg = (err && err.name === 'AbortError')
-      ? '识别超时（图片较大或服务繁忙），请重试'
-      : (err.message || '请重试');
-    showToast('图片识别失败：' + msg);
-  } finally {
-    setPhotoBtnBusy(targetId, false);
+    showToast('图片识别失败：' + (err.message || '请重试'));
   }
 }
 
