@@ -67,6 +67,14 @@
 - AI 辅助翻译和自动分类
 - 背诵练习，多选导出 PDF
 
+### 🎤 口语跟读评测（讯飞）
+- 单词详情弹窗：跟读单词 / 跟读例句，自动播放标准音后录音
+- Learn 卡片：内嵌跟读评测条，不打断卡片学习流
+- 评分反馈：总分 + 准确度/流利度/完整度 + 逐词红绿着色（漏读/增读/回读/替换标注）
+- 总分低于 60 分提示「建议重读」
+- 评测记录自动并入「批改记录」，支持类型筛选、查看详情、导出 PDF、云端同步
+- 讯飞 Key 由服务端统一配置（Supabase Secret），全局共享每日调用额度保护
+
 ## 🎤 TTS 语音引擎
 
 | 服务商 | 状态 | 说明 |
@@ -124,14 +132,26 @@ npm install -g supabase
 # 登录
 supabase login
 
+# 执行数据库 migration（口语评测每日额度计数表 + RPC）
+supabase db push
+
 # 部署 Edge Functions
 supabase functions deploy mimo-tts-proxy --project-ref <your-project-ref> --no-verify-jwt
 supabase functions deploy dict-proxy --project-ref <your-project-ref> --no-verify-jwt
 supabase functions deploy mineru-proxy --project-ref <your-project-ref> --no-verify-jwt
+supabase functions deploy iflytek-ise-proxy --project-ref <your-project-ref> --no-verify-jwt
 ```
 
 然后在 Supabase 控制台设置 Secret：
 - `MIMO_API_KEY`：小米 MIMO API Key
+- 口语评测（讯飞）所需的 Secret：
+  - `IFLYTEK_ISE_APP_ID`：讯飞应用 AppID
+  - `IFLYTEK_ISE_API_KEY`：讯飞 APIKey
+  - `IFLYTEK_ISE_API_SECRET`：讯飞 APISecret
+  - `IFLYTEK_ISE_DAILY_LIMIT`：全局每日调用上限，默认 500（对齐讯飞免费额度，可自行调整）
+  - `SUPABASE_SERVICE_ROLE_KEY`：额度计数所需（从控制台 Settings → API 获取；缺失时功能仍可用但不限流）
+
+开通讯飞评测：在 [讯飞开放平台控制台](https://console.xfyun.cn/services/ise) 开通「语音评测（流式版）」并完成个人认证，可获赠 1 万次/年免费额度（否则 500 次/天）。
 
 ## 🛠️ 技术栈
 
@@ -147,6 +167,8 @@ supabase functions deploy mineru-proxy --project-ref <your-project-ref> --no-ver
 english-vocab-learning/
 ├── index.html                          # 主应用（单文件）
 └── supabase/
+    ├── migrations/
+    │   └── ise_usage.sql               # 口语评测每日额度计数表 + RPC
     └── functions/
         ├── dict-proxy/
         │   └── index.ts                # 单词拼写校验（内置词表）
@@ -156,6 +178,9 @@ english-vocab-learning/
         │   └── index.ts                # Mineru 文档解析代理（拍照 OCR）
         ├── volcano-tts-proxy/
         │   └── index.ts                # 火山引擎 TTS 代理（Edge Function）
+        ├── iflytek-ise-proxy/
+        │   ├── index.ts                # 讯飞口语评测代理（Edge Function）
+        │   └── mock-server-test.ts     # 本地联调测试（模拟讯飞 WS）
         └── zhipu-proxy/
             └── index.ts                # 智谱 AI 代理（Edge Function）
 ```
@@ -167,6 +192,8 @@ english-vocab-learning/
 `dict-proxy` 用于单词拼写校验，内置 37 万英语词表（来自 dwyl/english-words 的 words_alpha.txt），存在性判断为纯内存查询，不依赖任何上游 API，结果确定、响应稳定（毫秒级，冷启动约 3 秒）。单词不存在时前端提示检查拼写（可点击"继续查询"强制查询）；另带 AI 兜底判断，确保拼写提示在任何网络环境下都不会丢失。
 
 `mineru-proxy` 用于拍照 OCR：前端上传图片二进制（已压缩为 JPEG），本函数完成 Mineru 三步调用（提交任务拿签名 URL → PUT 上传 → 轮询结果）后返回 Markdown 文本。当前使用免 Token 的 Agent 轻量 API（单文件 ≤10MB、IP 限频、仅输出 Markdown）；拿到标准 Token 后可切换到标准 API（每日 1000~2000 页免费额度）。
+
+`iflytek-ise-proxy` 用于口语跟读评测：浏览器录完整段音频（16kHz/16bit/单声道 PCM，base64）一次性上传，本函数完成讯飞鉴权签名（HMAC-SHA256）→ WebSocket 连接转发（按 40ms 分帧）→ 解析 base64 XML 结果，返回总分、准确度/流利度/完整度和逐词分数。Key 全部存于服务端 Secret，不进浏览器；通过 `ise_usage` 表做全局每日调用计数，超出 `IFLYTEK_ISE_DAILY_LIMIT` 后返回友好提示（防止公开部署页面刷爆免费额度）。两个实测结论已固化在代码里：① 当前生产服务返回 5 分制分数，代理内自动 ×20 归一化为百分制（与官方评分公式吻合）；② 讯飞 `read_word` 类别持续返回 48195 异常，单词跟读统一走 `read_sentence`（对单个单词返回同等完整的逐词评分）。`mock-server-test.ts` 是本地联调测试（模拟讯飞 WS 服务），运行 `deno run --allow-net --allow-env mock-server-test.ts` 即可在无真实 Key 的情况下验证核心链路。
 
 ## 📝 License
 
