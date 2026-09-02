@@ -9485,7 +9485,7 @@ function renderHistory() {
         <div class="history-meta">
           <div>
             <span class="history-type ${typeClass}">${typeLabel}</span>
-            <span style="margin-left:8px;font-size:0.78rem;color:var(--muted);">${r.difficulty}</span>
+            <span style="margin-left:8px;font-size:0.78rem;color:var(--muted);">${r.type === 'speaking' ? iseDifficultyLabel(r.difficulty) : r.difficulty}</span>
           </div>
           <div style="display:flex;align-items:center;gap:12px;">
             <span class="history-score">${r.score}分</span>
@@ -9527,7 +9527,7 @@ function viewCorrectionDetail(id) {
   
   // Build detail modal content
   const typeLabel = record.type === 'translation' ? '翻译批改' : (record.type === 'speaking' ? '口语评测' : '作文批改');
-  let content = `<div class="modal-title">${typeLabel} - ${record.difficulty}</div>`;
+  let content = `<div class="modal-title">${typeLabel} - ${record.type === 'speaking' ? iseDifficultyLabel(record.difficulty) : record.difficulty}</div>`;
   content += `<div style="text-align:center;margin-bottom:16px;"><span style="font-family:var(--font-display);font-size:2.5rem;font-weight:700;color:var(--accent);">${record.score}分</span></div>`;
 
   if (record.type === 'speaking') {
@@ -9579,7 +9579,7 @@ function exportCorrection() {
   const date = new Date(record.date).toLocaleString('zh-CN');
   let html = '';
 
-  html += `<div class="export-header"><h1>${typeLabel} - ${record.difficulty}</h1><p>日期：${date}</p></div>`;
+  html += `<div class="export-header"><h1>${typeLabel} - ${record.type === 'speaking' ? iseDifficultyLabel(record.difficulty) : record.difficulty}</h1><p>日期：${date}</p></div>`;
   html += `<div class="export-score">${record.score}分</div>`;
 
   if (record.type === 'speaking') {
@@ -11951,6 +11951,13 @@ function iseLastScore(text) {
   if (!r) return null;
   const n = parseFloat(r.score);
   return isNaN(n) ? null : Math.round(n);
+}
+
+// 旧版本记录存的是「单词跟读/例句跟读」，展示时统一为新文案
+function iseDifficultyLabel(d) {
+  if (d === '单词跟读') return '单词发音';
+  if (d === '例句跟读') return '例句发音';
+  return d;
 }
 
 // ── 入口 ──
