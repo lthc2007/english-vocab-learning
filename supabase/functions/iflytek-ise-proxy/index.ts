@@ -19,7 +19,7 @@ const corsHeaders = {
 
 const ISE_HOST = "ise-api.xfyun.cn";
 const ISE_PATH = "/v2/open-ise";
-const SESSION_TIMEOUT_MS = 20000;
+const SESSION_TIMEOUT_MS = 45000; // 讯飞偶发响应慢（实测部分单词 >20s），给足余量
 const MAX_AUDIO_B64_LEN = 3_000_000; // ~2.2MB PCM ≈ 70 秒，远大于单词/句子跟读
 const MAX_TEXT_LEN = 1000; // 英文 read_sentence 单句上限
 

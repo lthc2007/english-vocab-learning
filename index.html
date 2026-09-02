@@ -2489,7 +2489,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <div class="card-hint" id="fcHint" onclick="flipCard()" style="cursor:pointer;">点击翻转卡片</div>
         <button class="btn btn-sm" id="btnKnown" onclick="markKnown()" style="margin-top:6px;color:var(--success);border-color:var(--success);font-size:0.8rem;">✓ 熟词（删除）</button>
         <button class="btn btn-sm" id="btnAutoRead" onclick="startAutoRead()" style="margin-top:6px;margin-left:8px;color:var(--accent);border-color:var(--accent);font-size:0.8rem;"><svg class="ic" aria-hidden="true"><use href="#i-play"></use></svg> 单词听读</button>
-        <button class="btn btn-sm" id="btnIseLearn" onclick="startEvalInLearn()" style="margin-top:6px;margin-left:8px;color:#b45309;border-color:#f59e0b;font-size:0.8rem;"><svg class="ic" aria-hidden="true"><use href="#i-mic"></use></svg> 跟读评测</button>
+        <button class="btn btn-sm" id="btnIseLearn" onclick="startEvalInLearn()" style="margin-top:6px;margin-left:8px;color:#b45309;border-color:#f59e0b;font-size:0.8rem;"><svg class="ic" aria-hidden="true"><use href="#i-mic"></use></svg> 发音测评</button>
         <!-- 听读控制栏 -->
         <div id="autoReadControls" style="display:none;margin-top:8px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;">
           <span id="autoReadStatus" style="font-size:0.8rem;color:var(--accent);font-weight:600;">正在朗读...</span>
@@ -5517,12 +5517,12 @@ function showWordDetail(w) {
   if (w.example) html += `<div class="wd-row"><span class="wd-label">例句</span><span class="wd-val wd-example">${escapeHtml(w.example)}</span></div>`;
   if (w.exampleCn) html += `<div class="wd-row"><span class="wd-label">例句翻译</span><span class="wd-val wd-example">${escapeHtml(w.exampleCn)}</span></div>`;
   if (w.aiGenerated !== undefined) html += `<div class="wd-row"><span class="wd-label">AI</span><span class="wd-val">${w.aiGenerated ? '<span style="color:var(--success);">✓ 已生成</span>' : '<span style="color:var(--warning);">未生成</span>'}</span></div>`;
-  // 口语跟读入口 + 上次得分
+  // 发音测评入口 + 上次得分
   const lastIseScore = iseLastScore(w.english);
-  html += '<div class="wd-row"><span class="wd-label">口语跟读</span><span class="wd-val">'
-    + '<button class="btn btn-sm" style="padding:4px 10px;" onclick="startEvalFromDetail(\'word\')"><svg class="ic" aria-hidden="true"><use href="#i-mic"></use></svg> 跟读单词</button>'
-    + (w.example ? ' <button class="btn btn-sm" style="padding:4px 10px;" onclick="startEvalFromDetail(\'sentence\')">跟读例句</button>' : '')
-    + (lastIseScore !== null ? ' <span style="margin-left:6px;font-size:0.8rem;color:var(--muted);">上次跟读 ' + lastIseScore + ' 分</span>' : '')
+  html += '<div class="wd-row"><span class="wd-label">发音测评</span><span class="wd-val">'
+    + '<button class="btn btn-sm" style="padding:4px 10px;" onclick="startEvalFromDetail(\'word\')"><svg class="ic" aria-hidden="true"><use href="#i-mic"></use></svg> 单词发音测评</button>'
+    + (w.example ? ' <button class="btn btn-sm" style="padding:4px 10px;" onclick="startEvalFromDetail(\'sentence\')">例句发音测评</button>' : '')
+    + (lastIseScore !== null ? ' <span style="margin-left:6px;font-size:0.8rem;color:var(--muted);">上次测评 ' + lastIseScore + ' 分</span>' : '')
     + '</span></div>'
     + '<div id="wdIsePanel"></div>';
   if (!html) html = '<p style="color:var(--muted);text-align:center;padding:20px 0;">暂无详细信息</p>';
@@ -9476,7 +9476,7 @@ function renderHistory() {
     if (r.type === 'translation') {
       preview = '原文: ' + (r.original || '').substring(0, 50) + (r.original && r.original.length > 50 ? '...' : '');
     } else if (r.type === 'speaking') {
-      preview = '跟读内容: ' + (r.text || '').substring(0, 50) + (r.text && r.text.length > 50 ? '...' : '');
+      preview = '测评内容: ' + (r.text || '').substring(0, 50) + (r.text && r.text.length > 50 ? '...' : '');
     } else {
       preview = '题目: ' + (r.topic || '').substring(0, 50) + (r.topic && r.topic.length > 50 ? '...' : '');
     }
@@ -9534,7 +9534,7 @@ function viewCorrectionDetail(id) {
     let d = {};
     try { d = JSON.parse(record.detail || '{}'); } catch (e) { d = {}; }
     const dims = [['准确度', d.accuracy_score], ['流利度', d.fluency_score], ['完整度', d.integrity_score]];
-    content += `<div class="result-card"><div class="ai-section-title">跟读内容</div><div class="result-content" style="font-size:1.1rem;font-weight:600;">${escapeHtml(record.text || '')}</div></div>`;
+    content += `<div class="result-card"><div class="ai-section-title">测评内容</div><div class="result-content" style="font-size:1.1rem;font-weight:600;">${escapeHtml(record.text || '')}</div></div>`;
     content += `<div class="result-card"><div class="ai-section-title">评分维度</div><div class="result-content"><div style="display:flex;gap:20px;flex-wrap:wrap;">` +
       dims.map(([label, val]) => `<span>${label}: <strong>${val == null ? '—' : val}</strong></span>`).join('') +
       `</div></div></div>`;
@@ -9585,7 +9585,7 @@ function exportCorrection() {
   if (record.type === 'speaking') {
     let d = {};
     try { d = JSON.parse(record.detail || '{}'); } catch (e) { d = {}; }
-    html += `<div class="export-section"><div class="export-section-title">跟读内容</div><div class="export-section-content">${escapeHtml(record.text || '')}</div></div>`;
+    html += `<div class="export-section"><div class="export-section-title">测评内容</div><div class="export-section-content">${escapeHtml(record.text || '')}</div></div>`;
     html += `<div class="export-section"><div class="export-section-title">评分维度</div><div class="export-section-content">准确度: ${d.accuracy_score == null ? '—' : d.accuracy_score}，流利度: ${d.fluency_score == null ? '—' : d.fluency_score}，完整度: ${d.integrity_score == null ? '—' : d.integrity_score}</div></div>`;
     if (Array.isArray(d.words) && d.words.length > 0) {
       const wordsText = d.words.map(w => `${w.content || '?'} ${w.score == null ? '' : Math.round(w.score) + '分'}`).join('  ');
@@ -11906,7 +11906,7 @@ function toggleQuizDiscuss(qIdx) {
 }
 
 // ═══════════════════════════════════════
-// 口语跟读评测（讯飞语音评测 ISE，经 Supabase Edge Function 代理）
+// 发音测评（讯飞语音评测 ISE，经 Supabase Edge Function 代理）
 // ═══════════════════════════════════════
 const IFLYTEK_ISE_PROXY = SUPABASE_URL + '/functions/v1/iflytek-ise-proxy';
 const ISE_REC_LIMIT_MS = { read_word: 8000, read_sentence: 20000 };
@@ -11937,16 +11937,20 @@ function iseCleanText(raw, category) {
   return text;
 }
 
-function iseLastScore(text) {
+function iseLastRecord(text) {
   const t = (text || '').trim().toLowerCase();
   const history = loadHistory();
   for (const r of history) {
-    if (r.type === 'speaking' && (r.text || '').trim().toLowerCase() === t) {
-      const n = parseFloat(r.score);
-      if (!isNaN(n)) return Math.round(n);
-    }
+    if (r.type === 'speaking' && (r.text || '').trim().toLowerCase() === t) return r;
   }
   return null;
+}
+
+function iseLastScore(text) {
+  const r = iseLastRecord(text);
+  if (!r) return null;
+  const n = parseFloat(r.score);
+  return isNaN(n) ? null : Math.round(n);
 }
 
 // ── 入口 ──
@@ -11954,30 +11958,53 @@ function startEvalFromDetail(mode) {
   const w = window._wdDetailWord;
   if (!w) return;
   if (mode === 'word') {
-    startEval('wdIsePanel', iseCleanText(w.english, 'read_word'), 'read_word', '单词跟读');
+    startEval('wdIsePanel', iseCleanText(w.english, 'read_word'), 'read_word', '单词发音');
   } else if (w.example) {
-    startEval('wdIsePanel', iseCleanText(w.example, 'read_sentence'), 'read_sentence', '例句跟读');
+    startEval('wdIsePanel', iseCleanText(w.example, 'read_sentence'), 'read_sentence', '例句发音');
   }
 }
 
 function startEvalInLearn() {
   const w = appData.words[learnIndex];
   if (!w) return;
-  startEval('learnIsePanel', iseCleanText(w.english, 'read_word'), 'read_word', '单词跟读');
+  const text = iseCleanText(w.english, 'read_word');
+  // 已保存过测评的单词：先展示上次测评结果，可一键重新测评
+  const lastRec = iseLastRecord(text);
+  if (lastRec) {
+    if (iseSession) iseResetSession();
+    iseSession = {
+      container: 'learnIsePanel', text, category: 'read_word', label: '单词发音',
+      phase: 'saved', result: null, error: null, saved: true, savedRecord: lastRec
+    };
+    iseRender();
+  } else {
+    startEval('learnIsePanel', text, 'read_word', '单词发音');
+  }
 }
 
 function startEval(container, text, category, label) {
-  if (!text) { showToast('没有可评测的文本'); return; }
+  if (!text) { showToast('没有可测评的文本'); return; }
   if (iseSession) iseResetSession();
-  iseSession = { container, text, category, label, phase: 'playing', result: null, error: null, saved: false };
+  iseSession = { container, text, category, label, phase: 'choose', result: null, error: null, saved: false };
   iseRender();
-  // 自动播放一遍标准音（现有 TTS 引擎，失败走浏览器朗读兜底）
-  speakText(text, function() {
+}
+
+function isePlayStandard() {
+  if (!iseSession) return;
+  iseSession.phase = 'playing';
+  iseRender();
+  speakText(iseSession.text, function() {
     if (iseSession && iseSession.phase === 'playing') {
       iseSession.phase = 'ready';
       iseRender();
     }
   });
+}
+
+function iseBeginRecording() {
+  if (!iseSession) return;
+  iseSession.phase = 'ready';
+  iseRender();
 }
 
 function iseResetSession() {
@@ -12061,7 +12088,15 @@ async function iseStopRecording() {
   iseRender();
   try {
     const pcmB64 = await iseBuildPcm(chunks, srcRate);
-    const result = await iseEvaluate(pcmB64);
+    let result;
+    try {
+      result = await iseEvaluate(pcmB64);
+    } catch (e) {
+      // 超时/网络类错误自动重试一次（讯飞偶发响应慢，且 Edge Function 有冷启动）
+      if (!/超时|连接|网络|fetch|HTTP 5/.test(e.message || '')) throw e;
+      await new Promise(function(r) { setTimeout(r, 1500); });
+      result = await iseEvaluate(pcmB64);
+    }
     if (!iseSession) return;
     iseSession.result = result;
     iseSession.phase = 'result';
@@ -12118,7 +12153,7 @@ async function iseEvaluate(pcmB64) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_KEY },
     body: JSON.stringify({ text: iseSession.text, category: iseSession.category, audio: pcmB64 }),
-    signal: AbortSignal.timeout(60000)
+    signal: AbortSignal.timeout(75000)
   });
   let data = {};
   try { data = await resp.json(); } catch (e) {}
@@ -12155,24 +12190,50 @@ function iseWordsHtml(words) {
   }).join('') + '</div>';
 }
 
+// 结果展示公共块（即时结果与历史结果共用）
+function iseScoreBlock(r, total) {
+  const totalColor = total >= 80 ? 'var(--success)' : total >= ISE_SUGGEST_RETRY_SCORE ? 'var(--warning)' : 'var(--danger)';
+  const dims = [
+    ['准确度', r.accuracy_score], ['流利度', r.fluency_score], ['完整度', r.integrity_score]
+  ];
+  const badges = [];
+  if (total < ISE_SUGGEST_RETRY_SCORE) badges.push('<span class="ise-badge warn">总分低于 ' + ISE_SUGGEST_RETRY_SCORE + ' 分，建议重读</span>');
+  if (r.is_rejected) badges.push('<span class="ise-badge err">检测到乱读，分数仅供参考</span>');
+  return '<div class="ise-actions" style="align-items:flex-start;">'
+    + '<span class="ise-score-big" style="color:' + totalColor + ';">' + total + '</span><span class="ise-score-unit">分</span>'
+    + '<div class="ise-dims" style="margin:0;">' + dims.map(function(d) {
+        const v = d[1] == null ? '—' : Math.round(d[1]);
+        return '<div class="ise-dim"><div class="ise-dim-val">' + v + '</div><div class="ise-dim-label">' + d[0] + '</div></div>';
+      }).join('') + '</div>'
+    + '</div>'
+    + (badges.length ? '<div class="ise-badges">' + badges.join('') + '</div>' : '')
+    + iseWordsHtml(r.words);
+}
+
 function iseRender() {
   const s = iseSession;
   const el = s ? $(s.container) : null;
   if (!s || !el) return;
 
   let body = '';
-  if (s.phase === 'playing') {
+  if (s.phase === 'choose') {
+    body = '<div class="ise-actions">'
+      + '<button class="btn btn-primary" onclick="iseBeginRecording()"><svg class="ic" aria-hidden="true"><use href="#i-mic"></use></svg> 直接发音测评</button>'
+      + '<button class="btn btn-secondary" onclick="isePlayStandard()">先听标准音再发音</button>'
+      + '<button class="btn btn-secondary" onclick="iseResetSession()">关闭</button>'
+      + '</div>';
+  } else if (s.phase === 'playing') {
     body = '<div class="ise-evaluating"><span class="ise-spinner"></span>正在播放标准音…</div>';
   } else if (s.phase === 'ready') {
     body = '<div class="ise-actions">'
       + '<button class="btn btn-primary" onclick="iseStartRecording()"><svg class="ic" aria-hidden="true"><use href="#i-mic"></use></svg> 开始录音</button>'
       + '<button class="btn btn-secondary" onclick="iseReplayStandard()">重播标准音</button>'
       + '</div>'
-      + '<div class="ise-hint">录音最长 ' + (ISE_REC_LIMIT_MS[s.category] / 1000) + ' 秒，点击开始后跟读</div>';
+      + '<div class="ise-hint">录音最长 ' + (ISE_REC_LIMIT_MS[s.category] / 1000) + ' 秒，点击开始后发音</div>';
   } else if (s.phase === 'recording') {
     body = '<div class="ise-actions">'
       + '<span class="ise-rec-dot"></span><span class="ise-rec-time" id="iseRecTime">00:00</span>'
-      + '<button class="btn btn-danger" onclick="iseStopRecording()"><svg class="ic" aria-hidden="true"><use href="#i-stop"></use></svg> 停止并评测</button>'
+      + '<button class="btn btn-danger" onclick="iseStopRecording()"><svg class="ic" aria-hidden="true"><use href="#i-stop"></use></svg> 停止并测评</button>'
       + '</div>'
       + '<div class="ise-hint">正在录音，完成后点击停止</div>';
   } else if (s.phase === 'evaluating') {
@@ -12185,34 +12246,29 @@ function iseRender() {
       + '</div>';
   } else if (s.phase === 'result') {
     const r = s.result;
-    const total = Math.round(r.total_score);
-    const totalColor = total >= 80 ? 'var(--success)' : total >= ISE_SUGGEST_RETRY_SCORE ? 'var(--warning)' : 'var(--danger)';
-    const dims = [
-      ['准确度', r.accuracy_score], ['流利度', r.fluency_score], ['完整度', r.integrity_score]
-    ];
-    const badges = [];
-    if (total < ISE_SUGGEST_RETRY_SCORE) badges.push('<span class="ise-badge warn">总分低于 ' + ISE_SUGGEST_RETRY_SCORE + ' 分，建议重读</span>');
-    if (r.is_rejected) badges.push('<span class="ise-badge err">检测到乱读，分数仅供参考</span>');
-    body = '<div class="ise-actions" style="align-items:flex-start;">'
-      + '<span class="ise-score-big" style="color:' + totalColor + ';">' + total + '</span><span class="ise-score-unit">分</span>'
-      + '<div class="ise-dims" style="margin:0;">' + dims.map(function(d) {
-          const v = d[1] == null ? '—' : Math.round(d[1]);
-          return '<div class="ise-dim"><div class="ise-dim-val">' + v + '</div><div class="ise-dim-label">' + d[0] + '</div></div>';
-        }).join('') + '</div>'
-      + '</div>'
-      + (badges.length ? '<div class="ise-badges">' + badges.join('') + '</div>' : '')
-      + iseWordsHtml(r.words)
+    body = iseScoreBlock(r, Math.round(r.total_score))
       + '<div class="ise-actions" style="margin-top:10px;">'
       + (s.saved
           ? '<span style="color:var(--success);font-size:0.85rem;">已保存到批改记录</span>'
           : '<button class="btn btn-success" onclick="iseSaveRecord()">保存记录</button>')
-      + '<button class="btn btn-secondary" onclick="iseRetryRecord()">再读一遍</button>'
+      + '<button class="btn btn-secondary" onclick="iseRetryRecord()">再次测评</button>'
+      + '<button class="btn btn-secondary" onclick="iseResetSession()">关闭</button>'
+      + '</div>';
+  } else if (s.phase === 'saved') {
+    const rec = s.savedRecord;
+    let d = {};
+    try { d = JSON.parse(rec.detail || '{}'); } catch (e) { d = {}; }
+    const total = Math.round(parseFloat(rec.score) || 0);
+    body = '<div style="font-size:0.78rem;color:var(--muted);margin-bottom:6px;">上次测评 · ' + new Date(rec.date).toLocaleString('zh-CN') + '</div>'
+      + iseScoreBlock(d, total)
+      + '<div class="ise-actions" style="margin-top:10px;">'
+      + '<button class="btn btn-primary" onclick="iseRetryRecord()">重新测评</button>'
       + '<button class="btn btn-secondary" onclick="iseResetSession()">关闭</button>'
       + '</div>';
   }
 
   el.innerHTML = '<div class="ise-panel">'
-    + '<div class="ise-panel-title">' + escapeHtml(s.label) + '评测</div>'
+    + '<div class="ise-panel-title">' + escapeHtml(s.label) + '测评</div>'
     + '<div class="ise-text">' + escapeHtml(s.text) + '</div>'
     + body
     + '</div>';
