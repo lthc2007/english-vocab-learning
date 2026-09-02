@@ -2488,8 +2488,8 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
       </div>
         <div class="card-hint" id="fcHint" onclick="flipCard()" style="cursor:pointer;">点击翻转卡片</div>
         <button class="btn btn-sm" id="btnKnown" onclick="markKnown()" style="margin-top:6px;color:var(--success);border-color:var(--success);font-size:0.8rem;">✓ 熟词（删除）</button>
-        <button class="btn btn-sm" id="btnAutoRead" onclick="startAutoRead()" style="margin-top:6px;margin-left:8px;color:var(--accent);border-color:var(--accent);font-size:0.8rem;"><svg class="ic" aria-hidden="true"><use href="#i-play"></use></svg> 单词听读</button>
         <button class="btn btn-sm" id="btnIseLearn" onclick="startEvalInLearn()" style="margin-top:6px;margin-left:8px;color:#b45309;border-color:#f59e0b;font-size:0.8rem;"><svg class="ic" aria-hidden="true"><use href="#i-mic"></use></svg> 发音测评</button>
+        <button class="btn btn-sm" id="btnAutoRead" onclick="startAutoRead()" style="margin-top:6px;margin-left:8px;color:var(--accent);border-color:var(--accent);font-size:0.8rem;"><svg class="ic" aria-hidden="true"><use href="#i-play"></use></svg> 单词听读</button>
         <!-- 听读控制栏 -->
         <div id="autoReadControls" style="display:none;margin-top:8px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;">
           <span id="autoReadStatus" style="font-size:0.8rem;color:var(--accent);font-weight:600;">正在朗读...</span>
@@ -10702,8 +10702,10 @@ function renderArticle() {
       <div class="article-para-text">${wrapped}</div>
       <div class="article-para-actions">
         <button class="btn btn-secondary btn-sm" onclick="translateParagraph(${idx})" id="btnTrans${idx}">该段翻译</button>
+        <button class="btn btn-secondary btn-sm" onclick="startEvalInArticle(${idx})" id="btnIseArt${idx}" style="margin-left:6px;"><svg class="ic" aria-hidden="true"><use href="#i-mic"></use></svg> 发音测评</button>
         <span class="spinner" id="transSpinner${idx}" style="display:none;width:12px;height:12px;border-color:rgba(45,90,90,0.3);border-top-color:var(--accent);vertical-align:middle;margin-left:8px;"></span>
       </div>
+      <div id="articleIsePanel${idx}" style="margin-top:8px;"></div>
       <div class="article-para-translation" id="articleTrans${idx}"></div>
     </div>`;
   });
@@ -11960,6 +11962,39 @@ function iseDifficultyLabel(d) {
   return d;
 }
 
+// ── 录音本地缓存：先存 localStorage，成功返回结果后删除；失败可直接重传 ──
+const ISE_PENDING_KEY = 'ise_pending_audio';
+
+function iseSavePending(text, category, audio) {
+  try {
+    localStorage.setItem(ISE_PENDING_KEY, JSON.stringify({ text, category, audio, ts: Date.now() }));
+  } catch (e) { /* 存储已满时静默忽略，仅影响失败重传 */ }
+}
+
+function iseLoadPending() {
+  try {
+    const raw = localStorage.getItem(ISE_PENDING_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    return (d && typeof d.audio === 'string' && d.audio.length > 100) ? d : null;
+  } catch (e) { return null; }
+}
+
+function iseClearPending() {
+  try { localStorage.removeItem(ISE_PENDING_KEY); } catch (e) {}
+}
+
+// 评测请求（超时/网络类错误自动重试一次）
+async function iseEvaluateWithRetry(pcmB64) {
+  try {
+    return await iseEvaluate(pcmB64);
+  } catch (e) {
+    if (!/超时|连接|网络|fetch|HTTP 5/.test(e.message || '')) throw e;
+    await new Promise(function(r) { setTimeout(r, 1500); });
+    return await iseEvaluate(pcmB64);
+  }
+}
+
 // ── 入口 ──
 function startEvalFromDetail(mode) {
   const w = window._wdDetailWord;
@@ -11989,10 +12024,35 @@ function startEvalInLearn() {
   }
 }
 
-function startEval(container, text, category, label) {
+// 文章陪读：测评用户朗读该段落（复用同一评测面板，录音上限 30 秒）
+function startEvalInArticle(idx) {
+  const para = (articleData.paragraphs || [])[idx];
+  if (!para) return;
+  const text = iseCleanText(para, 'read_sentence');
+  if (!text) { showToast('该段落没有可测评的内容'); return; }
+  if (text.length > 1000) { showToast('段落过长（超过 1000 字符），暂不支持测评'); return; }
+  const container = 'articleIsePanel' + idx;
+  const lastRec = iseLastRecord(text);
+  if (lastRec) {
+    if (iseSession) iseResetSession();
+    iseSession = {
+      container, text, category: 'read_sentence', label: '段落发音',
+      phase: 'saved', result: null, error: null, saved: true, savedRecord: lastRec, recLimitMs: 30000
+    };
+    iseRender();
+  } else {
+    startEval(container, text, 'read_sentence', '段落发音', 30000);
+  }
+}
+
+function startEval(container, text, category, label, recLimitMs) {
   if (!text) { showToast('没有可测评的文本'); return; }
   if (iseSession) iseResetSession();
-  iseSession = { container, text, category, label, phase: 'choose', result: null, error: null, saved: false };
+  iseSession = {
+    container, text, category, label,
+    phase: 'choose', result: null, error: null, saved: false,
+    recLimitMs: recLimitMs || ISE_REC_LIMIT_MS[category] || 8000
+  };
   iseRender();
 }
 
@@ -12016,9 +12076,14 @@ function iseBeginRecording() {
 
 function iseResetSession() {
   iseStopHardware();
+  const prevContainer = iseSession ? iseSession.container : null;
   iseSession = null;
   const containers = ['wdIsePanel', 'learnIsePanel'];
   containers.forEach(id => { const el = $(id); if (el) el.innerHTML = ''; });
+  if (prevContainer && prevContainer.indexOf('articleIsePanel') === 0) {
+    const el = $(prevContainer);
+    if (el) el.innerHTML = '';
+  }
 }
 
 function iseStopHardware() {
@@ -12062,7 +12127,7 @@ async function iseStartRecording() {
     iseSession.phase = 'recording';
     iseSession.recStart = Date.now();
     iseRender();
-    const limitMs = ISE_REC_LIMIT_MS[iseSession.category] || 8000;
+    const limitMs = iseSession.recLimitMs || ISE_REC_LIMIT_MS[iseSession.category] || 8000;
     iseRecTimer = setInterval(function() {
       const el = $('iseRecTime');
       if (el && iseSession) el.textContent = iseFormatTime(Date.now() - iseSession.recStart);
@@ -12095,16 +12160,37 @@ async function iseStopRecording() {
   iseRender();
   try {
     const pcmB64 = await iseBuildPcm(chunks, srcRate);
-    let result;
-    try {
-      result = await iseEvaluate(pcmB64);
-    } catch (e) {
-      // 超时/网络类错误自动重试一次（讯飞偶发响应慢，且 Edge Function 有冷启动）
-      if (!/超时|连接|网络|fetch|HTTP 5/.test(e.message || '')) throw e;
-      await new Promise(function(r) { setTimeout(r, 1500); });
-      result = await iseEvaluate(pcmB64);
-    }
+    // 录音先缓存到本地：成功拿到结果后删除；超时/失败时可无需重录直接重传
+    iseSavePending(iseSession.text, iseSession.category, pcmB64);
+    const result = await iseEvaluateWithRetry(pcmB64);
     if (!iseSession) return;
+    iseClearPending();
+    iseSession.result = result;
+    iseSession.phase = 'result';
+    iseRender();
+  } catch (e) {
+    if (!iseSession) return;
+    iseSession.error = e.message || '评测失败，请重试';
+    iseSession.phase = 'error';
+    iseRender();
+  }
+}
+
+// 用 localStorage 里缓存的录音直接重传，无需重新录制
+async function iseRetryCached() {
+  const s = iseSession;
+  if (!s) return;
+  const pending = iseLoadPending();
+  if (!pending || pending.text !== s.text) {
+    showToast('本地缓存的录音已失效，请重新录音');
+    return;
+  }
+  s.phase = 'evaluating';
+  iseRender();
+  try {
+    const result = await iseEvaluateWithRetry(pending.audio);
+    if (!iseSession) return;
+    iseClearPending();
     iseSession.result = result;
     iseSession.phase = 'result';
     iseRender();
@@ -12224,11 +12310,15 @@ function iseRender() {
 
   let body = '';
   if (s.phase === 'choose') {
+    const pending = iseLoadPending();
+    const hasPending = !!(pending && pending.text === s.text);
     body = '<div class="ise-actions">'
       + '<button class="btn btn-primary" onclick="iseBeginRecording()"><svg class="ic" aria-hidden="true"><use href="#i-mic"></use></svg> 直接发音测评</button>'
       + '<button class="btn btn-secondary" onclick="isePlayStandard()">先听标准音再发音</button>'
+      + (hasPending ? '<button class="btn btn-secondary" onclick="iseRetryCached()">用上次录音重试</button>' : '')
       + '<button class="btn btn-secondary" onclick="iseResetSession()">关闭</button>'
-      + '</div>';
+      + '</div>'
+      + (hasPending ? '<div class="ise-hint">上次的录音还保存在本地，可直接重试提交</div>' : '');
   } else if (s.phase === 'playing') {
     body = '<div class="ise-evaluating"><span class="ise-spinner"></span>正在播放标准音…</div>';
   } else if (s.phase === 'ready') {
@@ -12236,7 +12326,7 @@ function iseRender() {
       + '<button class="btn btn-primary" onclick="iseStartRecording()"><svg class="ic" aria-hidden="true"><use href="#i-mic"></use></svg> 开始录音</button>'
       + '<button class="btn btn-secondary" onclick="iseReplayStandard()">重播标准音</button>'
       + '</div>'
-      + '<div class="ise-hint">录音最长 ' + (ISE_REC_LIMIT_MS[s.category] / 1000) + ' 秒，点击开始后发音</div>';
+      + '<div class="ise-hint">录音最长 ' + ((s.recLimitMs || ISE_REC_LIMIT_MS[s.category] || 8000) / 1000) + ' 秒，点击开始后发音</div>';
   } else if (s.phase === 'recording') {
     body = '<div class="ise-actions">'
       + '<span class="ise-rec-dot"></span><span class="ise-rec-time" id="iseRecTime">00:00</span>'
@@ -12246,11 +12336,15 @@ function iseRender() {
   } else if (s.phase === 'evaluating') {
     body = '<div class="ise-evaluating"><span class="ise-spinner"></span>正在评测发音，请稍候…</div>';
   } else if (s.phase === 'error') {
+    const pending = iseLoadPending();
+    const hasPending = !!(pending && pending.text === s.text);
     body = '<div style="color:var(--danger);font-size:0.9rem;margin-bottom:8px;">' + escapeHtml(s.error || '评测失败') + '</div>'
       + '<div class="ise-actions">'
-      + '<button class="btn btn-primary" onclick="iseRetryRecord()">重新录音</button>'
+      + (hasPending ? '<button class="btn btn-primary" onclick="iseRetryCached()">用刚才的录音重试</button>' : '')
+      + '<button class="btn btn-secondary" onclick="iseRetryRecord()">重新录音</button>'
       + '<button class="btn btn-secondary" onclick="iseResetSession()">关闭</button>'
-      + '</div>';
+      + '</div>'
+      + (hasPending ? '<div class="ise-hint">刚才的录音已保存在本地，无需重新录制即可重试</div>' : '');
   } else if (s.phase === 'result') {
     const r = s.result;
     body = iseScoreBlock(r, Math.round(r.total_score))
@@ -12297,7 +12391,7 @@ function iseRetryRecord() {
   if (!iseSession) return;
   const s = iseSession;
   iseSession = null;
-  startEval(s.container, s.text, s.category, s.label);
+  startEval(s.container, s.text, s.category, s.label, s.recLimitMs);
 }
 
 function iseSaveRecord() {
