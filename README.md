@@ -6,7 +6,8 @@
 
 ### 🔍 单词查询
 - 输入英文单词，AI 自动生成完整学习内容：释义、音标、例句、例句翻译、近义词、反义词、搭配、词根词缀、派生词、难度等级
-- 支持多种 AI 服务商（智谱免费、DeepSeek、OpenAI、Moonshot、Groq、豆包、自定义）
+- 内置免费 AI：通义千问 Qwen-Turbo（服务端代理，无需配置 Key，需登录）
+- 支持自配其他 AI 服务商（DeepSeek、OpenAI、Moonshot、Groq、智谱、豆包、自定义）
 
 ### 📝 单词管理
 - 手动添加 / 批量导入 / 剪贴板粘贴
@@ -82,16 +83,19 @@
 | 服务商 | 状态 | 说明 |
 |--------|------|------|
 | 浏览器内置 | 免费 | 使用 Web Speech API，无需配置 |
-| 小米 MIMO ✨ | 免费代理 | 通过 Supabase Edge Function 代理，无需配置 Key |
+| 小米 MIMO ✨ | 免费代理（默认） | 通过 Supabase Edge Function 代理，无需配置 Key |
 | 火山引擎 | 需 Key | 60+ 中文音色，支持新旧版控制台 |
 | MiniMax | 需 Key | 8 种英文音色，HD/Turbo 模型 |
 | OpenAI TTS | 需 Key | 6 种音色，tts-1 / tts-1-hd |
 
 ## 🤖 AI 服务商
 
+- **默认免费服务**：通义千问 Qwen-Turbo，服务端代理、无需配置 Key，**需登录**（登录/注册入口：顶栏「云同步」按钮 → 个人信息）。每日有调用额度，超出后提示可在个人信息中配置自己的 API Key 继续使用。
+- AI / TTS 配置位于「个人信息」弹窗（登录后可见）：未配置的用户使用内置免费模型；有需要的用户可以自填 Key 使用以下服务商：
+
 | 服务商 | 模型 | 说明 |
 |--------|------|------|
-| 智谱免费（GLM） | glm-4-flash | 免费代理，无需 Key |
+| 通义千问（内置免费） | qwen-turbo | 服务端代理，无需 Key，需登录 |
 | DeepSeek | deepseek-v4-pro / flash | 需 API Key |
 | OpenAI | gpt-4o / gpt-4o-mini / gpt-4-turbo / gpt-3.5-turbo | 需 API Key |
 | Moonshot | moonshot-v1-8k/32k/128k | 需 API Key |
@@ -104,6 +108,7 @@
 
 - 基于 Supabase 实现数据云端存储
 - 支持登录/注册/重置密码
+- **AI 功能需登录**：未登录使用 AI 时会自动弹出登录/注册入口（免费 AI 由服务端统一提供，登录同时用于调用额度保护）
 - 单词数据、句子数据上传/下载同步
 - 文章和音频云端保存
 - 学习时长自动记录与每日同步
@@ -117,15 +122,18 @@
 
 无需安装任何依赖，打开即用。推荐使用 Chrome / Edge 浏览器。
 
+> 说明：AI 功能（单词查询、文章陪读、批改等）需登录后使用，登录/注册入口在顶栏「云同步」按钮中；TTS 朗读默认免费（小米 MIMO），无需登录。
+
 ### 本地运行
 
 1. 克隆仓库或直接下载 `index.html`
-2. 用浏览器打开 `index.html`
+2. 用浏览器打开 `index.html`（或运行 `python server.py` / Windows 无 Python 时运行 `powershell -ExecutionPolicy Bypass -File serve.ps1`）
 3. 无需安装任何依赖，开箱即用
+4. 本地运行同样需登录才能使用 AI 功能（登录走线上 Supabase，正常联网即可）
 
 ### 使用云端功能（可选）
 
-如需使用云端同步，需部署 Supabase 后端：
+如需使用云端同步与免费 AI 服务，需部署 Supabase 后端：
 
 ```bash
 # 安装 Supabase CLI
@@ -134,7 +142,7 @@ npm install -g supabase
 # 登录
 supabase login
 
-# 执行数据库 migration（口语评测每日额度计数表 + RPC）
+# 执行数据库 migration（口语评测每日额度计数表 + RPC + 通义千问额度计数表 + RPC）
 supabase db push
 
 # 部署 Edge Functions
@@ -142,16 +150,22 @@ supabase functions deploy mimo-tts-proxy --project-ref <your-project-ref> --no-v
 supabase functions deploy dict-proxy --project-ref <your-project-ref> --no-verify-jwt
 supabase functions deploy mineru-proxy --project-ref <your-project-ref> --no-verify-jwt
 supabase functions deploy iflytek-ise-proxy --project-ref <your-project-ref> --no-verify-jwt
+# 注意：qwen-proxy 需要校验登录会话，不要加 --no-verify-jwt
+supabase functions deploy qwen-proxy --project-ref <your-project-ref>
 ```
 
 然后在 Supabase 控制台设置 Secret：
 - `MIMO_API_KEY`：小米 MIMO API Key
+- 通义千问免费 AI 所需的 Secret：
+  - `DASHSCOPE_API_KEY`：阿里云百炼 API Key（在 [百炼控制台](https://bailian.console.aliyun.com/) 获取）
+  - `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`：Supabase 自动注入 Edge Function，无需手动设置
+  - `QWEN_USER_DAILY_LIMIT`：每用户每日调用上限，默认 30000（可选）
+  - `QWEN_GLOBAL_DAILY_LIMIT`：全局每日调用上限，默认 5000（可选）
 - 口语评测（讯飞）所需的 Secret：
   - `IFLYTEK_ISE_APP_ID`：讯飞应用 AppID
   - `IFLYTEK_ISE_API_KEY`：讯飞 APIKey
   - `IFLYTEK_ISE_API_SECRET`：讯飞 APISecret
   - `IFLYTEK_ISE_DAILY_LIMIT`：全局每日调用上限，默认 500（对齐讯飞免费额度，可自行调整）
-  - `SUPABASE_SERVICE_ROLE_KEY`：额度计数所需（从控制台 Settings → API 获取；缺失时功能仍可用但不限流）
 
 开通讯飞评测：在 [讯飞开放平台控制台](https://console.xfyun.cn/services/ise) 开通「语音评测（流式版）」并完成个人认证，可获赠 1 万次/年免费额度（否则 500 次/天）。
 
@@ -168,9 +182,12 @@ supabase functions deploy iflytek-ise-proxy --project-ref <your-project-ref> --n
 ```
 english-vocab-learning/
 ├── index.html                          # 主应用（单文件）
+├── server.py                           # 本地静态服务器（Python）
+├── serve.ps1                           # 本地静态服务器（Windows PowerShell，无 Python 环境时使用）
 └── supabase/
     ├── migrations/
-    │   └── ise_usage.sql               # 口语评测每日额度计数表 + RPC
+    │   ├── ise_usage.sql               # 口语评测每日额度计数表 + RPC
+    │   └── qwen_usage.sql              # 通义千问每日额度计数表（每用户 + 全局）+ RPC
     └── functions/
         ├── dict-proxy/
         │   └── index.ts                # 单词拼写校验（内置词表）
@@ -183,13 +200,19 @@ english-vocab-learning/
         ├── iflytek-ise-proxy/
         │   ├── index.ts                # 讯飞口语评测代理（Edge Function）
         │   └── mock-server-test.ts     # 本地联调测试（模拟讯飞 WS）
+        ├── qwen-proxy/
+        │   └── index.ts                # 通义千问 Qwen-Turbo 代理（Edge Function，需登录 + 每日额度）
         └── zhipu-proxy/
-            └── index.ts                # 智谱 AI 代理（Edge Function）
+            └── index.ts                # 智谱 AI 代理（已弃用，代码保留未再引用）
 ```
 
 ## 🔧 Edge Function 说明
 
+`qwen-proxy` 用于代理通义千问 Qwen-Turbo API 调用（DashScope 兼容模式），是全体用户默认的免费 AI 入口。Key 存于服务端 Secret；**开启登录会话校验**（未登录 401），并按「每用户 + 全局」每日额度计数（`qwen_usage` 表，环境变量可调）防止公开页面刷爆账单；只允许 `qwen-turbo` 模型，`max_tokens` 强制 ≤7000。
+
 `mimo-tts-proxy` 用于代理小米 MIMO TTS API 调用，避免前端暴露 API Key。内置重试机制（最多 3 次，指数退避），应对间歇性 401/5xx 错误。
+
+`zhipu-proxy`（智谱 AI 代理）已弃用：前端不再引用，代码保留在仓库中，可按需删除部署。
 
 `dict-proxy` 用于单词拼写校验，内置 37 万英语词表（来自 dwyl/english-words 的 words_alpha.txt），存在性判断为纯内存查询，不依赖任何上游 API，结果确定、响应稳定（毫秒级，冷启动约 3 秒）。单词不存在时前端提示检查拼写（可点击"继续查询"强制查询）；另带 AI 兜底判断，确保拼写提示在任何网络环境下都不会丢失。
 

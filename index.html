@@ -1880,9 +1880,6 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
     <button class="fullscreen-btn" onclick="toggleFullscreen()" title="全屏显示" aria-label="全屏显示">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
     </button>
-    <button class="settings-btn" onclick="openSettings()" title="API 设置">
-      <span class="api-status" id="apiStatusDot"></span> API 设置
-    </button>
   </div>
 </header>
 
@@ -2761,107 +2758,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
 
 </main>
 
-<!-- Settings Modal -->
-<div class="modal-overlay" id="modalSettings">
-  <div class="modal" style="max-width:520px;">
-    <div class="modal-title">API 设置</div>
-    <!-- Section 1: AI Learning -->
-    <div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;">
-      <div style="font-weight:700;font-size:0.95rem;margin-bottom:10px;color:var(--accent);">AI 学习内容生成</div>
-      <div class="form-group">
-        <label class="form-label">服务商</label>
-        <select class="form-input" id="providerSelect" onchange="onProviderChange()">
-          <option value="zhipu_free">智谱免费（GLM）· 免配置</option>
-          <option value="deepseek">DeepSeek</option>
-          <option value="openai">OpenAI</option>
-          <option value="moonshot">Moonshot (月之暗面)</option>
-          <option value="groq">Groq</option>
-          <option value="zhipu">智谱 AI (GLM)</option>
-          <option value="bytedance">豆包 (字节)</option>
-          <option value="custom">自定义</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">API 地址</label>
-        <input class="form-input" id="apiUrlInput" type="text" placeholder="https://api.deepseek.com/v1" autocomplete="off" readonly style="background:#f5f5f5;color:#999;cursor:not-allowed;">
-      </div>
-      <div class="form-group">
-        <label class="form-label">模型名称</label>
-        <select class="form-input" id="modelSelect"></select>
-        <input class="form-input" id="modelCustomInput" type="text" placeholder="输入自定义模型名" autocomplete="off" style="display:none;margin-top:4px;">
-      </div>
-      <div class="form-group" style="position:relative;">
-        <label class="form-label">API Key</label>
-        <input class="form-input" id="apiKeyInput" type="password" placeholder="sk-..." autocomplete="off" style="padding-right:80px;">
-        <div class="input-btns">
-          <button class="btn btn-secondary btn-sm" onclick="pasteMainKey()"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg> 粘贴</button>
-          <button class="btn btn-secondary btn-sm" onclick="toggleMainKeyVisibility()" title="显示/隐藏" id="toggleMainKeyBtn"><svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg></button>
-        </div>
-        <p style="font-size:0.75rem;color:var(--muted);margin-top:4px;" id="apiKeyHint"></p>
-        <button class="btn btn-secondary btn-sm" onclick="testAiConnection()" id="testAiBtn" style="margin-top:8px;width:100%;"><svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg> 测试 AI 连接</button>
-        <span id="testAiResult" style="display:block;margin-top:4px;font-size:0.8rem;"></span>
-      </div>
-    </div>
-
-    <!-- Section 2: TTS -->
-    <div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;">
-      <div style="font-weight:700;font-size:0.95rem;margin-bottom:10px;color:var(--accent);">语音朗读 (TTS)</div>
-      <div class="form-group">
-        <label class="form-label">TTS 服务商</label>
-        <select class="form-input" id="ttsProviderSelect" onchange="onTtsProviderChange()">
-          <option value="none">不使用 API</option>
-          <option value="minimax">MiniMax TTS</option>
-          <option value="openai">OpenAI TTS</option>
-          <option value="volcano">火山引擎 TTS</option>
-          <option value="mimo">小米 MIMO · 免配置</option>
-        </select>
-      </div>
-      <div class="form-group" id="ttsUrlGroup">
-        <label class="form-label">TTS API 地址</label>
-        <input class="form-input" id="ttsUrlInput" type="text" placeholder="https://api.minimaxi.com/v1" autocomplete="off" readonly style="background:#f5f5f5;color:#999;cursor:not-allowed;">
-      </div>
-      <div class="form-group" id="ttsAppIdGroup" style="display:none;">
-        <label class="form-label">App ID</label>
-        <input class="form-input" id="ttsAppIdInput" type="text" placeholder="旧版 App ID (新版控制台留空)..." autocomplete="off">
-      </div>
-      <div class="form-group" id="volcanoConsoleType" style="display:none;">
-        <label class="form-label">控制台版本</label>
-        <div style="display:flex;gap:16px;padding:6px 0;">
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:0.9rem;">
-            <input type="radio" name="volcanoConsole" value="new" checked onchange="onVolcanoConsoleChange()"> 新版控制台 (仅 API Key)
-          </label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:0.9rem;">
-            <input type="radio" name="volcanoConsole" value="old" onchange="onVolcanoConsoleChange()"> 旧版控制台 (App ID + Token)
-          </label>
-        </div>
-      </div>
-      <div class="form-group" id="ttsModelGroup">
-        <label class="form-label">TTS 模型</label>
-        <select class="form-input" id="ttsModelSelect"></select>
-      </div>
-      <div class="form-group" id="ttsVoiceGroup">
-        <label class="form-label">音色</label>
-        <select class="form-input" id="ttsVoiceSelect"></select>
-      </div>
-      <div class="form-group" id="ttsKeyGroup" style="position:relative;">
-        <label class="form-label">TTS API Key</label>
-        <input class="form-input" id="ttsKeyInput" type="password" placeholder="TTS API Key..." autocomplete="off" style="padding-right:80px;">
-        <div class="input-btns">
-          <button class="btn btn-secondary btn-sm" onclick="pasteTtsKey()"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg> 粘贴</button>
-          <button class="btn btn-secondary btn-sm" onclick="toggleTtsKeyVisibility()" title="显示/隐藏" id="toggleTtsKeyBtn"><svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg></button>
-        </div>
-        <p style="font-size:0.75rem;color:var(--muted);margin-top:4px;" id="ttsKeyHint"></p>
-        <button class="btn btn-secondary btn-sm" onclick="testTtsConnection()" id="testTtsBtn" style="margin-top:8px;width:100%;"><svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg> 测试 TTS 连接</button>
-        <span id="testTtsResult" style="display:block;margin-top:4px;font-size:0.8rem;"></span>
-      </div>
-    </div>
-
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeSettings()">取消</button>
-      <button class="btn btn-primary" onclick="saveSettings()">保存</button>
-    </div>
-  </div>
-</div>
+<!-- Settings Modal 已移除：AI / TTS 配置已迁入「个人信息」弹窗（cloudProfileView） -->
 
 <!-- Cloud Login Modal -->
 <div class="modal-overlay" id="modalCloud">
@@ -2925,7 +2822,7 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         </div>
       </div>
       <div class="cloud-info" id="cloudInfoHint" style="margin-top:16px;font-size:0.82rem;color:var(--muted);">
-        输入邮箱和密码即可完成注册，无需邮箱验证。<br>数据通过 Supabase 加密存储，仅你自己可见。
+        输入邮箱和密码即可完成注册，无需邮箱验证。<br>登录后可免费使用 AI 学习功能（通义千问）并同步数据到云端。
       </div>
       <!-- 未登录时也提供本地备份/导入入口 -->
       <div id="cloudNotLoggedIn" style="text-align:center;padding:16px 0 0;border-top:1px solid var(--rule);margin-top:16px;">
@@ -2991,6 +2888,106 @@ body.focus-mode .main { max-width: 100%; padding: 16px; }
         <div id="studyDetailArea" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--rule);">
           <div style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">最近7天</div>
           <div id="studyDetailList" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+        </div>
+      </div>
+
+      <!-- AI / TTS 设置区块 -->
+      <div id="aiTtsConfigArea" style="border-top:1px solid var(--rule);padding-top:16px;margin-bottom:16px;">
+        <div style="font-size:0.9rem;font-weight:600;color:var(--ink);margin-bottom:4px;">AI / TTS 设置</div>
+        <div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;">不配置则默认使用通义千问（Qwen-Turbo）免费 AI 服务与小米 MIMO 免费语音；也可填写自己的 API Key 使用其他服务商。</div>
+        <!-- Section 1: AI Learning -->
+        <div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;">
+          <div style="font-weight:700;font-size:0.95rem;margin-bottom:10px;color:var(--accent);">AI 学习内容生成</div>
+          <div class="form-group">
+            <label class="form-label">服务商</label>
+            <select class="form-input" id="providerSelect" onchange="onProviderChange()">
+              <option value="qwen">通义千问 Qwen-Turbo · 免费</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="openai">OpenAI</option>
+              <option value="moonshot">Moonshot (月之暗面)</option>
+              <option value="groq">Groq</option>
+              <option value="zhipu">智谱 AI (GLM)</option>
+              <option value="bytedance">豆包 (字节)</option>
+              <option value="custom">自定义</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">API 地址</label>
+            <input class="form-input" id="apiUrlInput" type="text" placeholder="https://api.deepseek.com/v1" autocomplete="off" readonly style="background:#f5f5f5;color:#999;cursor:not-allowed;">
+          </div>
+          <div class="form-group">
+            <label class="form-label">模型名称</label>
+            <select class="form-input" id="modelSelect"></select>
+            <input class="form-input" id="modelCustomInput" type="text" placeholder="输入自定义模型名" autocomplete="off" style="display:none;margin-top:4px;">
+          </div>
+          <div class="form-group" style="position:relative;">
+            <label class="form-label">API Key</label>
+            <input class="form-input" id="apiKeyInput" type="password" placeholder="sk-..." autocomplete="off" style="padding-right:80px;">
+            <div class="input-btns">
+              <button class="btn btn-secondary btn-sm" onclick="pasteMainKey()"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg> 粘贴</button>
+              <button class="btn btn-secondary btn-sm" onclick="toggleMainKeyVisibility()" title="显示/隐藏" id="toggleMainKeyBtn"><svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg></button>
+            </div>
+            <p style="font-size:0.75rem;color:var(--muted);margin-top:4px;" id="apiKeyHint"></p>
+            <button class="btn btn-secondary btn-sm" onclick="testAiConnection()" id="testAiBtn" style="margin-top:8px;width:100%;"><svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg> 测试 AI 连接</button>
+            <span id="testAiResult" style="display:block;margin-top:4px;font-size:0.8rem;"></span>
+          </div>
+        </div>
+
+        <!-- Section 2: TTS -->
+        <div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;">
+          <div style="font-weight:700;font-size:0.95rem;margin-bottom:10px;color:var(--accent);">语音朗读 (TTS)</div>
+          <div class="form-group">
+            <label class="form-label">TTS 服务商</label>
+            <select class="form-input" id="ttsProviderSelect" onchange="onTtsProviderChange()">
+              <option value="none">不使用 API</option>
+              <option value="minimax">MiniMax TTS</option>
+              <option value="openai">OpenAI TTS</option>
+              <option value="volcano">火山引擎 TTS</option>
+              <option value="mimo">小米 MIMO · 免配置</option>
+            </select>
+          </div>
+          <div class="form-group" id="ttsUrlGroup">
+            <label class="form-label">TTS API 地址</label>
+            <input class="form-input" id="ttsUrlInput" type="text" placeholder="https://api.minimaxi.com/v1" autocomplete="off" readonly style="background:#f5f5f5;color:#999;cursor:not-allowed;">
+          </div>
+          <div class="form-group" id="ttsAppIdGroup" style="display:none;">
+            <label class="form-label">App ID</label>
+            <input class="form-input" id="ttsAppIdInput" type="text" placeholder="旧版 App ID (新版控制台留空)..." autocomplete="off">
+          </div>
+          <div class="form-group" id="volcanoConsoleType" style="display:none;">
+            <label class="form-label">控制台版本</label>
+            <div style="display:flex;gap:16px;padding:6px 0;">
+              <label style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:0.9rem;">
+                <input type="radio" name="volcanoConsole" value="new" checked onchange="onVolcanoConsoleChange()"> 新版控制台 (仅 API Key)
+              </label>
+              <label style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:0.9rem;">
+                <input type="radio" name="volcanoConsole" value="old" onchange="onVolcanoConsoleChange()"> 旧版控制台 (App ID + Token)
+              </label>
+            </div>
+          </div>
+          <div class="form-group" id="ttsModelGroup">
+            <label class="form-label">TTS 模型</label>
+            <select class="form-input" id="ttsModelSelect"></select>
+          </div>
+          <div class="form-group" id="ttsVoiceGroup">
+            <label class="form-label">音色</label>
+            <select class="form-input" id="ttsVoiceSelect"></select>
+          </div>
+          <div class="form-group" id="ttsKeyGroup" style="position:relative;">
+            <label class="form-label">TTS API Key</label>
+            <input class="form-input" id="ttsKeyInput" type="password" placeholder="TTS API Key..." autocomplete="off" style="padding-right:80px;">
+            <div class="input-btns">
+              <button class="btn btn-secondary btn-sm" onclick="pasteTtsKey()"><svg class="ic" aria-hidden="true"><use href="#i-clipboard"></use></svg> 粘贴</button>
+              <button class="btn btn-secondary btn-sm" onclick="toggleTtsKeyVisibility()" title="显示/隐藏" id="toggleTtsKeyBtn"><svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg></button>
+            </div>
+            <p style="font-size:0.75rem;color:var(--muted);margin-top:4px;" id="ttsKeyHint"></p>
+            <button class="btn btn-secondary btn-sm" onclick="testTtsConnection()" id="testTtsBtn" style="margin-top:8px;width:100%;"><svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg> 测试 TTS 连接</button>
+            <span id="testTtsResult" style="display:block;margin-top:4px;font-size:0.8rem;"></span>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn btn-primary" onclick="saveSettings()" style="width:100%;">保存设置</button>
         </div>
       </div>
 
@@ -3182,24 +3179,24 @@ function loadData() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch (e) { /* ignore */ }
-  return { apiKey: '', apiUrl: BUILTIN_ZHIPU_PROXY, model: 'glm-4-flash', provider: 'zhipu_free',
-    ttsKey: '', ttsAppId: '', ttsProvider: 'minimax', ttsUrl: 'https://api.minimaxi.com', ttsModel: 'speech-2.8-hd', ttsVoice: 'English_Graceful_Lady',
+  return { apiKey: '', apiUrl: BUILTIN_QWEN_PROXY, model: 'qwen-turbo', provider: 'qwen',
+    ttsKey: '', ttsAppId: '', ttsProvider: 'mimo', ttsUrl: 'https://mmdhtyuyirukvtmfzeby.supabase.co/functions/v1/mimo-tts-proxy', ttsModel: 'mimo-v2.5-tts', ttsVoice: 'Chloe',
     providerConfigs: {}, ttsProviderConfigs: {},
     words: [], sentences: [] };
 }
 
-// ── 内置免费模型（智谱AI）──
+// ── 内置免费模型（通义千问 Qwen-Turbo）──
 // API Key 存储在 Supabase Edge Function Secrets 中，前端不可见
-const BUILTIN_ZHIPU_PROXY = 'https://mmdhtyuyirukvtmfzeby.supabase.co/functions/v1/zhipu-proxy';
-const BUILTIN_ZHIPU_MODEL = 'glm-4-flash';
+const BUILTIN_QWEN_PROXY = 'https://mmdhtyuyirukvtmfzeby.supabase.co/functions/v1/qwen-proxy';
+const BUILTIN_QWEN_MODEL = 'qwen-turbo';
 
 // Provider presets
 const PROVIDERS = {
-  zhipu_free: {
-    name: '智谱免费（GLM）',
-    url: BUILTIN_ZHIPU_PROXY,
-    models: ['glm-4-flash'],
-    keyHint: '使用内置免费模型，无需配置 API Key。如需使用自己的 Key，请选择「智谱 AI」并填入。',
+  qwen: {
+    name: '通义千问 Qwen-Turbo',
+    url: BUILTIN_QWEN_PROXY,
+    models: ['qwen-turbo'],
+    keyHint: '使用内置免费模型，无需配置 API Key。如需使用自己的 Key，请选择其他服务商并填入。',
     tts: false,
     builtin: true
   },
@@ -3441,15 +3438,33 @@ if (!appData.viewCounts) appData.viewCounts = {};
 // 为旧数据迁移：旧版扁平 API 配置迁移到 per-provider 结构
 if (!appData.providerConfigs) appData.providerConfigs = {};
 if (!appData.ttsProviderConfigs) appData.ttsProviderConfigs = {};
+// zhipu_free 已下线：存量用户映射到内置通义千问（Qwen-Turbo）
+if (appData.provider === 'zhipu_free') {
+  appData.provider = 'qwen';
+  appData.model = 'qwen-turbo';
+  appData.apiKey = '';
+  appData.apiUrl = BUILTIN_QWEN_PROXY;
+}
+if (appData.providerConfigs) delete appData.providerConfigs['zhipu_free'];
+// TTS 默认改为小米 MIMO：从未配置过 TTS Key 的 MiniMax 存量用户自动迁移
+if (appData.ttsProvider === 'minimax' && !appData.ttsKey
+    && !(appData.ttsProviderConfigs && appData.ttsProviderConfigs['minimax'] && appData.ttsProviderConfigs['minimax'].ttsKey)) {
+  appData.ttsProvider = 'mimo';
+  appData.ttsUrl = 'https://mmdhtyuyirukvtmfzeby.supabase.co/functions/v1/mimo-tts-proxy';
+  appData.ttsModel = 'mimo-v2.5-tts';
+  appData.ttsVoice = 'Chloe';
+  appData.ttsKey = '';
+  appData.ttsAppId = '';
+}
 (function _migrateProviderConfigs() {
-  const p = appData.provider || 'zhipu_free';
+  const p = appData.provider || 'qwen';
   if (appData.apiKey || appData.apiUrl || appData.model) {
     if (!appData.providerConfigs[p]) appData.providerConfigs[p] = {};
     if (appData.apiKey) { appData.providerConfigs[p].apiKey = appData.apiKey; }
     if (appData.apiUrl) { appData.providerConfigs[p].apiUrl = appData.apiUrl; }
     if (appData.model) { appData.providerConfigs[p].model = appData.model; }
   }
-  const tp = appData.ttsProvider || 'minimax';
+  const tp = appData.ttsProvider || 'mimo';
   if (appData.ttsKey || appData.ttsUrl || appData.ttsModel || appData.ttsVoice) {
     if (!appData.ttsProviderConfigs[tp]) appData.ttsProviderConfigs[tp] = {};
     if (appData.ttsKey) { appData.ttsProviderConfigs[tp].ttsKey = appData.ttsKey; }
@@ -3958,11 +3973,12 @@ function updateCloudUI(loggedIn, email) {
 
 function openCloudPanel() {
   $('modalCloud').classList.add('show');
-  // 已登录则显示账户信息，未登录则显示登录表单
+  // 已登录则显示账户信息（含 AI/TTS 配置），未登录则显示登录表单
   if (cloudUserEmail) {
     $('cloudLoginView').style.display = 'none';
     $('cloudProfileView').style.display = '';
     if ($('cloudProfileEmail')) $('cloudProfileEmail').textContent = cloudUserEmail;
+    loadProfileConfigs();
   } else {
     $('cloudLoginView').style.display = '';
     $('cloudProfileView').style.display = 'none';
@@ -4077,31 +4093,6 @@ async function cloudSubmit(mode) {
   if (mode === 'register') {
     const confirm = $('regCloudConfirmPassword').value.trim();
     if (password !== confirm) { showToast('两次密码输入不一致'); return; }
-
-    // 注册前检查用户数量是否已达上限
-    let userCount = null;
-    try {
-      const { data: rpcCount, error: rpcErr } = await sbClient.rpc('count_user_words');
-      if (!rpcErr && typeof rpcCount === 'number') userCount = rpcCount;
-    } catch (e) { /* RPC 不可用 */ }
-    if (userCount === null) {
-      try {
-        const { count, error: countErr } = await sbClient
-          .from('user_words')
-          .select('*', { count: 'exact', head: true });
-        if (!countErr && count !== null) userCount = count;
-      } catch (e) { /* 计数查询失败则不阻止注册 */ }
-    }
-    if (userCount === null) {
-      $(errorId).textContent = '无法验证注册名额，请稍后重试';
-      $(errorId).style.display = '';
-      return;
-    }
-    if (userCount >= 30) {
-      $(errorId).textContent = '注册人数已达上限（30人），暂时无法注册新账号';
-      $(errorId).style.display = '';
-      return;
-    }
 
     // 直接使用 signUp 注册，无需邮箱验证
     const { data, error } = await withRetry(function() {
@@ -4530,7 +4521,6 @@ function importData(event) {
       }
       persist();
       renderWordTable();
-      updateApiStatus();
     } catch (err) {
       showToast('解析失败，请检查文件格式');
     }
@@ -4540,25 +4530,12 @@ function importData(event) {
 }
 
 // ═══════════════════════════════════════
-// API Status
+// AI API (multi-provider)
 // ═══════════════════════════════════════
-function updateApiStatus() {
-  const dot = $('apiStatusDot');
-  // 与 hasValidApiConfig 保持一致：zhipu_free 走 Supabase 代理，无需前端 Key
-  if (hasValidApiConfig()) {
-    dot.className = 'api-status ok';
-  } else {
-    dot.className = 'api-status no';
-  }
-}
-
-// ═══════════════════════════════════════
-// Settings Modal
-// ═══════════════════════════════════════
-function openSettings() {
+function loadProfileConfigs() {
   // 辅助函数：从 providerConfigs 加载当前 provider 的配置到 active 字段
   function _loadProviderConfig() {
-    const p = appData.provider || 'zhipu_free';
+    const p = appData.provider || 'qwen';
     const cfg = appData.providerConfigs[p];
     appData.apiUrl = PROVIDERS[p] ? PROVIDERS[p].url : '';
     if (cfg) {
@@ -4570,7 +4547,7 @@ function openSettings() {
     }
   }
   function _loadTtsProviderConfig() {
-    const tp = appData.ttsProvider || 'minimax';
+    const tp = appData.ttsProvider || 'mimo';
     const cfg = appData.ttsProviderConfigs[tp];
     appData.ttsUrl = TTS_PROVIDERS[tp] ? TTS_PROVIDERS[tp].url : '';
     if (cfg) {
@@ -4587,7 +4564,7 @@ function openSettings() {
   }
   _loadProviderConfig();
   _loadTtsProviderConfig();
-  $('providerSelect').value = appData.provider || 'zhipu_free';
+  $('providerSelect').value = appData.provider || 'qwen';
   onProviderChange();
   $('apiKeyInput').value = appData.apiKey || '';
   if (appData.model) {
@@ -4601,20 +4578,19 @@ function openSettings() {
     }
   }
   // TTS section
-  $('ttsProviderSelect').value = appData.ttsProvider || 'minimax';
+  $('ttsProviderSelect').value = appData.ttsProvider || 'mimo';
   onTtsProviderChange();
   $('ttsKeyInput').value = appData.ttsKey || '';
   $('ttsAppIdInput').value = appData.ttsAppId || '';
   if (appData.ttsModel) $('ttsModelSelect').value = appData.ttsModel;
   if (appData.ttsVoice) $('ttsVoiceSelect').value = appData.ttsVoice;
-  $('modalSettings').classList.add('show');
 }
 
 function onProviderChange() {
   const provider = $('providerSelect').value;
-  const oldProvider = appData.provider || 'zhipu_free';
-  // 只在服务商真正切换时才保存旧配置（避免 openSettings 时覆盖已保存配置）
-  if (oldProvider !== provider && (oldProvider !== 'zhipu_free' || appData.apiKey)) {
+  const oldProvider = appData.provider || 'qwen';
+  // 只在服务商真正切换时才保存旧配置（避免加载配置时覆盖已保存配置）
+  if (oldProvider !== provider && (oldProvider !== 'qwen' || appData.apiKey)) {
     appData.providerConfigs[oldProvider] = {
       apiKey: appData.apiKey || '',
       model: appData.model || ''
@@ -4630,8 +4606,6 @@ function onProviderChange() {
   const savedCfg = appData.providerConfigs[provider];
   if (savedCfg) {
     if (savedCfg.apiKey !== undefined) $('apiKeyInput').value = savedCfg.apiKey;
-  } else if (provider === 'zhipu_free') {
-    $('apiKeyInput').value = '';
   } else {
     $('apiKeyInput').value = '';
   }
@@ -4681,7 +4655,7 @@ function onProviderChange() {
 function onTtsProviderChange() {
   const provider = $('ttsProviderSelect').value;
   const oldTp = appData.ttsProvider || 'minimax';
-  // 只在服务商真正切换时才保存旧配置（避免 openSettings 时用残留 UI 值覆盖已保存配置）
+  // 只在服务商真正切换时才保存旧配置（避免加载配置时用残留 UI 值覆盖已保存配置）
   if (oldTp !== provider && oldTp !== 'none') {
     appData.ttsProviderConfigs[oldTp] = {
       ttsKey: $('ttsKeyInput').value.trim(),
@@ -4793,10 +4767,6 @@ function onVolcanoConsoleChange() {
     : '获取 App ID & Access Token: <a href="https://console.volcengine.com/speech/app" target="_blank" style="color:var(--accent);">console.volcengine.com/speech</a>';
 }
 
-function closeSettings() {
-  $('modalSettings').classList.remove('show');
-}
-
 // ─── API 连接测试 ───
 async function testAiConnection() {
   const btn = $('testAiBtn');
@@ -4807,11 +4777,11 @@ async function testAiConnection() {
   result.style.color = '';
 
   const provider = $('providerSelect').value;
-  const isProxy = provider === 'zhipu_free';
+  const isProxy = provider === 'qwen';
   const key = $('apiKeyInput').value.trim();
   const model = getModalModel();
 
-  // zhipu_free 走 Supabase 代理，无需前端 Key；其它 provider 需要用户填写的 Key
+  // qwen 走 Supabase 代理（服务端 Key + 登录会话）；其它 provider 需要用户填写的 Key
   if (!isProxy && !key) {
     result.textContent = '请先填写 API Key';
     result.style.color = '#e74c3c';
@@ -4820,14 +4790,28 @@ async function testAiConnection() {
     return;
   }
 
-  // 代理模式：直接 POST 到代理地址，不带 Authorization；
+  let token = null;
+  if (isProxy) {
+    token = await _getAccessToken();
+    if (!token) {
+      result.textContent = 'AI 服务需登录，请先登录后测试';
+      result.style.color = '#e74c3c';
+      btn.disabled = false;
+      btn.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg> 测试 AI 连接';
+      promptLoginForAI();
+      return;
+    }
+  }
+
+  // 代理模式：直接 POST 到代理地址，带登录会话令牌；
   // 直连模式：POST apiUrl + /chat/completions，带 Bearer Key
   const reqUrl = isProxy
-    ? BUILTIN_ZHIPU_PROXY
+    ? BUILTIN_QWEN_PROXY
     : (appData.apiUrl || 'https://api.deepseek.com/v1').replace(/\/$/, '') + '/chat/completions';
-  const reqModel = isProxy ? (model || BUILTIN_ZHIPU_MODEL) : model;
+  const reqModel = isProxy ? (model || BUILTIN_QWEN_MODEL) : model;
   const reqHeaders = { 'Content-Type': 'application/json' };
-  if (!isProxy) reqHeaders['Authorization'] = 'Bearer ' + key;
+  if (isProxy) reqHeaders['Authorization'] = 'Bearer ' + token;
+  else reqHeaders['Authorization'] = 'Bearer ' + key;
 
   try {
     const resp = await fetch(reqUrl, {
@@ -5041,8 +5025,6 @@ function saveSettings() {
     };
   }
   persist();
-  updateApiStatus();
-  closeSettings();
   showToast('API 设置已保存');
   renderWordTable();
   updateArticleEstimate();
@@ -5684,9 +5666,26 @@ function posLabel(word) {
 // AI API (multi-provider)
 // ═══════════════════════════════════════
 function hasValidApiConfig() {
-  // zhipu_free 通过 Supabase 代理，无需前端 Key
-  if (appData.provider === 'zhipu_free') return true;
+  // qwen 通过 Supabase 代理（服务端 Key），无需前端 Key；其他 provider 需用户自填 Key
+  if (appData.provider === 'qwen') return true;
   return !!appData.apiKey;
+}
+
+// 获取当前登录会话的 access token（未登录返回 null）
+async function _getAccessToken() {
+  try {
+    if (!sbClient) return null;
+    const { data } = await sbClient.auth.getSession();
+    return data && data.session ? data.session.access_token : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 未登录调用 AI 时：提示并打开登录视图
+function promptLoginForAI() {
+  showToast('AI 功能需登录后使用，请先登录');
+  if (!cloudUserEmail) openCloudPanel();
 }
 
 
@@ -5718,7 +5717,7 @@ async function executeAI(prompt, maxTokens, attempt = 0) {
     }
     return result;
   } catch (err) {
-    if (attempt >= maxAttempts - 1) {
+    if (attempt >= maxAttempts - 1 || (err && err.noRetry)) {
       console.error('[executeAI] 重试耗尽，请求异常:', err);
       throw err;
     }
@@ -5731,16 +5730,13 @@ async function executeAI(prompt, maxTokens, attempt = 0) {
 const callAI = enqueueAI;
 
 // 各模型最大输出 token 上限
-// 注意：zhipu_free 走的是免费 GLM-4-Flash，输出上限 4K
+// 注意：qwen 走内置免费代理，服务端钳制输出上限 7000
 //       DeepSeek V4 系列最大输出可达 384K
 function modelMaxOutputTokens(model) {
   const m = (model || '').toLowerCase();
-  // 智谱免费模型（GLM-4-Flash）免费版输出上限 4K
-  if (m.includes('glm-4-flash')) {
-    // 区分是否免费代理：zhipu_free 走免费 API 限制 4K，zhipu 付费版可更高
-    if (appData.provider === 'zhipu_free') return 4096;
-    return 128000;
-  }
+  // 内置通义千问免费代理：服务端钳制 7000
+  if (m.includes('qwen-turbo')) return 7000;
+  if (m.includes('glm-4-flash')) return 128000;
   if (m.includes('glm')) return 128000;     // 智谱付费 GLM 系列
   if (m.includes('deepseek')) return 384000; // DeepSeek V4 系列最大 384K
   if (m.includes('gpt-4')) return 16384;    // GPT-4 系列
@@ -5752,23 +5748,33 @@ function modelMaxOutputTokens(model) {
 }
 
 async function doCallAI(prompt, maxTokens = 1500) {
-  const isProxy = appData.provider === 'zhipu_free';
+  const isProxy = appData.provider === 'qwen';
   let useKey = appData.apiKey;
   let useUrl = appData.apiUrl;
   let useModel = appData.model;
   
   if (isProxy) {
-    useUrl = BUILTIN_ZHIPU_PROXY;
-    useModel = useModel || BUILTIN_ZHIPU_MODEL;
+    useUrl = BUILTIN_QWEN_PROXY;
+    useModel = useModel || BUILTIN_QWEN_MODEL;
   }
   
   if (!isProxy && !useKey) {
-    showToast('请先在 API 设置中配置 API Key');
+    showToast('请先在个人信息中配置 API Key');
     return null;
   }
 
-  // 智谱免费模型列表：按优先级降级尝试
-  const allModels = PROVIDERS.zhipu_free.models;
+  // 内置免费代理要求登录：拿会话令牌，未登录则引导登录
+  let useToken = null;
+  if (isProxy) {
+    useToken = await _getAccessToken();
+    if (!useToken) {
+      promptLoginForAI();
+      return null;
+    }
+  }
+
+  // 内置模型列表：按优先级降级尝试
+  const allModels = PROVIDERS.qwen.models;
   const fallbackModels = isProxy
     ? [useModel, ...allModels.filter(m => m !== useModel)]
     : [useModel];
@@ -5784,11 +5790,12 @@ async function doCallAI(prompt, maxTokens = 1500) {
     }
     lastModel = tryModel;
     try {
-      // 代理模式：直接 POST 代理地址，不带 Authorization
+      // 代理模式：直接 POST 代理地址，带登录会话令牌
       // 直连模式：POST apiUrl + /chat/completions，带 Bearer Key
       const reqUrl = isProxy ? useUrl : (useUrl || 'https://api.deepseek.com/v1').replace(/\/$/, '') + '/chat/completions';
       const reqHeaders = { 'Content-Type': 'application/json' };
-      if (!isProxy) reqHeaders['Authorization'] = 'Bearer ' + useKey;
+      if (isProxy) reqHeaders['Authorization'] = 'Bearer ' + useToken;
+      else reqHeaders['Authorization'] = 'Bearer ' + useKey;
 
       const reqBody = {
         model: tryModel || 'deepseek-v4-pro',
@@ -5812,8 +5819,21 @@ async function doCallAI(prompt, maxTokens = 1500) {
         const err = await resp.json().catch(() => ({}));
         // 兼容两种错误格式：err.error 为字符串 或 err.error.message 为对象
         const errMsg = (typeof err.error === 'string' ? err.error : err.error?.message) || `HTTP ${resp.status}`;
-        const errDetail = err.error?.code || err.error?.detail || '';
+        const errDetail = err.error?.code || err.error?.detail || err.code || '';
         const fullErr = errMsg + (errDetail ? ' ' + errDetail : '');
+        // 登录过期（401）：引导重新登录，不重试
+        if (isProxy && resp.status === 401) {
+          promptLoginForAI();
+          const e = new Error('登录已过期，请重新登录后重试');
+          e.noRetry = true;
+          throw e;
+        }
+        // 免费额度耗尽（429 quota_exceeded）：提示用户配置自己的 Key，不重试
+        if (resp.status === 429 && errDetail === 'quota_exceeded') {
+          const e = new Error(errMsg);
+          e.noRetry = true;
+          throw e;
+        }
         // 429/503 或访问量过大/限流 — 降级重试
         const isRateLimit = resp.status === 429 || resp.status === 503
           || fullErr.includes('访问量过大') || fullErr.includes('限流')
@@ -5979,7 +5999,7 @@ async function generateAllContent(wordId) {
     word = appData.words[learnIndex];
   }
   if (!word) return;
-  if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先在个人信息中配置 API Key'); return; }
 
   showToast('AI 正在生成全部学习内容，请稍候...');
   $('btnGenOne').disabled = true;
@@ -6002,7 +6022,7 @@ async function generateAllContent(wordId) {
 }async function generatePhoneticAndExample() {
   const w = appData.words[learnIndex];
   if (!w) return;
-  if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先在个人信息中配置 API Key'); return; }
   $('btnGenPhonetic').disabled = true;
   $('btnGenPhonetic').textContent = '生成中...';
   let successMsg = '';
@@ -6057,7 +6077,7 @@ function parsePhoneticAndExample(w, text) {
 
 async function generateAllContentBatch() {
   try {
-    if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
+    if (!hasValidApiConfig()) { showToast('请先在个人信息中配置 API Key'); return; }
     const wordsToGen = appData.words.filter(w => !w.aiGenerated);
     if (wordsToGen.length === 0) { showToast('所有单词都已有 AI 学习内容'); return; }
     if (!await showConfirm(`将为 ${wordsToGen.length} 个单词生成全部学习内容，每个约需3-5秒，确认继续？`)) return;
@@ -7187,7 +7207,6 @@ function updateFullscreenIcon() {
 // Init
 // ═══════════════════════════════════════
 function init() {
-  updateApiStatus();
   renderWordTable();
   // 延迟初始化非首屏面板，避免阻塞页面交互
   requestAnimationFrame(() => {
@@ -7200,9 +7219,6 @@ function init() {
 }
 
 // Close modal on overlay click
-$('modalSettings').addEventListener('click', function(e) {
-  if (e.target === this) closeSettings();
-});
 $('modalDetail').addEventListener('click', function(e) {
   if (e.target === this) this.classList.remove('show');
 });
@@ -7221,8 +7237,6 @@ document.addEventListener('keydown', function(e) {
       $('modalDetail').classList.remove('show');
     } else if ($('modalResetPassword').classList.contains('show')) {
       closeResetPassword();
-    } else if ($('modalSettings').classList.contains('show')) {
-      closeSettings();
     }
   }
 });
@@ -8359,7 +8373,7 @@ async function doLookup() {
   const word = $('lookupWord').value.trim();
   if (!word) { showToast('请输入单词'); return; }
   if (!/^[a-zA-Z\s\-']+$/.test(word)) { showToast('请输入英文单词'); return; }
-  if (!hasValidApiConfig()) { showToast('请先在 API 设置中配置 AI API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先在个人信息中配置 AI API Key'); return; }
 
   $('lookupResult').style.display = 'none';
   $('lookupError').style.display = 'none';
@@ -8630,6 +8644,8 @@ async function speakText(text, onDone) {
 // Translation & Writing Practice
 // ═══════════════════════════════════════
 let transGenDiff = '四级';
+// 已生成的翻译题目历史（只保留最近 5 篇原文），用于避免重复出题
+let transGenHistory = [];
 let transCorrectDiff = '四级';
 let writingDiff = '四级';
 
@@ -8660,29 +8676,69 @@ function selectWritingDiff(diff, btn) {
 
 async function generateTranslation() {
   try {
-  if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先在个人信息中配置 API Key'); return; }
   $('btnGenTrans').disabled = true;
   $('transGenLoading').style.display = '';
   startProgress('transGenProgress');
   $('transGenResult').style.display = 'none';
 
-  const prompt = `请仿照${transGenDiff}翻译真题风格，生成一道翻译题目，直接按以下格式输出，不要输出任何分析或额外说明：
+  // 各级别字数要求：四级 140-160 汉字、六级 180-200 汉字（对标考试要求）
+  const spec = transGenDiff === '四级'
+    ? { min: 140, max: 160, req: '一段140-160个汉字的中文', topic: '话题须为中国文化/社会发展/历史地理，如传统节日、饮食、城市、环保、教育等' }
+    : transGenDiff === '六级'
+    ? { min: 180, max: 200, req: '一段180-200个汉字的中文', topic: '话题须为中国传统文化/经济/科技/历史，如哲学思想、数字经济、人工智能、非遗技艺等' }
+    : { min: null, max: null, req: '一段约150词的英文段落', topic: '话题为社会/文化/科学/教育' };
 
-原文: <${transGenDiff === '四级' ? '一段140-160个汉字的中文，话题为中国文化/社会发展/历史地理' : transGenDiff === '六级' ? '一段180-200个汉字的中文，话题为中国传统文化/经济/科技/历史' : '一段约150词的英文段落，话题为社会/文化/科学/教育'}>
+  const recent = transGenHistory.slice(-5).map(s => s.substring(0, 30)).join('、');
+  const buildPrompt = (extra) => `请仿照${transGenDiff}翻译真题风格，生成一道翻译题目，直接按以下格式输出，不要输出任何分析或额外说明：
+
+原文: <${spec.req}。${spec.topic}。务必随机选择一个全新的具体话题，禁止与已出过的题目相同或高度相似>
 译文: <标准英文译文>
-重难点: <3-5条翻译重难点，包括关键句型、词汇选择、语法难点、易错点>`;
+重难点: <3-5条翻译重难点，包括关键句型、词汇选择、语法难点、易错点>
+${recent ? '已出过的题目（仅供你出题时避重参考，严禁出现在输出内容中）：' + recent + '\n' : ''}${extra ? extra + '\n' : ''}重要：原文长度必须严格符合要求，生成前请自行核对字数；以上所有约束与参考信息都不得输出到结果中`;
 
-  const result = await callAI(prompt, 8000);
+  // 过滤模型误输出的出题指令行（如「已出过的题目」清单），只保留真实内容
+  const stripPromptLeak = (s) => (s || '').split('\n')
+    .filter(line => !['已出过的题目', '不得重复', '话题须为', '重要：原文长度', '务必随机选择'].some(k => line.includes(k)))
+    .join('\n').trim();
+
+  let result = await callAI(buildPrompt(''), 8000);
+  let original = result ? stripPromptLeak(parseSection(result, '原文')) : '';
+
+  // 四六级字数校验：不符合要求则带反馈重试一次，重试结果更接近要求则采用
+  if (result && (transGenDiff === '四级' || transGenDiff === '六级')) {
+    const cnt = (s) => (s.match(/[\u4e00-\u9fff]/g) || []).length;
+    const count = cnt(original);
+    if (count < spec.min || count > spec.max) {
+      const retry = await callAI(buildPrompt(`你上次生成的原文只有 ${count} 个汉字，不符合 ${spec.min}-${spec.max} 字的要求。请重新生成一道全新题目，原文严格控制在 ${spec.min}-${spec.max} 个汉字之间`), 8000);
+      if (retry) {
+        const retryOriginal = stripPromptLeak(parseSection(retry, '原文'));
+        const retryCount = retryOriginal ? cnt(retryOriginal) : 0;
+        const retryInRange = retryOriginal && retryCount >= spec.min && retryCount <= spec.max;
+        if (retryInRange || (retryCount > 0 && Math.abs(retryCount - (spec.min + spec.max) / 2) < Math.abs(count - (spec.min + spec.max) / 2))) {
+          result = retry;
+          original = retryOriginal;
+        }
+      }
+    }
+  }
+
   $('btnGenTrans').disabled = false;
   stopProgress('transGenProgress');
   $('transGenLoading').style.display = 'none';
 
   if (!result) return;
 
-  $('transOriginal').textContent = parseSection(result, '原文');
-  $('transReference').textContent = parseSection(result, '译文');
-  $('transKeyPoints').textContent = parseSection(result, '重难点');
+  $('transOriginal').textContent = original;
+  $('transReference').textContent = stripPromptLeak(parseSection(result, '译文'));
+  $('transKeyPoints').textContent = stripPromptLeak(parseSection(result, '重难点'));
   $('transGenResult').style.display = '';
+
+  // 记录本次题目，避免后续重复出题
+  if (original) {
+    transGenHistory.push(original);
+    if (transGenHistory.length > 5) transGenHistory.shift();
+  }
   } catch (e) {
     showToast('操作失败: ' + (e.message || '未知错误'));
     console.error(e);
@@ -8697,7 +8753,7 @@ async function correctTranslation() {
   const original = $('correctOriginal').value.trim();
   const translation = $('correctTranslation').value.trim();
   if (!original || !translation) { showToast('请填写中文原文和你的译文'); return; }
-  if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先在个人信息中配置 API Key'); return; }
 
   $('btnCorrectTrans').disabled = true;
   $('correctLoading').style.display = '';
@@ -8753,7 +8809,7 @@ async function correctWriting() {
   const topic = $('writingTopic').value.trim();
   const essay = $('writingEssay').value.trim();
   if (!topic || !essay) { showToast('请填写作文题目和你的作文'); return; }
-  if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先在个人信息中配置 API Key'); return; }
 
   $('btnWritingCorrect').disabled = true;
   $('writingLoading').style.display = '';
@@ -8941,7 +8997,7 @@ function reciteFilterSentences(filter) {
 async function reciteAiTranslate() {
   const english = $('reciteEnglish').value.trim();
   if (!english) { showToast('请先输入英文句子'); return; }
-  if (!hasValidApiConfig()) { showToast('请先在 API 设置中配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先在个人信息中配置 API Key'); return; }
 
   const btn = $('btnReciteTranslate');
   btn.disabled = true;
@@ -9026,8 +9082,8 @@ async function aiClassifySentences() {
   const sentences = appData.sentences || [];
   if (sentences.length === 0) { showToast('没有句子可分类'); return; }
 
-  if (!appData.apiKey && !appData.providerConfigs[appData.provider]?.apiKey) {
-    showToast('请先在设置中配置 API Key');
+  if (!hasValidApiConfig()) {
+    showToast('请先在个人信息中配置 API Key');
     return;
   }
 
@@ -9304,7 +9360,7 @@ async function reciteCheckAnswer() {
 
   if (reciteCheckMode === 'ai') {
     if (!hasValidApiConfig()) {
-      showToast('请先在 API 设置中配置 API Key 以使用 AI 核对');
+      showToast('请先在个人信息中配置 API Key 以使用 AI 核对');
       $('reciteAiFeedback').style.display = '';
       $('reciteAiFeedback').innerHTML = '<div class="ai-section-title"><svg class="ic" aria-hidden="true"><use href="#i-alert"></use></svg> 提示</div><div class="ai-section-content">未配置 API Key，无法进行 AI 核对。请切换为手动核对或配置 API。</div>';
       return;
@@ -10118,7 +10174,7 @@ function toggleContextWord(chip) {
 async function generateContextArticle() {
   try {
     if (contextSelectedWords.length === 0) { showToast('请先选择至少 1 个单词'); return; }
-    if (!hasValidApiConfig()) { showToast('请先配置 API Key'); return; }
+    if (!hasValidApiConfig()) { showToast('请先在个人信息中配置 API Key'); return; }
 
     // 隐藏选择区，显示加载
     $('contextSelectArea').style.display = 'none';
@@ -10600,10 +10656,6 @@ function stripOptionPrefix(opt) {
 async function parseArticle() {
   const text = $('articleInput').value.trim();
   if (!text) { showToast('请先粘贴文章内容'); return; }
-  if (!appData.provider || appData.provider === 'zhipu_free') {
-    if (!appData.apiKey) { showToast('请先在 API 设置中配置 API Key'); return; }
-  }
-
   $('btnArticleParse').disabled = true;
   $('articleProgress').style.display = '';
 
@@ -10800,10 +10852,6 @@ async function translateParagraph(idx) {
     return;
   }
 
-  if (!appData.provider || appData.provider === 'zhipu_free') {
-    if (!appData.apiKey) { showToast('请先在 API 设置中配置 API Key'); return; }
-  }
-
   btn.disabled = true;
   spinner.style.display = '';
 
@@ -10846,13 +10894,6 @@ async function lookupArticleWord(word, event) {
   loadingEl.innerHTML = '<span class="wim-text">查询中...</span>';
   clickedEl.insertAdjacentElement('afterend', loadingEl);
 
-  if (!appData.provider || appData.provider === 'zhipu_free') {
-    if (!appData.apiKey) {
-      loadingEl.innerHTML = '<span class="wim-text">请配置 API Key</span><span class="wim-close" onclick="removeAllInlineMeanings();event.stopPropagation();">&times;</span>';
-      return;
-    }
-  }
-
   // Get context
   let context = '';
   for (const para of articleData.paragraphs) {
@@ -10862,25 +10903,49 @@ async function lookupArticleWord(word, event) {
     }
   }
 
-  const prompt = `The word "${word}" appears in the following English article. Analyze it:
+  const buildPrompt = (extra) => `The word "${word}" appears in the following English article. Analyze it:
 
 1. "lemma" - the base/dictionary form (e.g. "running" → "run", "went" → "go", "mice" → "mouse"). If already base form, return the same word.
 2. "pos" - part of speech of the lemma in this context, e.g. "n." (noun), "v." (verb), "adj." (adjective), "adv." (adverb), "prep." (preposition), "conj." (conjunction), "pron." (pronoun). Must always be filled.
 3. "phonetic" - IPA transcription of the lemma
-4. "lemma_meaning" - the general Chinese meaning of the lemma (standard dictionary definition, NOT context-specific). Must always be filled.
-5. "context_meaning" - the specific Chinese meaning in this article context. If same as lemma_meaning, leave empty.
-
-Return ONLY valid JSON:
+4. "lemma_meaning" - the general meaning of the lemma (standard dictionary definition, NOT context-specific). IMPORTANT: MUST be written in Chinese (中文释义). Never write English definitions.
+5. "context_meaning" - the specific meaning in this article context, also in Chinese (中文释义). If same as lemma_meaning, leave empty.
+${extra ? extra + '\n' : ''}Return ONLY valid JSON:
 {"lemma": "...", "pos": "...", "phonetic": "...", "lemma_meaning": "...", "context_meaning": "..."}
 
 Context: ${context}`;
 
-  try {
-    const result = await doCallAI(prompt, 500);
-    if (!result) throw new Error('AI 返回为空');
-    let jsonStr = result.content || result;
+  const parseJsonResult = (raw) => {
+    let jsonStr = raw && (raw.content || raw);
+    if (typeof jsonStr !== 'string') return null;
     jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-    const parsed = JSON.parse(jsonStr);
+    // 容错：只截取第一个 { 到最后一个 }，忽略模型可能附带的其他说明文字
+    const start = jsonStr.indexOf('{');
+    const end = jsonStr.lastIndexOf('}');
+    if (start >= 0 && end > start) jsonStr = jsonStr.slice(start, end + 1);
+    try { return JSON.parse(jsonStr); } catch (e) { return null; }
+  };
+
+  const hasChinese = (s) => /[\u4e00-\u9fff]/.test(s || '');
+
+  let result = null;
+  try {
+    result = await doCallAI(buildPrompt(''), 500);
+    if (!result) throw new Error('AI 返回为空');
+    let parsed = parseJsonResult(result);
+    if (!parsed) {
+      const retry = await doCallAI(buildPrompt('You must return ONLY a single-line valid JSON object, no other text.'), 500);
+      if (retry) parsed = parseJsonResult(retry);
+      if (!parsed) throw new Error('AI 返回格式异常');
+    }
+    // 释义必须是中文：模型偶尔忽略要求返回英文释义，此时强调后重试一次
+    if (!hasChinese(parsed.lemma_meaning) && !hasChinese(parsed.context_meaning)) {
+      const retry = await doCallAI(buildPrompt('IMPORTANT: you returned English definitions, which is WRONG. Rewrite lemma_meaning and context_meaning in Chinese (中文释义), keep the same JSON structure.'), 500);
+      if (retry) {
+        const retryParsed = parseJsonResult(retry);
+        if (retryParsed && (hasChinese(retryParsed.lemma_meaning) || hasChinese(retryParsed.context_meaning))) parsed = retryParsed;
+      }
+    }
 
     const lemma = parsed.lemma || word;
     const pos = parsed.pos || '';
@@ -11111,7 +11176,7 @@ function closeArticleSentencePopup() {
 
 async function translateSelectedSentence() {
   if (!selectedSentenceText) return;
-  if (!hasValidApiConfig()) { showToast('请先在 API 设置中配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先在个人信息中配置 API Key'); return; }
 
   const btn = $('btnAspTranslate');
   btn.disabled = true;
@@ -11521,10 +11586,6 @@ async function answerExistingQuestions() {
     showToast('未检测到题目');
     return;
   }
-  if (!appData.provider || appData.provider === 'zhipu_free') {
-    if (!appData.apiKey) { showToast('请先在 API 设置中配置 API Key'); return; }
-  }
-
   const btn = $('btnArticleQuizAnswer') || $('btnArticleQuiz');
   const progress = $('articleQuizAnswerProgress') || $('articleQuizProgress');
   const progressText = $('articleQuizAnswerProgressText') || $('articleQuizProgressText');
@@ -11604,10 +11665,6 @@ ${questionsJson}`;
 
 async function generateArticleQuiz() {
   if (articleData.paragraphs.length === 0) { showToast('请先解析文章'); return; }
-  if (!appData.provider || appData.provider === 'zhipu_free') {
-    if (!appData.apiKey) { showToast('请先在 API 设置中配置 API Key'); return; }
-  }
-
   const btn = $('btnArticleQuiz');
   const progress = $('articleQuizProgress');
   const progressText = $('articleQuizProgressText');
@@ -11853,7 +11910,7 @@ async function discussQuizQuestion(qIdx) {
 
   const userMsg = input.value.trim();
   if (!userMsg) return;
-  if (!hasValidApiConfig()) { showToast('请先在 API 设置中配置 API Key'); return; }
+  if (!hasValidApiConfig()) { showToast('请先在个人信息中配置 API Key'); return; }
 
   // Append user question
   const qDiv = document.createElement('div');
