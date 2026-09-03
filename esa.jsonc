@@ -1,0 +1,8 @@
+{
+  "installCommand": "",
+  "buildCommand": "",
+  "assets": {
+    "directory": ".",
+    "notFoundStrategy": "singlePageApplication"
+  }
+}
